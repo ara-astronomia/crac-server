@@ -1,10 +1,10 @@
 from concurrent import futures
-from generated.roof_pb2 import (
+from crac_protobuf.roof_pb2 import (
     RoofAction,
     RoofStatus,
     RoofResponse,
 )
-from generated.roof_pb2_grpc import (
+from crac_protobuf.roof_pb2_grpc import (
     RoofServicer,
     add_RoofServicer_to_server,
 )
@@ -38,10 +38,3 @@ if __name__ == "__main__":
     serve()
 
 
-# from generated.roof_pb2 import *
-# from generated.roof_pb2_grpc import *
-# import grpc
-# channel = grpc.insecure_channel("localhost:50051")
-# client = RoofStub(channel)
-# request = RoofRequest(action=RoofAction.OPEN)
-# client.SetAction(request)
