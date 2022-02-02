@@ -1,40 +1,23 @@
-from concurrent import futures
 from crac_protobuf.roof_pb2 import (
     RoofAction,
-    RoofStatus,
     RoofResponse,
 )
 from crac_protobuf.roof_pb2_grpc import (
     RoofServicer,
-    add_RoofServicer_to_server,
 )
-import grpc
+from crac_server.component.mock.roof_control import MockRoofControl as RoofControl
+
 
 class RoofService(RoofServicer):
     def SetAction(self, request, context):
-        
+        print("Request " + str(request.action))
         if request.action == RoofAction.OPEN:
-            status = RoofStatus.ROOF_OPENED
+            status = RoofControl().open()
         elif request.action == RoofAction.CLOSE:
-            status = RoofStatus.ROOF_CLOSED
+            status = RoofControl().close()
         else:
-            status = RoofStatus.ROOF_CLOSED
+            status = RoofControl().read()
 
-        print(status)
+        print("Response " + str(status))
 
         return RoofResponse(status=status)
-
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    add_RoofServicer_to_server(
-        RoofService(), server
-    )
-    server.add_insecure_port("[::]:50051")
-    server.start()
-    server.wait_for_termination()
-
-
-if __name__ == "__main__":
-    serve()
-
-
