@@ -10,7 +10,7 @@ from crac_server.component.mock.roof_control import MockRoofControl as RoofContr
 
 class RoofService(RoofServicer):
     def SetAction(self, request, context):
-        print("Request " + str(request.action))
+        print("Request " + str(request))
         if request.action == RoofAction.OPEN:
             status = RoofControl().open()
         elif request.action == RoofAction.CLOSE:

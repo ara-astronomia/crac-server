@@ -3,12 +3,14 @@ from concurrent import futures
 from tkinter import Button
 from crac_protobuf.button_pb2_grpc import add_ButtonServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
+from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 import grpc
-from crac_server.logger import Logger
 from crac_server.service.button_service import ButtonService
 from crac_server.service.roof_service import RoofService
 from gpiozero import Device
 from gpiozero.pins.mock import MockFactory
+
+from crac_server.service.telescope_service import TelescopeService
 if Device.pin_factory is not None:
     Device.pin_factory.reset()
 Device.pin_factory = MockFactory()
@@ -16,11 +18,14 @@ Device.pin_factory = MockFactory()
 
 def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    add_ButtonServicer_to_server(
+        ButtonService(), server
+    )
     add_RoofServicer_to_server(
         RoofService(), server
     )
-    add_ButtonServicer_to_server(
-        ButtonService(), server
+    add_TelescopeServicer_to_server(
+        TelescopeService(), server
     )
     server.add_insecure_port("[::]:50051")
     server.start()
