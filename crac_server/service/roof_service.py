@@ -5,7 +5,7 @@ from crac_protobuf.roof_pb2 import (
 from crac_protobuf.roof_pb2_grpc import (
     RoofServicer,
 )
-from crac_server.component.mock.roof_control import MockRoofControl as RoofControl
+from crac_server.component.roof.simulator.roof_control import MockRoofControl as RoofControl
 
 
 class RoofService(RoofServicer):
