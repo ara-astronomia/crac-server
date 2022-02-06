@@ -1,13 +1,15 @@
+import logging
 import json
 import os
 import re
 import socket
 import config
-from components.telescope.telescope import BaseTelescope
-from logger import Logger
+from component.telescope.telescope import Telescope as BaseTelescope
 from typing import Dict
-from status import TelescopeStatus
-from status import SyncStatus
+from crac_protobuf.telescope_pb2 import TelescopeStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 class Telescope(BaseTelescope):
@@ -30,25 +32,25 @@ class Telescope(BaseTelescope):
             self.connected = True
 
     def update_coords(self) -> Dict[str, int]:
-        Logger.getLogger().info("Leggo le coordinate")
+        logger.info("Leggo le coordinate")
         data = self.__call_thesky__(self.script)
-        Logger.getLogger().info("data per il update_coords: %s", data)
-        Logger.getLogger().debug("Coordinate e status letti: %s", data)
+        logger.info("data per il update_coords: %s", data)
+        logger.debug("Coordinate e status letti: %s", data)
 
         self.__parse_result__(data.decode("utf-8"))
         return self.coords
 
     def move_tele(self, **kwargs) -> Dict[str, int]:
-        Logger.getLogger().info("muovo il telescopio")
+        logger.info("muovo il telescopio")
         try:
             data = self.__call_thesky__(script=self.script_move_track, **kwargs)
-            Logger.getLogger().info("data per il move_tele: %s", data)
+            logger.info("data per il move_tele: %s", data)
         except (ConnectionError, TimeoutError, json.decoder.JSONDecodeError):
             self.__disconnection__()
         else:
-            Logger.getLogger().debug("Parking %s", data)
+            logger.debug("Parking %s", data)
             self.coords["error"] = self.__is_error__(data.decode("utf-8"))
-            Logger.getLogger().info("data error per il move_tele: %s", self.coords["error"])
+            logger.info("data error per il move_tele: %s", self.coords["error"])
             self.update_coords()
             self.__update_status__()
             self.coords
@@ -62,16 +64,16 @@ class Telescope(BaseTelescope):
             self.__update_status__()
 
     def sync_tele(self, **kwargs) -> Dict[str, float]:
-        Logger.getLogger().info("sincronizzo il telescopio")
+        logger.info("sincronizzo il telescopio")
         try:
             data = self.__call_thesky__(script=self.script_sync_tele, **kwargs)
-            Logger.getLogger().info("data per il sync: %s", data)
+            logger.info("data per il sync: %s", data)
         except (ConnectionError, TimeoutError, json.decoder.JSONDecodeError):
             self.__disconnection__()
             return False
         else:
             self.__parse_result__(data.decode("utf-8"))
-            Logger.getLogger().debug("sincronizzo il telescopio a queste coordinate %s", kwargs)
+            logger.debug("sincronizzo il telescopio a queste coordinate %s", kwargs)
             return True
 
     def close_connection(self) -> None:
@@ -83,7 +85,7 @@ class Telescope(BaseTelescope):
         return self.__call_thesky__(script=self.script_disconnect_tele)
 
     def __disconnection__(self):
-        Logger.getLogger().exception("Connessione con The Sky persa: ")
+        logger.exception("Connessione con The Sky persa: ")
         self.status = TelescopeStatus.LOST
         self.connected = False
 
@@ -99,7 +101,7 @@ class Telescope(BaseTelescope):
                 file = file.format(**kwargs)
             self.s.sendall(file.encode('utf-8'))
             data = self.s.recv(1024)
-            Logger.getLogger().debug("Data received from js: %s", data)
+            logger.debug("Data received from js: %s", data)
 #        self.close_connection()
         return data
 
@@ -115,7 +117,7 @@ class Telescope(BaseTelescope):
             self.coords["az"] = round(coords["az"], 2)
             self.coords["tr"] = coords["tr"]
             self.coords["sl"] = coords["sl"]
-        Logger.getLogger().debug("Coords Telescopio: %s", str(self.coords))
+        logger.debug("Coords Telescopio: %s", str(self.coords))
 
     def __is_error__(self, input_str, search_reg="Error = ([1-9][^\\d]|\\d{2,})") -> int:
         r = re.search(search_reg, input_str)

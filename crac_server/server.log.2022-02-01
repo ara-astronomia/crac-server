@@ -1,0 +1,30 @@
+INFO 2022-02-01 23:31:56,795 file roof_service.py linea 18 ciao
+INFO 2022-02-01 23:32:41,405 file roof_service.py linea 18 ciao
+INFO 2022-02-01 23:33:29,098 file roof_service.py linea 18 ciao
+INFO 2022-02-01 23:35:13,903 file roof_service.py linea 18 ciao
+ERROR 2022-02-01 23:35:27,228 file _server.py linea 453 Exception calling application: pin 27 is already in use by <gpiozero.OutputDevice object on pin GPIO27, active_high=True, is_active=False>
+Traceback (most recent call last):
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/grpc/_server.py", line 443, in _call_behavior
+    response_or_iterator = behavior(argument, context)
+  File "/Users/acaradossi/workspace/mine/crac-server/crac_server/service/roof_service.py", line 24, in SetAction
+    status = RoofControl().close()
+  File "/Users/acaradossi/workspace/mine/crac-server/crac_server/component/roof_control.py", line 10, in __init__
+    self.motor = OutputDevice(Config.getInt("switch_roof", "roof_board"))
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/gpiozero/devices.py", line 108, in __call__
+    self = super(GPIOMeta, cls).__call__(*args, **kwargs)
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/gpiozero/output_devices.py", line 83, in __init__
+    super(OutputDevice, self).__init__(pin, pin_factory=pin_factory)
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/gpiozero/mixins.py", line 85, in __init__
+    super(SourceMixin, self).__init__(*args, **kwargs)
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/gpiozero/devices.py", line 548, in __init__
+    self.pin_factory.reserve_pins(self, pin)
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/gpiozero/pins/pi.py", line 91, in reserve_pins
+    super(PiFactory, self).reserve_pins(
+  File "/Users/acaradossi/Library/Caches/pypoetry/virtualenvs/crac-server-iNdiu1Yb-py3.10/lib/python3.10/site-packages/gpiozero/pins/__init__.py", line 77, in reserve_pins
+    raise GPIOPinInUse('pin %s is already in use by %r' %
+gpiozero.exc.GPIOPinInUse: pin 27 is already in use by <gpiozero.OutputDevice object on pin GPIO27, active_high=True, is_active=False>
+INFO 2022-02-01 23:37:09,162 file roof_service.py linea 24 ciao
+INFO 2022-02-01 23:39:02,981 file roof_service.py linea 24 ciao
+INFO 2022-02-01 23:41:00,078 file roof_service.py linea 24 ciao
+INFO 2022-02-01 23:43:04,708 file roof_service.py linea 24 ciao
+INFO 2022-02-01 23:43:40,461 file roof_service.py linea 24 ciao

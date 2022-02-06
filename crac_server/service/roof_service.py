@@ -1,3 +1,4 @@
+import logging
 from crac_protobuf.roof_pb2 import (
     RoofAction,
     RoofResponse,
@@ -8,9 +9,12 @@ from crac_protobuf.roof_pb2_grpc import (
 from crac_server.component.roof.simulator.roof_control import MockRoofControl as RoofControl
 
 
+logger = logging.getLogger(__name__)
+
+
 class RoofService(RoofServicer):
     def SetAction(self, request, context):
-        print("Request " + str(request))
+        logger.info("Request " + str(request))
         if request.action == RoofAction.OPEN:
             status = RoofControl().open()
         elif request.action == RoofAction.CLOSE:
@@ -18,6 +22,6 @@ class RoofService(RoofServicer):
         else:
             status = RoofControl().read()
 
-        print("Response " + str(status))
+        logger.info("Response " + str(status))
 
         return RoofResponse(status=status)

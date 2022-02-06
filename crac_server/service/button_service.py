@@ -1,3 +1,4 @@
+import logging
 from crac_protobuf.button_pb2 import (
     ButtonAction,
     ButtonType,
@@ -9,9 +10,12 @@ from crac_server.component.button_control import ButtonControl
 from crac_server.config import Config
 
 
+logger = logging.getLogger(__name__)
+
+
 class ButtonService(ButtonServicer):
     def SetAction(self, request, context):
-        print("Request " + str(request))
+        logger.info("Request " + str(request))
         if request.type == ButtonType.TELE_SWITCH:
             buttonControl = ButtonControl(Config.getInt("switch_power", "panel_board"))
         elif request.type == ButtonType.CCD_SWITCH:
@@ -26,6 +30,6 @@ class ButtonService(ButtonServicer):
         elif request.action == ButtonAction.TURN_OFF:
             status = buttonControl.off()
 
-        print("Response " + str(status))
+        logger.info("Response " + str(status))
 
         return ButtonResponse(status=status, type=request.type)

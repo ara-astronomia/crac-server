@@ -1,3 +1,4 @@
+import logging
 from crac_protobuf.telescope_pb2 import (
     TelescopeAction,
     TelescopeResponse,
@@ -5,25 +6,35 @@ from crac_protobuf.telescope_pb2 import (
 from crac_protobuf.telescope_pb2_grpc import (
     TelescopeServicer,
 )
-#from crac_server.component.telescope_control import MockRoofControl as RoofControl
+from crac_server.component.telescope.simulator.telescope import Telescope
+from crac_server.component.button_control import ButtonControl
+from crac_server.config import Config
+
+
+logger = logging.getLogger(__name__)
+telescope = Telescope()
 
 
 class TelescopeService(TelescopeServicer):
     def SetAction(self, request, context):
-        print("Request " + str(request))
-        sync = False
+        logger.info("Request " + str(request))
+        
         if request.action == TelescopeAction.SYNC:
-            sync = True
-            #status = RoofControl().open()
+            tele_switch = ButtonControl(Config.getInt("switch_power", "panel_board"))
+            tele_switch.on()
+            telescope.sync()
         elif request.action == TelescopeAction.PARK_POSITION:
-            pass
-            #status = RoofControl().close()
+            telescope.park()
         elif request.action == TelescopeAction.FLAT_POSITION:
-            pass
-        elif request.action == TelescopeAction.CHECK_TELESCOPE:
-            pass
-            #status = RoofControl().read()
+            telescope.flat()
+        
+        speed = telescope.get_speed()
+        aa_coords = telescope.get_aa_coords()
+        status = telescope.get_status(aa_coords)
+        sync = telescope.sync_status
 
-        print("Response " + str(sync))
+        response = TelescopeResponse(status=status, aa_coords=aa_coords, speed=speed, sync=sync)
 
-        return TelescopeResponse(sync=sync)
+        logger.info("Response " + str(response))
+
+        return response

@@ -1,6 +1,12 @@
+import logging
+import logging.config
+
+
+logging.config.fileConfig('logging.conf')
+
+
 from signal import signal, SIGTERM
 from concurrent import futures
-from tkinter import Button
 from crac_protobuf.button_pb2_grpc import add_ButtonServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
@@ -14,6 +20,9 @@ from crac_server.service.telescope_service import TelescopeService
 if Device.pin_factory is not None:
     Device.pin_factory.reset()
 Device.pin_factory = MockFactory()
+
+
+logger = logging.getLogger('crac_server.app')
 
 
 def serve():
@@ -31,10 +40,10 @@ def serve():
     server.start()
 
     def handle_sigterm(*_):
-        print("Received shutdown signal")
+        logger.info("Received shutdown signal")
         all_rpcs_done_event = server.stop(30)
         all_rpcs_done_event.wait(30)
-        print("Shut down gracefully")
+        logger.info("Shut down gracefully")
 
     signal(SIGTERM, handle_sigterm)
     server.wait_for_termination()
