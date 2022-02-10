@@ -1,6 +1,9 @@
 from configparser import ConfigParser
 import datetime
+import logging
 import os
+from crac_server import config
+from time import sleep
 from crac_server.component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords,
@@ -10,12 +13,55 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server.config import Config
 
 
+logger = logging.getLogger(__name__)
+
+
 class Telescope(BaseTelescope):
     def __init__(self):
         super().__init__()
 
     def disconnect(self) -> bool:
         return True
+
+    def park(self):
+        self.move(
+            aa_coords=AltazimutalCoords(
+                alt=config.Config.getFloat("park_alt", "telescope"),
+                az=config.Config.getFloat("park_az", "telescope")
+            ),
+            speed=TelescopeSpeed.SLEWING
+        )
+        sleep(10)
+        super().park()
+    
+    def flat(self):
+        self.move(
+            aa_coords=AltazimutalCoords(
+                alt=config.Config.getFloat("flat_alt", "telescope"),
+                az=config.Config.getFloat("flat_az", "telescope")
+            ),
+            speed=TelescopeSpeed.SLEWING
+        )
+        sleep(10)
+        super().flat()
+
+    def set_speed(self, speed: TelescopeSpeed):
+        if speed == TelescopeSpeed.TRACKING:
+            sl = 1
+            tr = 0
+        elif speed == TelescopeSpeed.SLEWING:
+            sl = 0
+            tr = 1
+        else:
+            sl = 1
+            tr = 1
+        aa_coords = self.get_aa_coords()
+        telescope_config = ConfigParser()
+        telescope_config["coords"] = {'alt': str(aa_coords.alt), 'az': str(aa_coords.az), 'tr': str(tr), 'sl': str(sl), 'error': 0}
+        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
+        with open(telescope_path, 'w') as telescope_file:
+            telescope_config.write(telescope_file)
+        logger.debug(f"Telescope coords: {aa_coords}")
 
     def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
         if speed == TelescopeSpeed.TRACKING:

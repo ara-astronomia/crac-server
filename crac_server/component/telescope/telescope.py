@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-import config
+from crac_server import config
 from typing import Dict
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
@@ -46,23 +46,26 @@ class Telescope:
 
     def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
         raise NotImplementedError()
+    
+    def set_speed(self, speed: TelescopeSpeed):
+        raise NotImplementedError()
 
-    def park(self):
+    def park(self, speed=TelescopeSpeed.DEFAULT):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
                 az=config.Config.getFloat("park_az", "telescope")
             ),
-            speed=TelescopeSpeed.DEFAULT
+            speed=speed
         )
 
-    def flat(self):
+    def flat(self, speed=TelescopeSpeed.DEFAULT):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),
                 az=config.Config.getFloat("flat_az", "telescope")
             ),
-            speed=TelescopeSpeed.TRACKING
+            speed=speed
         )
 
     def get_status(self, aa_coords: AltazimutalCoords):

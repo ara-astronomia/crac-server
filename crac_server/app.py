@@ -14,15 +14,16 @@ Device.pin_factory = MockFactory()
 
 from signal import signal, SIGTERM
 from concurrent import futures
+from crac_server.config import Config
+from crac_server.service.button_service import ButtonService
+from crac_server.service.curtains_service import CurtainsService
+from crac_server.service.roof_service import RoofService
+from crac_server.service.telescope_service import TelescopeService
 from crac_protobuf.button_pb2_grpc import add_ButtonServicer_to_server
 from crac_protobuf.curtains_pb2_grpc import add_CurtainServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 import grpc
-from crac_server.service.button_service import ButtonService
-from crac_server.service.curtains_service import CurtainsService
-from crac_server.service.roof_service import RoofService
-from crac_server.service.telescope_service import TelescopeService
 
 
 
@@ -43,9 +44,9 @@ def serve():
     add_TelescopeServicer_to_server(
         TelescopeService(), server
     )
-    server.add_insecure_port("[::]:50051")
+    server.add_insecure_port(f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')
     server.start()
-    logger.info("Server loaded")
+    logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
 
     def handle_sigterm(*_):
         logger.info("Received shutdown signal")
