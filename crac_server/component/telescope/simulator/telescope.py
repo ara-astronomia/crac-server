@@ -3,12 +3,9 @@ import datetime
 import os
 from crac_server.component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import (
-    TelescopeStatus,
     AltazimutalCoords,
     EquatorialCoords,
-    PierSide,
     TelescopeSpeed,
-    TelescopeResponse,
 )
 from crac_server.config import Config
 
@@ -81,3 +78,6 @@ class Telescope(BaseTelescope):
             return TelescopeSpeed.TRACKING
         elif tr == "1" and sl == "0":
             return TelescopeSpeed.SLEWING
+
+
+TELESCOPE = Telescope()

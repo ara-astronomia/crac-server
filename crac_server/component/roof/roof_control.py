@@ -1,7 +1,11 @@
+import logging
 from gpiozero import OutputDevice, DigitalInputDevice
 
 from crac_server.config import Config
 from crac_protobuf.roof_pb2 import RoofStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 class RoofControl():
@@ -13,24 +17,30 @@ class RoofControl():
 
     def open(self):
         self.motor.on()
-        return self.roof_open_switch.wait_for_active()
+        self.roof_open_switch.wait_for_active()
 
     def close(self):
         self.motor.off()
-        return self.roof_closed_switch.wait_for_active()
+        self.roof_closed_switch.wait_for_active()
 
-    def read(self):
+    def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active
+        logger.debug(f'roof closed switch is {is_roof_closed}')
         is_roof_open = self.roof_open_switch.is_active
+        logger.debug(f'roof opened switch is {is_roof_open}')
         is_switched_on = self.motor.value
+        logger.debug(f'roof motor switch is {is_switched_on}')
 
         if is_roof_closed and is_roof_open:
-            return RoofStatus.ROOF_ERROR
+            status = RoofStatus.ROOF_ERROR
         elif is_roof_closed and not is_switched_on:
-            return RoofStatus.ROOF_CLOSED
+            status = RoofStatus.ROOF_CLOSED
         elif is_roof_open and is_switched_on:
-            return RoofStatus.ROOF_OPENED
+            status = RoofStatus.ROOF_OPENED
         elif is_switched_on:
-            return RoofStatus.ROOF_OPENING
+            status = RoofStatus.ROOF_OPENING
         else:
-            return RoofStatus.ROOF_CLOSING
+            status = RoofStatus.ROOF_CLOSING
+
+        logger.debug(f'roof status is {status}')
+        return status

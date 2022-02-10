@@ -17,7 +17,6 @@ class MockRoofControl(RoofControl):
         t.start()
         super().open()
         t.join()
-        return RoofStatus.ROOF_OPENED
 
     def close(self):
         self.roof_open_switch.pin.drive_high()
@@ -26,8 +25,10 @@ class MockRoofControl(RoofControl):
         t.start()
         super().close()
         t.join()
-        return RoofStatus.ROOF_CLOSED
 
     def __wait_for_open__(self, pin):
         sleep(10)
         pin.drive_low()
+
+
+ROOF = MockRoofControl()

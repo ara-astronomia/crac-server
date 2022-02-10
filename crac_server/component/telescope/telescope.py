@@ -135,11 +135,17 @@ class Telescope:
         logger.debug('dec park (declinazione decimale): %s', dec)
         return EquatorialCoords(ra=ra, dec=dec)
 
-    def is_below_curtains_area(self, alt: float):
-        return alt <= self.max_secure_alt
+    def is_below_curtains_area(self, alt: float) -> bool:
+        return alt <= config.Config.getFloat("max_secure_alt", "telescope")
 
-    def is_above_curtains_area(self, alt: float, max_est: int, max_west: int):
+    def is_above_curtains_area(self, alt: float, max_est: int, max_west: int) -> bool:
         return alt >= max_est and alt >= max_west
+
+    def is_within_curtains_area(self, aa_coords: AltazimutalCoords) -> bool:
+        return self.get_status(aa_coords) in [
+            TelescopeStatus.EAST,
+            TelescopeStatus.WEST
+        ]
 
     def __within_flat_alt_range(self, alt: float):
         return self.__within_range(alt, config.Config.getFloat("flat_alt", "telescope"))

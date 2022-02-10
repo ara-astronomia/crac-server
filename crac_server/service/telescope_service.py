@@ -6,13 +6,11 @@ from crac_protobuf.telescope_pb2 import (
 from crac_protobuf.telescope_pb2_grpc import (
     TelescopeServicer,
 )
-from crac_server.component.telescope.simulator.telescope import Telescope
-from crac_server.component.button_control import ButtonControl
-from crac_server.config import Config
+from crac_server.component.telescope.simulator.telescope import TELESCOPE
+from crac_server.component.button_control import TELE_SWITCH
 
 
 logger = logging.getLogger(__name__)
-telescope = Telescope()
 
 
 class TelescopeService(TelescopeServicer):
@@ -20,18 +18,17 @@ class TelescopeService(TelescopeServicer):
         logger.info("Request " + str(request))
         
         if request.action == TelescopeAction.SYNC:
-            tele_switch = ButtonControl(Config.getInt("switch_power", "panel_board"))
-            tele_switch.on()
-            telescope.sync()
+            TELE_SWITCH.on()
+            TELESCOPE.sync()
         elif request.action == TelescopeAction.PARK_POSITION:
-            telescope.park()
+            TELESCOPE.park()
         elif request.action == TelescopeAction.FLAT_POSITION:
-            telescope.flat()
+            TELESCOPE.flat()
         
-        speed = telescope.get_speed()
-        aa_coords = telescope.get_aa_coords()
-        status = telescope.get_status(aa_coords)
-        sync = telescope.sync_status
+        speed = TELESCOPE.get_speed()
+        aa_coords = TELESCOPE.get_aa_coords()
+        status = TELESCOPE.get_status(aa_coords)
+        sync = TELESCOPE.sync_status
 
         response = TelescopeResponse(status=status, aa_coords=aa_coords, speed=speed, sync=sync)
 
