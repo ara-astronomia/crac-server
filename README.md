@@ -14,8 +14,7 @@ poetry install
 
 # Execute the service
 
-Currently we have only the roof service, so it is handy to execute it with:
-
+You can start the server with the following commands
 ```
 cd crac_server
 python app.py
@@ -38,3 +37,5 @@ client = RoofStub(channel)
 request = RoofRequest(action=RoofAction.OPEN)
 client.SetAction(request)
 ```
+
+or you can clone the crac-client repository (https://github.com/ara-astronomia/crac-client) and start it
