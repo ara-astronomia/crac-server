@@ -17,8 +17,8 @@ poetry install
 Currently we have only the roof service, so it is handy to execute it with:
 
 ```
-cd crac_server/service
-python roof_service.py
+cd crac_server
+python app.py
 ```
 
 Then you can test the connectivity by executing a python repl:

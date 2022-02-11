@@ -39,6 +39,7 @@ class ButtonService(ButtonServicer):
         elif request.action == ButtonAction.TURN_OFF:
             if request.type == ButtonType.TELE_SWITCH:
                 TELESCOPE.nosync()
+                TELESCOPE.disconnect()
             buttonControl.off()
 
         status = buttonControl.get_status()

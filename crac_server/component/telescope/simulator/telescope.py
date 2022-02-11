@@ -22,6 +22,23 @@ class Telescope(BaseTelescope):
 
     def disconnect(self) -> bool:
         return True
+    
+    def sync(self):
+        """ 
+            Register the telescope in park position
+            Calculate the corrisponding equatorial coordinate
+        """
+        self.sync_time = datetime.datetime.utcnow()
+        aa_coords = AltazimutalCoords(
+            alt=Config.getFloat("park_alt", "telescope"),
+            az=Config.getFloat("park_az", "telescope")
+        )
+        telescope_config = ConfigParser()
+        telescope_config["coords"] = {'alt': str(aa_coords.alt), 'az': str(aa_coords.az), 'tr': 1, 'sl': 1, 'error': 0}
+        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
+        with open(telescope_path, 'w') as telescope_file:
+            telescope_config.write(telescope_file)
+        self.sync_status = True
 
     def park(self):
         self.move(
@@ -78,23 +95,6 @@ class Telescope(BaseTelescope):
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
-
-    def sync(self):
-        """ 
-            Register the telescope in park position
-            Calculate the corrisponding equatorial coordinate
-        """
-        self.sync_time = datetime.datetime.utcnow()
-        aa_coords = AltazimutalCoords(
-            alt=Config.getFloat("park_alt", "telescope"),
-            az=Config.getFloat("park_az", "telescope")
-        )
-        telescope_config = ConfigParser()
-        telescope_config["coords"] = {'alt': str(aa_coords.alt), 'az': str(aa_coords.az), 'tr': 1, 'sl': 1, 'error': 0}
-        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
-        with open(telescope_path, 'w') as telescope_file:
-            telescope_config.write(telescope_file)
-        self.sync_status = True
 
     def nosync(self):
         self.sync_time = None

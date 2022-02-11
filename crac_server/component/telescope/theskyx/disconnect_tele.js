@@ -9,7 +9,7 @@ var console = RunJavaScriptOutput;
 
 /* Disconnect this scriptable object to the mount hardware and the mount hardware to TheSky if not connected already. */
 sky6RASCOMTele.Disconnect();
-sky6RASCOMTele.DisconnectTelescope();
+sky6RASCOMTheSky.DisconnectTelescope();
 
 Out;
 

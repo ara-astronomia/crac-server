@@ -1,3 +1,4 @@
+from datetime import datetime
 from component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import TelescopeStatus
 from crac_server import config
@@ -23,6 +24,28 @@ class Telescope(BaseTelescope):
         self.script_sync_tele = os.path.join(os.path.dirname(__file__), 'sync_tele.js')
         self.script_disconnect_tele = os.path.join(os.path.dirname(__file__), 'disconnect_tele.js')
         self.connected = False
+
+    
+    def disconnect(self) -> None:
+        self.__call_thesky__(script=self.script_disconnect_tele)
+        return True
+
+    def sync(self, **kwargs) -> Dict[str, float]:
+        logger.info("sincronizzo il telescopio")
+        alt_deg = config.Config.getFloat("park_alt", "telescope")
+        az_deg = config.Config.getFloat("park_az", "telescope")
+        self.sync_time = datetime.utcnow()
+        eq_coords = self.altaz2radec(self.sync_time, alt=alt_deg, az=az_deg)
+        try:
+            data = self.__call_thesky__(script=self.script_sync_tele, ra=eq_coords.ra, dec=eq_coords.dec)
+            logger.info("data per il sync: %s", data)
+        except (ConnectionError, TimeoutError, json.decoder.JSONDecodeError):
+            self.__disconnection__()
+            self.sync_status = False
+        else:
+            self.__parse_result__(data.decode("utf-8"))
+            logger.debug("sincronizzo il telescopio a queste coordinate %s", kwargs)
+            self.sync_status = True
 
     def open_connection(self) -> None:
 
@@ -63,31 +86,16 @@ class Telescope(BaseTelescope):
         else:
             self.__update_status__()
 
-    def sync_tele(self, **kwargs) -> Dict[str, float]:
-        logger.info("sincronizzo il telescopio")
-        try:
-            data = self.__call_thesky__(script=self.script_sync_tele, **kwargs)
-            logger.info("data per il sync: %s", data)
-        except (ConnectionError, TimeoutError, json.decoder.JSONDecodeError):
-            self.__disconnection__()
-            return False
-        else:
-            self.__parse_result__(data.decode("utf-8"))
-            logger.debug("sincronizzo il telescopio a queste coordinate %s", kwargs)
-            return True
-
     def close_connection(self) -> None:
         if self.connected:
             self.s.close()
             self.connected = False
 
-    def disconnect(self) -> None:
-        return self.__call_thesky__(script=self.script_disconnect_tele)
-
     def __disconnection__(self):
         logger.exception("Connessione con The Sky persa: ")
         self.status = TelescopeStatus.LOST
         self.connected = False
+        self.disconnect()
 
     def __call_thesky__(self, script: str, **kwargs) -> bytes:
         self.open_connection()
