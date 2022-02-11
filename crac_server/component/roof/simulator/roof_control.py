@@ -1,7 +1,7 @@
+from crac_protobuf.roof_pb2 import RoofStatus
+from crac_server.component.roof.roof_control import RoofControl
 from threading import Thread
 from time import sleep
-from crac_server.component.roof.roof_control import RoofControl
-from crac_protobuf.roof_pb2 import RoofStatus
 
 class MockRoofControl(RoofControl):
 

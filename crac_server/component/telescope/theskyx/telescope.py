@@ -1,12 +1,12 @@
+from component.telescope.telescope import Telescope as BaseTelescope
+from crac_protobuf.telescope_pb2 import TelescopeStatus
+from crac_server import config
 import logging
 import json
 import os
 import re
 import socket
-import config
-from component.telescope.telescope import Telescope as BaseTelescope
 from typing import Dict
-from crac_protobuf.telescope_pb2 import TelescopeStatus
 
 
 logger = logging.getLogger(__name__)
@@ -16,13 +16,13 @@ class Telescope(BaseTelescope):
 
     def __init__(self):
         super().__init__()
-        self.hostname = config.Config.getValue("theskyx_server")
-        self.port: int = 3040
-        self.script: str = os.path.join(os.path.dirname(__file__), 'get_alt_az.js')
-        self.script_move_track: str = os.path.join(os.path.dirname(__file__), 'set_move_track.js')
-        self.script_sync_tele: str = os.path.join(os.path.dirname(__file__), 'sync_tele.js')
-        self.script_disconnect_tele: str = os.path.join(os.path.dirname(__file__), 'disconnect_tele.js')
-        self.connected: bool = False
+        self.hostname = config.Config.getValue("theskyx_ip", "server")
+        self.port = 3040
+        self.script = os.path.join(os.path.dirname(__file__), 'get_alt_az.js')
+        self.script_move_track = os.path.join(os.path.dirname(__file__), 'set_move_track.js')
+        self.script_sync_tele = os.path.join(os.path.dirname(__file__), 'sync_tele.js')
+        self.script_disconnect_tele = os.path.join(os.path.dirname(__file__), 'disconnect_tele.js')
+        self.connected = False
 
     def open_connection(self) -> None:
 

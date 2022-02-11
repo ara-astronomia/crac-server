@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Curtain:
-    def __init__(self, rotary_encoder, curtain_closed, curtain_open, motor):
+    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int]):
         self.__base__()
         self.rotary_encoder = RotaryEncoder(**rotary_encoder)
         self.curtain_closed = DigitalInputDevice(**curtain_closed)
@@ -71,22 +71,22 @@ class Curtain:
             (self.steps() == self.__min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
         )
 
-    def __is_disabled__(self):
+    def __is_disabled__(self) -> bool:
         return self.curtain_closed.is_active and not self.motor.value and not self.motor.enable_device.value
 
-    def __is_opening__(self):
+    def __is_opening__(self) -> bool:
         return self.motor.value == 1
 
-    def __is_closing__(self):
+    def __is_closing__(self) -> bool:
         return self.motor.value == -1
 
-    def __is_open__(self):
+    def __is_open__(self) -> bool:
         return self.curtain_open.is_active and not self.curtain_closed.is_active and not self.motor.value
 
-    def __is_closed__(self):
+    def __is_closed__(self) -> bool:
         return self.curtain_closed.is_active and not self.curtain_open.is_active and not self.motor.value
 
-    def __is_stopped__(self):
+    def __is_stopped__(self) -> bool:
         return not self.curtain_closed.is_active and not self.curtain_open.is_active and not self.motor.value
 
     def manual_reset(self):
@@ -123,10 +123,10 @@ class Curtain:
 
         self.__event_detect__()
 
-    def steps(self):
+    def steps(self) -> int:
         return self.rotary_encoder.steps
 
-    def get_status(self):
+    def get_status(self) -> CurtainStatus:
 
         """ Read the status of the curtain based on the pin of motor, encoder and switches """
 

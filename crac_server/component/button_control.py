@@ -1,12 +1,10 @@
-from gpiozero import OutputDevice
-
 from crac_protobuf.button_pb2 import ButtonStatus
-
 from crac_server.config import Config
+from gpiozero import OutputDevice
 
 
 class ButtonControl():
-    def __init__(self, pin):
+    def __init__(self, pin: int):
         self.output = OutputDevice(pin)
 
     def on(self):
@@ -15,7 +13,7 @@ class ButtonControl():
     def off(self):
         self.output.off()
 
-    def get_status(self):
+    def get_status(self) -> ButtonStatus:
         if self.output.value:
             return ButtonStatus.ON
         else:

@@ -1,16 +1,16 @@
 from configparser import ConfigParser
-import datetime
-import logging
-import os
-from crac_server import config
-from time import sleep
-from crac_server.component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords,
     EquatorialCoords,
     TelescopeSpeed,
 )
+from crac_server import config
+from crac_server.component.telescope.telescope import Telescope as BaseTelescope
 from crac_server.config import Config
+import datetime
+import logging
+import os
+from time import sleep
 
 
 logger = logging.getLogger(__name__)
