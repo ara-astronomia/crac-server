@@ -109,7 +109,7 @@ class Telescope(ABC):
             elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.EAST
 
-    def __radec2altaz(self, obstime: datetime, eq_coords: EquatorialCoords):
+    def __radec2altaz(self, eq_coords: EquatorialCoords, obstime = datetime.utcnow()):
         logger.debug("astropy ra received: %s", eq_coords.ra)
         logger.debug("astropy dec received: %s", eq_coords.dec)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
@@ -126,7 +126,7 @@ class Telescope(ABC):
         logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
         return aa_coords
 
-    def __altaz2radec(self, obstime: datetime, aa_cords: AltazimutalCoords):
+    def __altaz2radec(self, aa_cords: AltazimutalCoords, decimal_places: None | int = None, obstime = datetime.utcnow()):
         logger.debug('obstime: %s', obstime)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         logger.debug("astropy timestring: %s", timestring)
@@ -144,6 +144,9 @@ class Telescope(ABC):
         dec = float(ra_dec.dec / u.deg)
         logger.debug('ar park (orario decimale): %s', ra)
         logger.debug('dec park (declinazione decimale): %s', dec)
+        if decimal_places:
+            ra = round(ra, decimal_places)
+            dec = round(dec, decimal_places)
         return EquatorialCoords(ra=ra, dec=dec)
 
     def is_below_curtains_area(self, alt: float) -> bool:

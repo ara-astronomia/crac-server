@@ -1,9 +1,11 @@
 import logging
 import socket
+from time import sleep
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords,
+    EquatorialCoords,
     TelescopeSpeed,
 )
 import xml.etree.ElementTree as ET
@@ -37,9 +39,9 @@ class Telescope(BaseTelescope):
         #         file = file.format(**kwargs)
         self.s.sendall(script.encode('utf-8'))
         data = self.s.recv(30000)
-        logger.debug("Data received from xml: %s", data)
-        print(ET.fromstring(data))
+        #logger.debug("Data received from xml: %s", data)
         print(data)
+        #print(ET.fromstring(data))
         self.disconnect()
         return ET.fromstring(data)
 
@@ -64,7 +66,33 @@ class Telescope(BaseTelescope):
         raise NotImplementedError()
 
     def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
-        raise NotImplementedError()
+        current_eq_coords = None
+        move_eq_coords = self.__altaz2radec(aa_coords, decimal_places=2)
+        while (not current_eq_coords) or (current_eq_coords.ra != move_eq_coords.ra) or (current_eq_coords.dec != move_eq_coords.dec):
+            eq_park_position = f"""
+                                <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
+                                    <oneNumber name="RA">
+                                {move_eq_coords.ra}
+                                    </oneNumber>
+                                    <oneNumber name="DEC">
+                                {move_eq_coords.dec}
+                                    </oneNumber>
+                                </newNumberVector>
+
+                                """
+            #print(f"EQ Park Position: {eq_park_position}")
+            root = self.__call_indi__(eq_park_position)
+            for coords in root.findall("oneNumber"):
+                if coords.attrib["name"] == "RA":
+                    ra = round(float(coords.text), 2)
+                elif coords.attrib["name"] == "DEC":
+                    dec = round(float(coords.text), 2)
+
+            current_eq_coords = EquatorialCoords(ra=ra, dec=dec)
+            print(current_eq_coords)
+            print(move_eq_coords)
+            sleep(5)
+            move_eq_coords = self.__altaz2radec(aa_coords, decimal_places=2)
     
     def set_speed(self, speed: TelescopeSpeed):
         raise NotImplementedError()
@@ -78,7 +106,7 @@ class Telescope(BaseTelescope):
     def get_speed(self):
         raise NotImplementedError()
 
-    async def park(self, speed=TelescopeSpeed.DEFAULT):
+    def park(self, speed=TelescopeSpeed.DEFAULT):
         # self.move(
         #     aa_coords=AltazimutalCoords(
         #         alt=config.Config.getFloat("park_alt", "telescope"),
@@ -86,15 +114,37 @@ class Telescope(BaseTelescope):
         #     ),
         #     speed=speed
         # )
-        await self.xml_to_indiserver(
-            """
-            <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
-                <oneSwitch name="PARK">
-            On
-                </oneSwitch>
-            </newSwitchVector>
+        # self.__call_indi__(
+            # <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
+            #     <oneSwitch name="UNPARK">
+            # On
+            #     </oneSwitch>
+            # </newSwitchVector>
+        
+        park_eq_coords = self.__altaz2radec(AltazimutalCoords(alt=0, az=0), decimal_places=2)
+        print(park_eq_coords)
+        self.__call_indi__(
+            f"""
+                <newNumberVector device="Telescope Simulator" name="TELESCOPE_PARK_POSITION">
+                    <oneNumber name="PARK_ALT">
+                        {config.Config.getFloat("park_alt", "telescope")}
+                    </oneNumber>
+                    <oneNumber name="PARK_AZ">
+                        {config.Config.getFloat("park_az", "telescope")}
+                    </oneNumber>
+                </newNumberVector>
             """
         )
+        self.__call_indi__(
+            """
+                <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
+                    <oneSwitch name="PARK">
+                On
+                    </oneSwitch>
+                </newSwitchVector>
+            """
+        )
+
 
     def flat(self, speed=TelescopeSpeed.DEFAULT):
         self.move(
@@ -110,12 +160,4 @@ if __name__ == '__main__':
     t = Telescope()
     t.port = 7624
     t.hostname = "localhost"
-    t.__call_indi__(
-        """
-        <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
-            <oneSwitch name="PARK">
-        On
-            </oneSwitch>
-        </newSwitchVector>
-        """
-    )
+    t.park()
