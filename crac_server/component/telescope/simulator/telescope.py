@@ -96,10 +96,6 @@ class Telescope(BaseTelescope):
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
-    def nosync(self):
-        self.sync_time = None
-        self.sync_status = False
-    
     def get_aa_coords(self) -> AltazimutalCoords:
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()

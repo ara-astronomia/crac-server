@@ -7,7 +7,7 @@ from crac_protobuf.telescope_pb2 import (
 from crac_protobuf.telescope_pb2_grpc import (
     TelescopeServicer,
 )
-from crac_server.component.telescope.simulator.telescope import TELESCOPE
+from crac_server.component.telescope.indi.telescope import TELESCOPE
 from crac_server.component.button_control import DOME_LIGHT, TELE_SWITCH
 
 

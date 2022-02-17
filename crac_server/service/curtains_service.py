@@ -12,7 +12,7 @@ from crac_server.component.curtains.factory_curtain import (
     CURTAIN_EAST,
     CURTAIN_WEST,
 )
-from crac_server.component.telescope.simulator.telescope import TELESCOPE
+from crac_server.component.telescope.indi.telescope import TELESCOPE
 from crac_server.config import Config
 
 

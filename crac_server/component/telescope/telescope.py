@@ -39,13 +39,13 @@ class Telescope(ABC):
             Calculate the corrisponding equatorial coordinate
         """
         raise NotImplementedError()
-    
-    @abstractmethod
+
     def nosync(self):
         """ 
             Unregister the telescope
         """
-        raise NotImplementedError()
+        self.sync_time = None
+        self.sync_status = False
 
     @abstractmethod
     def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
@@ -127,7 +127,7 @@ class Telescope(ABC):
         logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
         return aa_coords
 
-    def __altaz2radec(self, aa_cords: AltazimutalCoords, decimal_places: None | int = None, obstime = datetime.utcnow()):
+    def __altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int = None, obstime = datetime.utcnow()):
         logger.debug('obstime: %s', obstime)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         logger.debug("astropy timestring: %s", timestring)
@@ -139,7 +139,7 @@ class Telescope(ABC):
         equinox = config.Config.getValue("equinox", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=time)
-        alt_az = SkyCoord(alt=aa_cords.alt * u.deg, az=aa_cords.az * u.deg, frame=aa, equinox=equinox)
+        alt_az = SkyCoord(alt=aa_coords.alt * u.deg, az=aa_coords.az * u.deg, frame=aa, equinox=equinox)
         ra_dec = alt_az.transform_to('fk5')
         ra = float((ra_dec.ra / 15) / u.deg)
         dec = float(ra_dec.dec / u.deg)

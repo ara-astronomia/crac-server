@@ -13,7 +13,7 @@ from crac_server.component.button_control import (
     FLAT_LIGHT,
     DOME_LIGHT,
 )
-from crac_server.component.telescope.simulator.telescope import TELESCOPE
+from crac_server.component.telescope.indi.telescope import TELESCOPE
 
 
 logger = logging.getLogger(__name__)
