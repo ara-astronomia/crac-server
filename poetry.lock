@@ -33,7 +33,7 @@ test = ["pytest", "pytest-cov"]
 
 [[package]]
 name = "crac-protobuf"
-version = "0.1.6"
+version = "0.1.8"
 description = "Protobuf contrat for client/server communication"
 category = "main"
 optional = false
@@ -41,7 +41,7 @@ python-versions = "^3.10"
 
 [package.source]
 type = "file"
-url = "../crac-protobuf/dist/crac-protobuf-0.1.6.tar.gz"
+url = "../crac-protobuf/dist/crac-protobuf-0.1.8.tar.gz"
 
 [[package]]
 name = "gpiozero"
@@ -127,6 +127,14 @@ docs = ["sphinx-astropy (>=1.3)"]
 test = ["pytest", "pytest-doctestplus (>=0.7)"]
 
 [[package]]
+name = "pyindi-client"
+version = "0.2.8"
+description = "Third party Python API for INDI client"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "pyparsing"
 version = "3.0.7"
 description = "Python parsing module"
@@ -156,7 +164,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "204b422fa6198232b4f5f389b5f7702e7df41d16210b163ecd31df92e003653a"
+content-hash = "3d84874ea7065617ffd4a28ce39165f814d1161e5801ec5aff6458e4b1a606ab"
 
 [metadata.files]
 astropy = [
@@ -184,7 +192,7 @@ colorzero = [
     {file = "colorzero-2.0.tar.gz", hash = "sha256:e7d5a5c26cd0dc37b164ebefc609f388de24f8593b659191e12d85f8f9d5eb58"},
 ]
 crac-protobuf = [
-    {file = "crac-protobuf-0.1.6.tar.gz", hash = "sha256:2b7025eb5bdad0b616c0e4076fe702b0615bda2066fd86df00c6501b9bc11ff2"},
+    {file = "crac-protobuf-0.1.8.tar.gz", hash = "sha256:c726724bcfcbd0627e9ab94d13ce11545fc9d75048c972deb53c5f8cf6d4a46e"},
 ]
 gpiozero = [
     {file = "gpiozero-1.6.2-py2.py3-none-any.whl", hash = "sha256:9af00b90d4fa775aa1fc023363e4aa5539844a5b0c461be5ced5cfabba364d99"},
@@ -365,6 +373,9 @@ pyerfa = [
     {file = "pyerfa-2.0.0.1-cp39-cp39-win32.whl", hash = "sha256:7895b7e6f3bc36442d1969bf3bda5a4c3b661be7a5a468798369cbd5d81023d8"},
     {file = "pyerfa-2.0.0.1-cp39-cp39-win_amd64.whl", hash = "sha256:63a83c35cea8c5d50d53c18089f1e625c0ffc59a7a5b8d44e0f1b3ec5288f183"},
     {file = "pyerfa-2.0.0.1.tar.gz", hash = "sha256:2fd4637ffe2c1e6ede7482c13f583ba7c73119d78bef90175448ce506a0ede30"},
+]
+pyindi-client = [
+    {file = "pyindi-client-0.2.8.tar.gz", hash = "sha256:e1678a1235a7f86a8f6754b4e80b948fd7c358974105604f33dae84be19c33d9"},
 ]
 pyparsing = [
     {file = "pyparsing-3.0.7-py3-none-any.whl", hash = "sha256:a6c06a88f252e6c322f65faf8f418b16213b51bdfaece0524c1c1bc30c63c484"},
