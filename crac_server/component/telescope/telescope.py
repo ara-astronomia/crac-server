@@ -56,15 +56,15 @@ class Telescope(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_aa_coords(self):
+    def get_aa_coords(self) -> AltazimutalCoords:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_eq_coords(self):
+    def get_eq_coords(self) -> EquatorialCoords:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_speed(self):
+    def get_speed(self) -> TelescopeSpeed:
         raise NotImplementedError()
 
     def park(self, speed=TelescopeSpeed.DEFAULT):
@@ -85,7 +85,7 @@ class Telescope(ABC):
             speed=speed
         )
 
-    def get_status(self, aa_coords: AltazimutalCoords):
+    def get_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
         if not aa_coords or not aa_coords.alt or not aa_coords.az:
             logger.error("Errore Telescopio: "+str(aa_coords))
             return TelescopeStatus.ERROR
@@ -120,7 +120,8 @@ class Telescope(ABC):
         height = config.Config.getInt("height", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=observing_time)
-        coord = SkyCoord(str(eq_coords.ra)+"h", str(eq_coords.dec)+"d", equinox=self.equinox, frame="fk5")
+        equinox = config.Config.getValue("equinox", "geography")
+        coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="fk5")
         altaz_coords = coord.transform_to(aa)
         aa_coords = AltazimutalCoords(alt=float(altaz_coords.alt / u.deg), az=float(altaz_coords.az / u.deg))
         logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
@@ -138,7 +139,7 @@ class Telescope(ABC):
         equinox = config.Config.getValue("equinox", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=time)
-        alt_az = SkyCoord(aa_cords.alt * u.deg, aa_cords.az * u.deg, frame=aa, equinox=equinox)
+        alt_az = SkyCoord(alt=aa_cords.alt * u.deg, az=aa_cords.az * u.deg, frame=aa, equinox=equinox)
         ra_dec = alt_az.transform_to('fk5')
         ra = float((ra_dec.ra / 15) / u.deg)
         dec = float(ra_dec.dec / u.deg)
