@@ -39,9 +39,6 @@ class Telescope(BaseTelescope):
         #         file = file.format(**kwargs)
         self.s.sendall(script.encode('utf-8'))
         data = self.s.recv(30000)
-        #logger.debug("Data received from xml: %s", data)
-        print(data)
-        #print(ET.fromstring(data))
         self.disconnect()
         return ET.fromstring(data)
 
@@ -65,7 +62,7 @@ class Telescope(BaseTelescope):
         """
         raise NotImplementedError()
 
-    def move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SLEWING):
+    def move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.TRACKING):
         self.__call_indi__(
             """
                 <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
@@ -75,27 +72,60 @@ class Telescope(BaseTelescope):
                 </newSwitchVector>
             """
         )
+        eq_coords = self.__altaz2radec(aa_coords) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
+        print(aa_coords)
+        print(eq_coords)
+        print(self.__radec2altaz(eq_coords))
+
+        self.__call_indi__(
+            f"""
+                <newSwitchVector device="Telescope Simulator" name="ON_COORD_SET">
+                    <oneSwitch name="SLEW">
+                        {"On" if speed == TelescopeSpeed.DEFAULT else "Off"}
+                    </oneSwitch>
+                    <oneSwitch name="TRACK">
+                        {"On" if speed == TelescopeSpeed.TRACKING else "Off"}
+                    </oneSwitch>
+                    <oneSwitch name="SYNC">
+                        Off
+                    </oneSwitch>
+                </newSwitchVector>
+            """
+        )
         self.__call_indi__(
             f"""
                 <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
-                    <oneNumber name="ALT">
-                {aa_coords.alt}
+                    <oneNumber name="DEC">
+                      {eq_coords.dec}
                     </oneNumber>
-                    <oneNumber name="AZ">
-                {aa_coords.az}
+                    <oneNumber name="RA">
+                      {eq_coords.ra}
                     </oneNumber>
                 </newNumberVector>
-
-            """)
+            """
+        )
     
     def set_speed(self, speed: TelescopeSpeed):
         raise NotImplementedError()
 
     def get_aa_coords(self):
-        raise NotImplementedError()
+        eq_coords = self.get_eq_coords()
+        return self.__radec2altaz(eq_coords)
 
     def get_eq_coords(self):
-        raise NotImplementedError()
+        root = self.__call_indi__(
+            """
+            <getProperties device="Telescope Simulator" version="1.7" name="EQUATORIAL_EOD_COORD"/>
+            """
+        )
+        
+        for coords in root.findall("defNumber"):
+            if coords.attrib["name"] == "RA":
+                ra = round(float(coords.text), 2)
+            elif coords.attrib["name"] == "DEC":
+                dec = round(float(coords.text), 2)
+
+        return EquatorialCoords(ra=ra, dec=dec)
 
     def get_speed(self):
         raise NotImplementedError()
@@ -142,11 +172,29 @@ class Telescope(BaseTelescope):
             ),
             speed=speed
         )
+        self.__call_indi__(
+            """
+            <newSwitchVector device="Telescope Simulator" name="TELESCOPE_TRACK_STATE">
+                <oneSwitch name="TRACK_OFF">
+            On
+                </oneSwitch>
+            </newSwitchVector>
+            """
+        )
 
 if __name__ == '__main__':
     t = Telescope()
     t.port = 7624
     t.hostname = "localhost"
-    t.park()
+    #t.park()
     # sleep(5)
     # t.flat()
+    # t.move(
+    #     aa_coords=AltazimutalCoords(
+    #         alt=config.Config.getFloat("park_alt", "telescope"),
+    #         az=config.Config.getFloat("park_az", "telescope")
+    #     )
+    # )
+    t.flat()
+    print(t.get_eq_coords())
+    print(t.get_aa_coords())
