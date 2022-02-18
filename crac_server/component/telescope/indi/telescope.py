@@ -1,7 +1,4 @@
-from datetime import datetime
 import logging
-import socket
-from time import sleep
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import (
@@ -9,10 +6,14 @@ from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,
     TelescopeSpeed,
 )
+from datetime import datetime
+import socket
+import threading 
+from time import sleep
 import xml.etree.ElementTree as ET
 
-
 logger = logging.getLogger(__name__)
+lock = threading.Lock()
 
 
 class Telescope(BaseTelescope):
@@ -30,12 +31,12 @@ class Telescope(BaseTelescope):
             self.s.connect((self.hostname, self.port))
             self.connected = True
 
-    def __call_indi__(self, script: str, **kwargs) -> bytes:
-        self.open_connection()
-        self.s.sendall(script.encode('utf-8'))
-        data = self.s.recv(30000)
-        print(data)
-        self.disconnect()
+    def __call_indi__(self, script: str) -> bytes:
+        with lock:
+            self.open_connection()
+            self.s.sendall(script.encode('utf-8'))
+            data = self.s.recv(30000)
+            self.disconnect()
         return ET.fromstring(data)
 
 
@@ -111,9 +112,9 @@ class Telescope(BaseTelescope):
             """
         )
         eq_coords = self.__altaz2radec(aa_coords) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
-        print(aa_coords)
-        print(eq_coords)
-        print(self.__radec2altaz(eq_coords))
+        logger.debug(aa_coords)
+        logger.debug(eq_coords)
+        logger.debug(self.__radec2altaz(eq_coords))
 
         self.set_speed(speed)
         self.__call_indi__(
@@ -168,7 +169,10 @@ class Telescope(BaseTelescope):
 
     def get_aa_coords(self):
         eq_coords = self.get_eq_coords()
-        return self.__radec2altaz(eq_coords)
+        aa_coords = self.__radec2altaz(eq_coords)
+        logger.debug(f"Coordinate altazimutali {aa_coords}")
+        logger.debug(f"Riconversione in coordinate equatoriali {self.__altaz2radec(aa_coords)}")
+        return aa_coords
 
     def get_eq_coords(self):
         root = self.__call_indi__(
@@ -183,7 +187,9 @@ class Telescope(BaseTelescope):
             elif coords.attrib["name"] == "DEC":
                 dec = round(float(coords.text), 2)
 
-        return EquatorialCoords(ra=ra, dec=dec)
+        eq_coords = EquatorialCoords(ra=ra, dec=dec)
+        logger.debug(f"Coordinate equatoriali {eq_coords}")
+        return eq_coords
 
     def get_speed(self):
         root = self.__call_indi__(
@@ -258,24 +264,39 @@ if __name__ == '__main__':
     t = Telescope()
     t.port = 7624
     t.hostname = "localhost"
-    #t.park()
+    # #t.park()
+    # # sleep(5)
+    # # t.flat()
+    # # t.move(
+    # #     aa_coords=AltazimutalCoords(
+    # #         alt=config.Config.getFloat("park_alt", "telescope"),
+    # #         az=config.Config.getFloat("park_az", "telescope")
+    # #     )
+    # # )
+    # #t.flat()
+    # #t.sync()
+    # #print(t.get_eq_coords())
+    # #print(t.get_aa_coords())
+    # t.set_speed(TelescopeSpeed.DEFAULT)
+    # print(t.get_speed())
     # sleep(5)
-    # t.flat()
-    # t.move(
-    #     aa_coords=AltazimutalCoords(
-    #         alt=config.Config.getFloat("park_alt", "telescope"),
-    #         az=config.Config.getFloat("park_az", "telescope")
-    #     )
-    # )
-    #t.flat()
-    #t.sync()
-    #print(t.get_eq_coords())
-    #print(t.get_aa_coords())
-    t.set_speed(TelescopeSpeed.DEFAULT)
-    print(t.get_speed())
-    sleep(5)
-    t.set_speed(TelescopeSpeed.TRACKING)
-    print(t.get_speed())
-    sleep(5)
-    t.set_speed(TelescopeSpeed.SLEWING)
-    print(t.get_speed())
+    # t.set_speed(TelescopeSpeed.TRACKING)
+    # print(t.get_speed())
+    # sleep(5)
+    # t.set_speed(TelescopeSpeed.SLEWING)
+    # print(t.get_speed())
+
+
+    from skyfield.api import N, Star, W, wgs84, load, wgs84
+    position = wgs84.latlon(latitude_degrees=42.22933, longitude_degrees=12.8115, elevation_m=465)
+    ts = load.timescale()
+    time = ts.utc(2022, 2, 18, 10, 2, 40)
+    planets = load('de421.bsp')
+    earth = planets['earth']
+    observatory = earth + position
+    gc = Star(ra_hours=(6, 52, 19.95), dec_degrees=(41, 45, 20.54))
+    observation = observatory.at(time).observe(gc)
+    aa_coords = observation.apparent().altaz()
+    print(aa_coords)
+    print(t.get_aa_coords())
+    print(t.get_eq_coords())

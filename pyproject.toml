@@ -11,6 +11,7 @@ crac-protobuf = { path = "../crac-protobuf/dist/crac-protobuf-0.1.8.tar.gz" }
 grpcio-tools = "^1.43.0"
 gpiozero = "^1.6.2"
 astropy = "^5.0.1"
+skyfield = "^1.42"
 
 [tool.poetry.dev-dependencies]
 
