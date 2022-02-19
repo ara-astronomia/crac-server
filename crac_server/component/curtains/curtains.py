@@ -1,5 +1,5 @@
 import logging
-
+import threading
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
@@ -17,6 +17,7 @@ class Curtain:
         self.motor = Motor(**motor)
         self.motor.enable_device.off()
         self.__event_detect__()
+        self.lock = threading.Lock()
 
     def __base__(self):
         self.__sub_min_step__ = -5
@@ -36,13 +37,16 @@ class Curtain:
         self.curtain_open.when_activated = None
 
     def __open__(self):
-        self.motor.forward()
+        with self.lock:
+            self.motor.forward()
 
     def __close__(self):
-        self.motor.backward()
+        with self.lock:
+            self.motor.backward()
 
     def __stop__(self):
-        self.motor.stop()
+        with self.lock:
+            self.motor.stop()
 
     def __check_and_stop__(self):
         logger.debug("Number of steps: %s", self.steps())

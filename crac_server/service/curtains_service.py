@@ -7,11 +7,12 @@ from crac_protobuf.curtains_pb2 import (
 )
 from crac_protobuf.telescope_pb2 import TelescopeStatus
 from crac_protobuf.curtains_pb2_grpc import CurtainServicer
-
+from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.curtains.factory_curtain import (
     CURTAIN_EAST,
     CURTAIN_WEST,
 )
+from crac_server.component.roof.simulator.roof_control import ROOF
 from crac_server.component.telescope.indi.telescope import TELESCOPE
 from crac_server.config import Config
 
@@ -25,13 +26,16 @@ class CurtainsService(CurtainServicer):
         
         curtain_east_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_EAST)
         curtain_west_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_WEST)
-        if request.action == CurtainsAction.DISABLE:
+        if request.action is CurtainsAction.DISABLE:
             CURTAIN_EAST.disable()
             CURTAIN_WEST.disable()
-        elif request.action == CurtainsAction.ENABLE:
+        elif (
+                request.action is CurtainsAction.ENABLE and 
+                ROOF.get_status() is RoofStatus.ROOF_OPENED
+        ):
             CURTAIN_EAST.enable()
             CURTAIN_WEST.enable()
-        elif request.action == CurtainsAction.CALIBRATE_CURTAINS:
+        elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
             CURTAIN_EAST.manual_reset()
             CURTAIN_WEST.manual_reset()
 
@@ -46,6 +50,7 @@ class CurtainsService(CurtainServicer):
         curtain_west_entry.steps = CURTAIN_WEST.steps()
         logger.debug("actual east curtain steps %s", curtain_east_entry.steps)
         logger.debug("actual west curtain steps %s", curtain_west_entry.steps)
+        
         return CurtainsResponse(curtains=(curtain_east_entry, curtain_west_entry))
 
     def __calculate_curtains_steps(self):

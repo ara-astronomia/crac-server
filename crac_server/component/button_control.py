@@ -1,17 +1,24 @@
+import threading
 from crac_protobuf.button_pb2 import ButtonStatus
 from crac_server.config import Config
 from gpiozero import OutputDevice
 
 
+lock = threading.Lock()
+
+
 class ButtonControl():
     def __init__(self, pin: int):
         self.output = OutputDevice(pin)
+        self.lock = threading.Lock()
 
     def on(self):
-        self.output.on()
+        with self.lock:
+            self.output.on()
 
     def off(self):
-        self.output.off()
+        with self.lock:
+            self.output.off()
 
     def get_status(self) -> ButtonStatus:
         if self.output.value:
