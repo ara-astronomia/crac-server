@@ -35,7 +35,7 @@ class ButtonService(ButtonServicer):
             buttonControl.on()
             if request.type == ButtonType.FLAT_LIGHT:
                 logger.info("Turned on Flat Panel")
-                TELESCOPE.set_speed(TelescopeSpeed.TRACKING)
+                TELESCOPE.set_speed(TelescopeSpeed.SPEED_TRACKING)
         elif request.action == ButtonAction.TURN_OFF:
             if request.type == ButtonType.TELE_SWITCH:
                 TELESCOPE.nosync()

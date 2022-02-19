@@ -67,7 +67,7 @@ class Telescope(ABC):
     def get_speed(self) -> TelescopeSpeed:
         raise NotImplementedError()
 
-    def park(self, speed=TelescopeSpeed.DEFAULT):
+    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
@@ -76,7 +76,7 @@ class Telescope(ABC):
             speed=speed
         )
 
-    def flat(self, speed=TelescopeSpeed.DEFAULT):
+    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),

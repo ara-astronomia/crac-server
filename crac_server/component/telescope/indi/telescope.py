@@ -37,7 +37,11 @@ class Telescope(BaseTelescope):
             self.s.sendall(script.encode('utf-8'))
             data = self.s.recv(30000)
             self.disconnect()
-        return ET.fromstring(data)
+            print(data)
+        try:
+            return ET.fromstring(data)
+        except ET.ParseError as err:
+            logger.error(f"Xml Malformed {err}")
 
 
     def disconnect(self) -> bool:
@@ -101,7 +105,7 @@ class Telescope(BaseTelescope):
         )
         self.sync_status = True
 
-    def move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.TRACKING):
+    def move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call_indi__(
             """
                 <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
@@ -115,7 +119,6 @@ class Telescope(BaseTelescope):
         logger.debug(aa_coords)
         logger.debug(eq_coords)
         logger.debug(self.__radec2altaz(eq_coords))
-
         self.set_speed(speed)
         self.__call_indi__(
             f"""
@@ -131,7 +134,7 @@ class Telescope(BaseTelescope):
         )
     
     def set_speed(self, speed: TelescopeSpeed):
-        if speed is TelescopeSpeed.DEFAULT:
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call_indi__(
                 """
                     <newSwitchVector device="Telescope Simulator" name="TELESCOPE_TRACK_STATE">
@@ -155,10 +158,10 @@ class Telescope(BaseTelescope):
                 f"""
                     <newSwitchVector device="Telescope Simulator" name="ON_COORD_SET">
                         <oneSwitch name="SLEW">
-                            {"On" if speed == TelescopeSpeed.SLEWING else "Off"}
+                            {"On" if speed == TelescopeSpeed.SPEED_SLEWING else "Off"}
                         </oneSwitch>
                         <oneSwitch name="TRACK">
-                            {"On" if speed == TelescopeSpeed.TRACKING else "Off"}
+                            {"On" if speed == TelescopeSpeed.SPEED_TRACKING else "Off"}
                         </oneSwitch>
                         <oneSwitch name="SYNC">
                             Off
@@ -194,35 +197,22 @@ class Telescope(BaseTelescope):
     def get_speed(self):
         root = self.__call_indi__(
             """
-            <getProperties device="Telescope Simulator" version="1.7" name="TELESCOPE_TRACK_STATE"/>
+            <getProperties device="Telescope Simulator" version="1.7" name="EQUATORIAL_EOD_COORD"/>
             """
         )
-        for switch in root.findall("defSwitch"):
-            if switch.attrib["name"] == "TRACK_ON":
-                track_on = switch.text.strip()
-            elif switch.attrib["name"] == "TRACK_OFF":
-                track_off = switch.text.strip()
+        state = root.attrib["state"].strip()
 
-        if track_on == "Off" or track_off == "On":
-            return TelescopeSpeed.DEFAULT
+        match state:
+            case "Ok":
+                return TelescopeSpeed.SPEED_TRACKING
+            case "Idle":
+                return TelescopeSpeed.SPEED_NOT_TRACKING
+            case "Busy":
+                return TelescopeSpeed.SPEED_SLEWING
+            case _:
+                return TelescopeSpeed.SPEED_ERROR
 
-        root = self.__call_indi__(
-            """
-            <getProperties device="Telescope Simulator" version="1.7" name="ON_COORD_SET"/>
-            """
-        )
-        for switch in root.findall("defSwitch"):
-            if switch.attrib["name"] == "TRACK":
-                track = switch.text.strip()
-            elif switch.attrib["name"] == "SLEW":
-                slew = switch.text.strip()
-
-        if track == "On":
-            return TelescopeSpeed.TRACKING
-        elif slew == "On":
-            return TelescopeSpeed.SLEWING
-
-    def park(self, speed=TelescopeSpeed.DEFAULT):
+    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
@@ -240,7 +230,7 @@ class Telescope(BaseTelescope):
             """
         )
 
-    def flat(self, speed=TelescopeSpeed.DEFAULT):
+    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),
@@ -277,26 +267,26 @@ if __name__ == '__main__':
     # #t.sync()
     # #print(t.get_eq_coords())
     # #print(t.get_aa_coords())
-    # t.set_speed(TelescopeSpeed.DEFAULT)
+    # t.set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
     # print(t.get_speed())
     # sleep(5)
-    # t.set_speed(TelescopeSpeed.TRACKING)
+    # t.set_speed(TelescopeSpeed.SPEED_TRACKING)
     # print(t.get_speed())
     # sleep(5)
-    # t.set_speed(TelescopeSpeed.SLEWING)
-    # print(t.get_speed())
+    # t.set_speed(TelescopeSpeed.SPEED_SLEWING)
+    print(t.get_speed())
 
 
-    from skyfield.api import N, Star, W, wgs84, load, wgs84
-    position = wgs84.latlon(latitude_degrees=42.22933, longitude_degrees=12.8115, elevation_m=465)
-    ts = load.timescale()
-    time = ts.utc(2022, 2, 18, 10, 2, 40)
-    planets = load('de421.bsp')
-    earth = planets['earth']
-    observatory = earth + position
-    gc = Star(ra_hours=(6, 52, 19.95), dec_degrees=(41, 45, 20.54))
-    observation = observatory.at(time).observe(gc)
-    aa_coords = observation.apparent().altaz()
-    print(aa_coords)
-    print(t.get_aa_coords())
-    print(t.get_eq_coords())
+    # from skyfield.api import N, Star, W, wgs84, load, wgs84
+    # position = wgs84.latlon(latitude_degrees=42.22933, longitude_degrees=12.8115, elevation_m=465)
+    # ts = load.timescale()
+    # time = ts.utc(2022, 2, 18, 10, 2, 40)
+    # planets = load('de421.bsp')
+    # earth = planets['earth']
+    # observatory = earth + position
+    # gc = Star(ra_hours=(6, 52, 19.95), dec_degrees=(41, 45, 20.54))
+    # observation = observatory.at(time).observe(gc)
+    # aa_coords = observation.apparent().altaz()
+    # print(aa_coords)
+    # print(t.get_aa_coords())
+    # print(t.get_eq_coords())
