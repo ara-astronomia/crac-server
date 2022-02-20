@@ -29,7 +29,6 @@ class TelescopeService(TelescopeServicer):
                 sync=False
             )
         elif request.action is TelescopeAction.SYNC:
-            print("in sync")
             TELE_SWITCH.on()
             TELESCOPE.sync()
         elif (

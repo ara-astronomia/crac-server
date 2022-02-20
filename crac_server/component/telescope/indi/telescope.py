@@ -37,7 +37,7 @@ class Telescope(BaseTelescope):
             self.s.sendall(script.encode('utf-8'))
             data = self.s.recv(30000)
             self.disconnect()
-            print(data)
+            logger.debug(data)
         try:
             return ET.fromstring(data)
         except ET.ParseError as err:

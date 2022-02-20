@@ -5,7 +5,10 @@ from crac_protobuf.curtains_pb2 import (
     CurtainOrientation,
     CurtainEntryResponse
 )
-from crac_protobuf.telescope_pb2 import TelescopeStatus
+from crac_protobuf.telescope_pb2 import (
+    TelescopeStatus,
+    TelescopeSpeed,
+)
 from crac_protobuf.curtains_pb2_grpc import CurtainServicer
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.curtains.factory_curtain import (
@@ -39,10 +42,10 @@ class CurtainsService(CurtainServicer):
             CURTAIN_EAST.manual_reset()
             CURTAIN_WEST.manual_reset()
 
-        steps = self.__calculate_curtains_steps()
-
-        CURTAIN_EAST.move(steps["east"])
-        CURTAIN_WEST.move(steps["west"])
+        if TELESCOPE.get_speed() in [TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING]:
+            steps = self.__calculate_curtains_steps()
+            CURTAIN_EAST.move(steps["east"])
+            CURTAIN_WEST.move(steps["west"])
 
         curtain_east_entry.status = CURTAIN_EAST.get_status()
         curtain_west_entry.status = CURTAIN_WEST.get_status()
