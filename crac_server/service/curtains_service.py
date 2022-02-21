@@ -1,9 +1,11 @@
+import importlib
 import logging
 from crac_protobuf.curtains_pb2 import (
     CurtainsAction,
     CurtainsResponse,
     CurtainOrientation,
-    CurtainEntryResponse
+    CurtainEntryResponse,
+    CurtainStatus,
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
@@ -16,11 +18,11 @@ from crac_server.component.curtains.factory_curtain import (
     CURTAIN_WEST,
 )
 from crac_server.component.roof.simulator.roof_control import ROOF
-from crac_server.component.telescope.indi.telescope import TELESCOPE
 from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
+TELESCOPE = importlib.import_module(f"component.telescope.{Config.getValue('driver', 'telescope')}.telescope").TELESCOPE
 
 
 class CurtainsService(CurtainServicer):
@@ -30,8 +32,14 @@ class CurtainsService(CurtainServicer):
         curtain_east_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_EAST)
         curtain_west_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_WEST)
         if request.action is CurtainsAction.DISABLE:
-            CURTAIN_EAST.disable()
-            CURTAIN_WEST.disable()
+            statusE = CURTAIN_EAST.get_status()
+            statusW = CURTAIN_WEST.get_status()
+            if (
+                statusE <= CurtainStatus.CURTAIN_OPENED and
+                statusW <= CurtainStatus.CURTAIN_OPENED
+            ):
+                CURTAIN_EAST.disable()
+                CURTAIN_WEST.disable()
         elif (
                 request.action is CurtainsAction.ENABLE and 
                 ROOF.get_status() is RoofStatus.ROOF_OPENED

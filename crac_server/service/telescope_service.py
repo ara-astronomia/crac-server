@@ -1,6 +1,5 @@
+import importlib
 import logging
-from crac_server.component.telescope.indi.telescope import TELESCOPE
-from crac_server.component.button_control import DOME_LIGHT, FLAT_LIGHT, TELE_SWITCH
 from crac_protobuf.button_pb2 import ButtonStatus
 from crac_protobuf.telescope_pb2 import (
     TelescopeAction,
@@ -11,9 +10,12 @@ from crac_protobuf.telescope_pb2 import (
 from crac_protobuf.telescope_pb2_grpc import (
     TelescopeServicer,
 )
+from crac_server.component.button_control import DOME_LIGHT, FLAT_LIGHT, TELE_SWITCH
+from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
+TELESCOPE = importlib.import_module(f"component.telescope.{Config.getValue('driver', 'telescope')}.telescope").TELESCOPE
 
 
 class TelescopeService(TelescopeServicer):

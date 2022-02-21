@@ -248,7 +248,8 @@ class Telescope(BaseTelescope):
             """
         )
 
-TELESCOPE = Telescope()
+TELESCOPE = Telescope(hostname=config.Config.getValue('hostname', 'telescope'), port=config.Config.getInt('port', 'telescope'))
+
 
 if __name__ == '__main__':
     t = Telescope()

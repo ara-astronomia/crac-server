@@ -39,13 +39,13 @@ class MockCurtain(Curtain):
         self.t.start()
 
     def __fake_move_forward__(self, curtain):
-        while curtain.motor.is_active:
+        while curtain.motor.is_active and curtain.motor.value:
             sleep(0.2)
             curtain.__rotate_cw__(curtain.rotary_encoder.a, curtain.rotary_encoder.b)
             curtain.__check_curtains_limit__()
 
     def __fake_move_backward__(self, curtain):
-        while curtain.motor.is_active:
+        while curtain.motor.is_active and curtain.motor.value:
             sleep(0.2)
             curtain.__rotate_ccw__(curtain.rotary_encoder.a, curtain.rotary_encoder.b)
             curtain.__check_curtains_limit__()

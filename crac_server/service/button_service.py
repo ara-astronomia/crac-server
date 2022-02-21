@@ -1,3 +1,4 @@
+import importlib
 import logging
 from crac_protobuf.button_pb2 import (
     ButtonAction,
@@ -13,10 +14,11 @@ from crac_server.component.button_control import (
     FLAT_LIGHT,
     DOME_LIGHT,
 )
-from crac_server.component.telescope.indi.telescope import TELESCOPE
+from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
+TELESCOPE = importlib.import_module(f"component.telescope.{Config.getValue('driver', 'telescope')}.telescope").TELESCOPE
 
 
 class ButtonService(ButtonServicer):
