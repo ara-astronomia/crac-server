@@ -1,4 +1,5 @@
 import logging
+import threading
 from gpiozero import OutputDevice, DigitalInputDevice
 
 from crac_server.config import Config
@@ -6,7 +7,7 @@ from crac_protobuf.roof_pb2 import RoofStatus
 
 
 logger = logging.getLogger(__name__)
-
+lock = threading.Lock()
 
 class RoofControl():
 
@@ -16,12 +17,14 @@ class RoofControl():
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
 
     def open(self):
-        self.motor.on()
-        self.roof_open_switch.wait_for_active()
+        with lock:
+            self.motor.on()
+            self.roof_open_switch.wait_for_active()
 
     def close(self):
-        self.motor.off()
-        self.roof_closed_switch.wait_for_active()
+        with lock:
+            self.motor.off()
+            self.roof_closed_switch.wait_for_active()
 
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active

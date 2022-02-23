@@ -1,3 +1,4 @@
+import importlib
 import logging
 from crac_protobuf.button_pb2 import (
     ButtonAction,
@@ -13,10 +14,11 @@ from crac_server.component.button_control import (
     FLAT_LIGHT,
     DOME_LIGHT,
 )
-from crac_server.component.telescope.simulator.telescope import TELESCOPE
+from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
+TELESCOPE = importlib.import_module(f"component.telescope.{Config.getValue('driver', 'telescope')}.telescope").TELESCOPE
 
 
 class ButtonService(ButtonServicer):
@@ -35,7 +37,7 @@ class ButtonService(ButtonServicer):
             buttonControl.on()
             if request.type == ButtonType.FLAT_LIGHT:
                 logger.info("Turned on Flat Panel")
-                TELESCOPE.set_speed(TelescopeSpeed.TRACKING)
+                TELESCOPE.set_speed(TelescopeSpeed.SPEED_TRACKING)
         elif request.action == ButtonAction.TURN_OFF:
             if request.type == ButtonType.TELE_SWITCH:
                 TELESCOPE.nosync()

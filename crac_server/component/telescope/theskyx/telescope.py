@@ -1,4 +1,5 @@
 from datetime import datetime
+import threading
 from component.telescope.telescope import Telescope as BaseTelescope
 from crac_protobuf.telescope_pb2 import TelescopeStatus
 from crac_server import config
@@ -11,6 +12,7 @@ from typing import Dict
 
 
 logger = logging.getLogger(__name__)
+lock = threading.Lock()
 
 
 class Telescope(BaseTelescope):
@@ -48,7 +50,6 @@ class Telescope(BaseTelescope):
             self.sync_status = True
 
     def open_connection(self) -> None:
-
         if not self.connected:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.connect((self.hostname, self.port))
@@ -98,19 +99,20 @@ class Telescope(BaseTelescope):
         self.disconnect()
 
     def __call_thesky__(self, script: str, **kwargs) -> bytes:
-        self.open_connection()
-        with open(script, 'r') as p:
-            file = p.read()
-            if kwargs:
-                if kwargs.get("az") is None:
-                    kwargs["az"] = ""
-                if kwargs.get("alt") is None:
-                    kwargs["alt"] = ""
-                file = file.format(**kwargs)
-            self.s.sendall(file.encode('utf-8'))
-            data = self.s.recv(1024)
-            logger.debug("Data received from js: %s", data)
-#        self.close_connection()
+        with lock:
+            self.open_connection()
+            with open(script, 'r') as p:
+                file = p.read()
+                if kwargs:
+                    if kwargs.get("az") is None:
+                        kwargs["az"] = ""
+                    if kwargs.get("alt") is None:
+                        kwargs["alt"] = ""
+                    file = file.format(**kwargs)
+                self.s.sendall(file.encode('utf-8'))
+                data = self.s.recv(1024)
+                logger.debug("Data received from js: %s", data)
+           self.close_connection()
         return data
 
     def __parse_result__(self, data: str):

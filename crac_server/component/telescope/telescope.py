@@ -39,13 +39,13 @@ class Telescope(ABC):
             Calculate the corrisponding equatorial coordinate
         """
         raise NotImplementedError()
-    
-    @abstractmethod
+
     def nosync(self):
         """ 
             Unregister the telescope
         """
-        raise NotImplementedError()
+        self.sync_time = None
+        self.sync_status = False
 
     @abstractmethod
     def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
@@ -56,18 +56,18 @@ class Telescope(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_aa_coords(self):
+    def get_aa_coords(self) -> AltazimutalCoords:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_eq_coords(self):
+    def get_eq_coords(self) -> EquatorialCoords:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_speed(self):
+    def get_speed(self) -> TelescopeSpeed:
         raise NotImplementedError()
 
-    def park(self, speed=TelescopeSpeed.DEFAULT):
+    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
@@ -76,7 +76,7 @@ class Telescope(ABC):
             speed=speed
         )
 
-    def flat(self, speed=TelescopeSpeed.DEFAULT):
+    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),
@@ -85,7 +85,7 @@ class Telescope(ABC):
             speed=speed
         )
 
-    def get_status(self, aa_coords: AltazimutalCoords):
+    def get_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
         if not aa_coords or not aa_coords.alt or not aa_coords.az:
             logger.error("Errore Telescopio: "+str(aa_coords))
             return TelescopeStatus.ERROR
@@ -109,7 +109,7 @@ class Telescope(ABC):
             elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.EAST
 
-    def __radec2altaz(self, obstime: datetime, eq_coords: EquatorialCoords):
+    def __radec2altaz(self, eq_coords: EquatorialCoords, obstime = datetime.utcnow()):
         logger.debug("astropy ra received: %s", eq_coords.ra)
         logger.debug("astropy dec received: %s", eq_coords.dec)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
@@ -120,13 +120,14 @@ class Telescope(ABC):
         height = config.Config.getInt("height", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=observing_time)
-        coord = SkyCoord(str(eq_coords.ra)+"h", str(eq_coords.dec)+"d", equinox=self.equinox, frame="fk5")
+        equinox = config.Config.getValue("equinox", "geography")
+        coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="fk5")
         altaz_coords = coord.transform_to(aa)
         aa_coords = AltazimutalCoords(alt=float(altaz_coords.alt / u.deg), az=float(altaz_coords.az / u.deg))
         logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
         return aa_coords
 
-    def __altaz2radec(self, obstime: datetime, aa_cords: AltazimutalCoords):
+    def __altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int = None, obstime = datetime.utcnow()):
         logger.debug('obstime: %s', obstime)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         logger.debug("astropy timestring: %s", timestring)
@@ -138,12 +139,15 @@ class Telescope(ABC):
         equinox = config.Config.getValue("equinox", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=time)
-        alt_az = SkyCoord(aa_cords.alt * u.deg, aa_cords.az * u.deg, frame=aa, equinox=equinox)
+        alt_az = SkyCoord(alt=aa_coords.alt * u.deg, az=aa_coords.az * u.deg, frame=aa, equinox=equinox)
         ra_dec = alt_az.transform_to('fk5')
         ra = float((ra_dec.ra / 15) / u.deg)
         dec = float(ra_dec.dec / u.deg)
         logger.debug('ar park (orario decimale): %s', ra)
         logger.debug('dec park (declinazione decimale): %s', dec)
+        if decimal_places:
+            ra = round(ra, decimal_places)
+            dec = round(dec, decimal_places)
         return EquatorialCoords(ra=ra, dec=dec)
 
     def is_below_curtains_area(self, alt: float) -> bool:

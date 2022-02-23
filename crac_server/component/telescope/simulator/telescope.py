@@ -46,7 +46,7 @@ class Telescope(BaseTelescope):
                 alt=config.Config.getFloat("park_alt", "telescope"),
                 az=config.Config.getFloat("park_az", "telescope")
             ),
-            speed=TelescopeSpeed.SLEWING
+            speed=TelescopeSpeed.SPEED_SLEWING
         )
         sleep(10)
         super().park()
@@ -57,16 +57,16 @@ class Telescope(BaseTelescope):
                 alt=config.Config.getFloat("flat_alt", "telescope"),
                 az=config.Config.getFloat("flat_az", "telescope")
             ),
-            speed=TelescopeSpeed.SLEWING
+            speed=TelescopeSpeed.SPEED_SLEWING
         )
         sleep(10)
         super().flat()
 
     def set_speed(self, speed: TelescopeSpeed):
-        if speed == TelescopeSpeed.TRACKING:
+        if speed == TelescopeSpeed.SPEED_TRACKING:
             sl = 1
             tr = 0
-        elif speed == TelescopeSpeed.SLEWING:
+        elif speed == TelescopeSpeed.SPEED_SLEWING:
             sl = 0
             tr = 1
         else:
@@ -81,10 +81,10 @@ class Telescope(BaseTelescope):
         logger.debug(f"Telescope coords: {aa_coords}")
 
     def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
-        if speed == TelescopeSpeed.TRACKING:
+        if speed == TelescopeSpeed.SPEED_TRACKING:
             sl = 1
             tr = 0
-        elif speed == TelescopeSpeed.SLEWING:
+        elif speed == TelescopeSpeed.SPEED_SLEWING:
             sl = 0
             tr = 1
         else:
@@ -96,10 +96,6 @@ class Telescope(BaseTelescope):
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
-    def nosync(self):
-        self.sync_time = None
-        self.sync_status = False
-    
     def get_aa_coords(self) -> AltazimutalCoords:
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()
@@ -119,11 +115,11 @@ class Telescope(BaseTelescope):
         tr = telescope_config.get("coords", "tr", fallback=0)
         sl = telescope_config.get("coords", "sl", fallback=1)
         if tr == "1" and sl == "1":
-            return TelescopeSpeed.DEFAULT
+            return TelescopeSpeed.SPEED_NOT_TRACKING
         elif tr == "0" and sl == "1":
-            return TelescopeSpeed.TRACKING
+            return TelescopeSpeed.SPEED_TRACKING
         elif tr == "1" and sl == "0":
-            return TelescopeSpeed.SLEWING
+            return TelescopeSpeed.SPEED_SLEWING
 
 
 TELESCOPE = Telescope()

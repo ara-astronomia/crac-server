@@ -1,5 +1,5 @@
 import logging
-
+import threading
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
@@ -17,6 +17,8 @@ class Curtain:
         self.motor = Motor(**motor)
         self.motor.enable_device.off()
         self.__event_detect__()
+        self.lock = threading.Lock()
+        self.to_disable = False
 
     def __base__(self):
         self.__sub_min_step__ = -5
@@ -36,13 +38,16 @@ class Curtain:
         self.curtain_open.when_activated = None
 
     def __open__(self):
-        self.motor.forward()
+        with self.lock:
+            self.motor.forward()
 
     def __close__(self):
-        self.motor.backward()
+        with self.lock:
+            self.motor.backward()
 
     def __stop__(self):
-        self.motor.stop()
+        with self.lock:
+            self.motor.stop()
 
     def __check_and_stop__(self):
         logger.debug("Number of steps: %s", self.steps())
@@ -51,10 +56,14 @@ class Curtain:
             self.target is None or
             self.steps() == self.target or
             self.steps() >= self.__security_step__ or
-            self.steps() <= self.__sub_min_step__
+            self.steps() <= self.__sub_min_step__ or
+            not self.motor.enable_device.value
         ):
             self.__stop__()
             self.target = None
+            if self.to_disable:
+                self.disable_motor()
+                
 
     def __reset_steps__(self, open_or_closed):
         self.__stop__()
@@ -139,7 +148,7 @@ class Curtain:
         elif self.__is_opening__():
             status = CurtainStatus.CURTAIN_OPENING
         elif self.__is_closing__():
-            status = CurtainStatus.CURTAIN_CLOSING
+            status = CurtainStatus.CURTAIN_DISABLING if self.to_disable else CurtainStatus.CURTAIN_CLOSING
         elif self.__is_open__():
             status = CurtainStatus.CURTAIN_OPENED
         elif self.__is_closed__():
@@ -189,18 +198,27 @@ class Curtain:
         """
 
         self.move(self.__min_step__)
+        if self.steps() == self.__min_step__:
+            self.disable_motor()
 
     def disable(self):
-        self.bring_down()
-        self.motor.enable_device.off()
+        logger.debug(f"self.to_disable is {self.to_disable}")
+        if not self.__is_opening__() and not self.__is_closing__():
+            self.to_disable = True
+            self.bring_down()
+            logger.debug(f"self.to_disable after bring down is {self.to_disable}")
 
     def enable(self):
+        logger.debug(f"motor is {self.motor.enable_device.value}")
         self.motor.enable_device.on()
+        logger.debug(f"motor after enabling is {self.motor.enable_device.value}")
 
-    def motor_stop(self):
+    def disable_motor(self):
 
         """
             disable motor
         """
-
-        self.__stop__()
+        
+        with self.lock:
+            self.motor.enable_device.off()
+            self.to_disable = False
