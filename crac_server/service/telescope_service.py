@@ -1,6 +1,12 @@
+from cgitb import text
+from faulthandler import disable
 import importlib
 import logging
 from crac_protobuf.button_pb2 import ButtonStatus
+from crac_protobuf.button_pb2 import (
+    ButtonGui,
+    ButtonColor,
+)
 from crac_protobuf.telescope_pb2 import (
     TelescopeAction,
     TelescopeResponse,
@@ -28,7 +34,23 @@ class TelescopeService(TelescopeServicer):
             return TelescopeResponse(
                 status=TelescopeStatus.LOST, 
                 speed=TelescopeSpeed.SPEED_ERROR,
-                sync=False
+                sync=False,
+                buttons_gui=[
+                    ButtonGui(
+                        key="SYNC",
+                        button_color=ButtonColor(text_color="white", background_color="red")
+                    ),
+                    ButtonGui(
+                        key="PARK_POSITION",
+                        is_disabled=True,
+                        button_color=ButtonColor(text_color="white", background_color="red")
+                    ),
+                    ButtonGui(
+                        key="FLAT_POSITION",
+                        is_disabled=True,
+                        button_color=ButtonColor(text_color="white", background_color="red")
+                    ),
+                ]
             )
         elif request.action is TelescopeAction.SYNC:
             SWITCHES["TELE_SWITCH"].on()
@@ -56,8 +78,51 @@ class TelescopeService(TelescopeServicer):
             ):
             TELESCOPE.set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
         speed = TELESCOPE.get_speed()
+        
+        match status:
+            case TelescopeStatus.PARKED:
+                park_button_color = ButtonColor(text_color="white", background_color="green")
+                flat_button_color = ButtonColor(text_color="black", background_color="white")
+            case TelescopeStatus.FLATTER:
+                park_button_color = ButtonColor(text_color="black", background_color="white")
+                flat_button_color = ButtonColor(text_color="white", background_color="green")
+            case _:
+                park_button_color = ButtonColor(text_color="black", background_color="white")
+                flat_button_color = ButtonColor(text_color="black", background_color="white")
+        
+        if TELESCOPE.sync_status:
+            sync_button_color = ButtonColor(text_color="white", background_color="green")
+            sync_disabled = True
+        else:
+            sync_button_color = ButtonColor(text_color="white", background_color="red")
+            sync_disabled = False
 
-        response = TelescopeResponse(status=status, aa_coords=aa_coords, speed=speed, sync=sync)
+        sync_button_gui = ButtonGui(
+            key="SYNC",
+            is_disabled=sync_disabled,
+            button_color=sync_button_color
+        )
+        park_button_gui = ButtonGui(
+            key="PARK_POSITION",
+            is_disabled=False,
+            button_color=park_button_color
+        ) 
+        flat_button_gui = ButtonGui(
+            key="FLAT_POSITION",
+            is_disabled=False,
+            button_color=flat_button_color
+        )
+        response = TelescopeResponse(
+            status=status, 
+            aa_coords=aa_coords, 
+            speed=speed, 
+            sync=sync,
+            buttons_gui=[
+                sync_button_gui,
+                park_button_gui,
+                flat_button_gui,
+            ]
+        )
         logger.info("Response " + str(response))
 
         if request.autolight:
@@ -65,5 +130,6 @@ class TelescopeService(TelescopeServicer):
                 SWITCHES["DOME_LIGHT"].on()
             else:
                 SWITCHES["DOME_LIGHT"].off()
+
 
         return response
