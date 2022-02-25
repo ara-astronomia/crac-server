@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 class RoofService(RoofServicer):
     def SetAction(self, request, context):
         logger.info("Request " + str(request))
-        telescope_is_secure = TELESCOPE.get_status(TELESCOPE.get_aa_coords()) <= TelescopeStatus.SECURE
+        telescope_is_secure = self.__telescope_is_secure()
+        curtains_are_secure = self.__curtains_are_secure()
         if request.action is RoofAction.OPEN:
             ROOF.open()
         elif (
                 request.action is RoofAction.CLOSE and
-                CURTAIN_EAST.get_status() is CurtainStatus.CURTAIN_DISABLED and
-                CURTAIN_WEST.get_status() is CurtainStatus.CURTAIN_DISABLED and
+                curtains_are_secure and
                 telescope_is_secure
             ):
             ROOF.close()
@@ -46,7 +46,11 @@ class RoofService(RoofServicer):
 
         if (
                 status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING] or
-                (status is RoofStatus.ROOF_OPENED and not telescope_is_secure)
+                (
+                    status is RoofStatus.ROOF_OPENED and 
+                    not telescope_is_secure and
+                    not curtains_are_secure
+                )
         ):
             disabled = True
         else:
@@ -60,3 +64,13 @@ class RoofService(RoofServicer):
         )
 
         return RoofResponse(status=status, button_gui=button_gui)
+
+    def __telescope_is_secure(self):
+        return TELESCOPE.get_status(TELESCOPE.get_aa_coords()) <= TelescopeStatus.SECURE
+
+
+    def __curtains_are_secure(self):
+        return (
+            CURTAIN_EAST.get_status() is CurtainStatus.CURTAIN_DISABLED and 
+            CURTAIN_WEST.get_status() is CurtainStatus.CURTAIN_DISABLED
+        )
