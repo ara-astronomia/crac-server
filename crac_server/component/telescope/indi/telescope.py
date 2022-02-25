@@ -75,7 +75,7 @@ class Telescope(BaseTelescope):
             alt=config.Config.getFloat("park_alt", "telescope"),
             az=config.Config.getFloat("park_az", "telescope")
         )
-        eq_coords = self.__altaz2radec(aa_coords)
+        eq_coords = self.__altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
         self.__call_indi__(
             f"""
                 <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
@@ -115,10 +115,10 @@ class Telescope(BaseTelescope):
                 </newSwitchVector>
             """
         )
-        eq_coords = self.__altaz2radec(aa_coords) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
+        eq_coords = self.__altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug(aa_coords)
         logger.debug(eq_coords)
-        logger.debug(self.__radec2altaz(eq_coords))
+        logger.debug(self.__radec2altaz(eq_coords, obstime=datetime.utcnow()))
         self.set_speed(speed)
         self.__call_indi__(
             f"""
@@ -172,9 +172,9 @@ class Telescope(BaseTelescope):
 
     def get_aa_coords(self):
         eq_coords = self.get_eq_coords()
-        aa_coords = self.__radec2altaz(eq_coords)
+        aa_coords = self.__radec2altaz(eq_coords, obstime=datetime.utcnow())
         logger.debug(f"Coordinate altazimutali {aa_coords}")
-        logger.debug(f"Riconversione in coordinate equatoriali {self.__altaz2radec(aa_coords)}")
+        logger.debug(f"Riconversione in coordinate equatoriali {self.__altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())}")
         return aa_coords
 
     def get_eq_coords(self):

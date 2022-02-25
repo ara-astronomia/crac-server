@@ -106,7 +106,7 @@ class Telescope(BaseTelescope):
 
     def get_eq_coords(self) -> EquatorialCoords:
         aa_coords = self.get_aa_coords()
-        return self.__altaz2radec(aa_coords)
+        return self.__altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
 
     def get_speed(self) -> TelescopeSpeed:
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
