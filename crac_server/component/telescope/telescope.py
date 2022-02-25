@@ -109,7 +109,7 @@ class Telescope(ABC):
             elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.EAST
 
-    def __radec2altaz(self, eq_coords: EquatorialCoords, obstime = datetime.utcnow()):
+    def __radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime):
         logger.debug("astropy ra received: %s", eq_coords.ra)
         logger.debug("astropy dec received: %s", eq_coords.dec)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
@@ -127,7 +127,7 @@ class Telescope(ABC):
         logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
         return aa_coords
 
-    def __altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int = None, obstime = datetime.utcnow()):
+    def __altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int, obstime: datetime):
         logger.debug('obstime: %s', obstime)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         logger.debug("astropy timestring: %s", timestring)
