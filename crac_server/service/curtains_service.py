@@ -1,3 +1,4 @@
+from curses import meta
 import importlib
 import logging
 from crac_protobuf.curtains_pb2 import (
@@ -6,6 +7,11 @@ from crac_protobuf.curtains_pb2 import (
     CurtainOrientation,
     CurtainEntryResponse,
     CurtainStatus,
+)
+from crac_protobuf.button_pb2 import (
+    ButtonGui,
+    ButtonLabel,
+    ButtonKey,
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
@@ -29,6 +35,8 @@ class CurtainsService(CurtainServicer):
     def SetAction(self, request, context):
         logger.info("Request " + str(request))
         
+        roof_is_opened = ROOF.get_status() is RoofStatus.ROOF_OPENED
+        
         curtain_east_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_EAST)
         curtain_west_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_WEST)
         if request.action is CurtainsAction.DISABLE:
@@ -42,13 +50,13 @@ class CurtainsService(CurtainServicer):
                 CURTAIN_WEST.disable()
         elif (
                 request.action is CurtainsAction.ENABLE and 
-                ROOF.get_status() is RoofStatus.ROOF_OPENED
+                roof_is_opened
         ):
             CURTAIN_EAST.enable()
             CURTAIN_WEST.enable()
-        elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
-            CURTAIN_EAST.manual_reset()
-            CURTAIN_WEST.manual_reset()
+        # elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
+        #     CURTAIN_EAST.manual_reset()
+        #     CURTAIN_WEST.manual_reset()
 
         if TELESCOPE.get_speed() in [TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING]:
             steps = self.__calculate_curtains_steps()
@@ -61,8 +69,40 @@ class CurtainsService(CurtainServicer):
         curtain_west_entry.steps = CURTAIN_WEST.steps()
         logger.debug("actual east curtain steps %s", curtain_east_entry.steps)
         logger.debug("actual west curtain steps %s", curtain_west_entry.steps)
-        
-        return CurtainsResponse(curtains=(curtain_east_entry, curtain_west_entry))
+        if (
+            curtain_east_entry.status is CurtainStatus.CURTAIN_DISABLED and 
+            curtain_west_entry.status is CurtainStatus.CURTAIN_DISABLED
+        ):
+            metadata_enable_button = CurtainsAction.ENABLE
+            name_enable_button = ButtonLabel.LABEL_DISABLE
+        else:
+            metadata_enable_button = CurtainsAction.DISABLE
+            name_enable_button = ButtonLabel.LABEL_ENABLE
+            
+        enable_button = ButtonGui(
+            key=ButtonKey.KEY_CURTAINS,
+            label=name_enable_button,
+            is_disabled=(not roof_is_opened),
+            metadata=metadata_enable_button,
+        )
+
+        calibrate_button = ButtonGui(
+            key=ButtonKey.KEY_CALIBRATE,
+            label=ButtonLabel.LABEL_CALIBRATE,
+            is_disabled=(not roof_is_opened),
+            metadata=CurtainsAction.CALIBRATE_CURTAINS,
+        )
+
+        return CurtainsResponse(
+            curtains=(
+                curtain_east_entry, 
+                curtain_west_entry
+            ), 
+            buttons_gui=[
+                enable_button, 
+                calibrate_button
+            ]
+        )
 
     def __calculate_curtains_steps(self):
 

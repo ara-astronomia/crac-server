@@ -9,6 +9,8 @@ from crac_protobuf.button_pb2 import (
     ButtonStatus,
     ButtonGui,
     ButtonColor,
+    ButtonLabel,
+    ButtonKey,
 )
 from crac_protobuf.button_pb2_grpc import ButtonServicer
 from crac_protobuf.telescope_pb2 import TelescopeSpeed
@@ -45,8 +47,9 @@ class ButtonService(ButtonServicer):
             text_color, background_color = ("white", "red")
 
         button_gui = ButtonGui(
+            key=ButtonKey.Value(f"KEY_{ButtonType.Name(request.type)}"),
+            label=(ButtonLabel.LABEL_ON if status is ButtonStatus.ON else ButtonLabel.LABEL_OFF),
             metadata=(ButtonAction.TURN_OFF if status is ButtonStatus.ON else ButtonAction.TURN_ON),
-            name=ButtonStatus.Name(ButtonStatus.ON if status is ButtonStatus.ON else ButtonStatus.OFF),
             is_disabled=False,
             button_color=ButtonColor(text_color=text_color, background_color=background_color),
         )

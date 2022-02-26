@@ -6,6 +6,8 @@ from crac_protobuf.button_pb2 import ButtonStatus
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonColor,
+    ButtonLabel,
+    ButtonKey,
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeAction,
@@ -37,18 +39,24 @@ class TelescopeService(TelescopeServicer):
                 sync=False,
                 buttons_gui=[
                     ButtonGui(
-                        key="SYNC",
-                        button_color=ButtonColor(text_color="white", background_color="red")
+                        key=ButtonKey.KEY_SYNC,
+                        label=ButtonLabel.LABEL_SYNC,
+                        metadata=TelescopeAction.SYNC,
+                        button_color=ButtonColor(text_color="white", background_color="red"),
                     ),
                     ButtonGui(
-                        key="PARK_POSITION",
+                        key=ButtonKey.KEY_PARK,
+                        label=ButtonLabel.LABEL_PARK,
+                        metadata=TelescopeAction.PARK_POSITION,
                         is_disabled=True,
-                        button_color=ButtonColor(text_color="white", background_color="red")
+                        button_color=ButtonColor(text_color="white", background_color="red"),
                     ),
                     ButtonGui(
-                        key="FLAT_POSITION",
+                        key=ButtonKey.KEY_FLAT,
+                        label=ButtonLabel.LABEL_FLAT,
+                        metadata=TelescopeAction.FLAT_POSITION,
                         is_disabled=True,
-                        button_color=ButtonColor(text_color="white", background_color="red")
+                        button_color=ButtonColor(text_color="white", background_color="red"),
                     ),
                 ]
             )
@@ -98,17 +106,23 @@ class TelescopeService(TelescopeServicer):
             sync_disabled = False
 
         sync_button_gui = ButtonGui(
-            key="SYNC",
+            key=ButtonKey.KEY_SYNC,
+            label=ButtonLabel.LABEL_SYNC,
+            metadata=TelescopeAction.SYNC,
             is_disabled=sync_disabled,
             button_color=sync_button_color
         )
         park_button_gui = ButtonGui(
-            key="PARK_POSITION",
+            key=ButtonKey.KEY_PARK,
+            label=ButtonLabel.LABEL_PARK,
+            metadata=TelescopeAction.PARK_POSITION,
             is_disabled=False,
             button_color=park_button_color
         ) 
         flat_button_gui = ButtonGui(
-            key="FLAT_POSITION",
+            key=ButtonKey.KEY_FLAT,
+            label=ButtonLabel.LABEL_FLAT,
+            metadata=TelescopeAction.FLAT_POSITION,
             is_disabled=False,
             button_color=flat_button_color
         )

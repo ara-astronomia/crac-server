@@ -2,6 +2,8 @@ import logging
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonColor,
+    ButtonLabel,
+    ButtonKey,
 )
 from crac_protobuf.curtains_pb2 import CurtainStatus
 from crac_protobuf.roof_pb2 import (
@@ -56,8 +58,19 @@ class RoofService(RoofServicer):
         else:
             disabled = False
 
+        match status:
+            case RoofStatus.ROOF_CLOSED:
+                label = ButtonLabel.LABEL_CLOSE
+            case RoofStatus.ROOF_OPENED:
+                label = ButtonLabel.LABEL_OPEN
+            case RoofStatus.ROOF_CLOSING:
+                label = ButtonLabel.LABEL_CLOSING
+            case RoofStatus.ROOF_OPENING:
+                label = ButtonLabel.LABEL_OPENING
+
         button_gui = ButtonGui(
-            key="ROOF",
+            key=ButtonKey.KEY_ROOF,
+            label=label,
             metadata=(RoofAction.CLOSE if status in [RoofStatus.ROOF_OPENED, RoofStatus.ROOF_OPENING] else RoofAction.OPEN),
             is_disabled=disabled,
             button_color=ButtonColor(text_color=text_color, background_color=background_color),

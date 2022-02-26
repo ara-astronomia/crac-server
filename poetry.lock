@@ -229,7 +229,7 @@ colorzero = [
     {file = "colorzero-2.0.tar.gz", hash = "sha256:e7d5a5c26cd0dc37b164ebefc609f388de24f8593b659191e12d85f8f9d5eb58"},
 ]
 crac-protobuf = [
-    {file = "crac-protobuf-0.1.13.tar.gz", hash = "sha256:0ef4bd80c6d72f85801632d6850507f019124a7a7731be93e4fe7541e1e5f8ab"},
+    {file = "crac-protobuf-0.1.13.tar.gz", hash = "sha256:70290a0fce7bea17d7b6d766a8dd95e5616012a67b9144efb794569eef4edd0b"},
 ]
 gpiozero = [
     {file = "gpiozero-1.6.2-py2.py3-none-any.whl", hash = "sha256:9af00b90d4fa775aa1fc023363e4aa5539844a5b0c461be5ced5cfabba364d99"},
