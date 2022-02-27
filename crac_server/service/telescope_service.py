@@ -28,7 +28,7 @@ TELESCOPE = importlib.import_module(f"component.telescope.{Config.getValue('driv
 
 class TelescopeService(TelescopeServicer):
     def SetAction(self, request, context):
-        logger.info("Request " + str(request))
+        logger.info("TelescopeRequest TelescopeService" + str(request))
         if (
                 SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.OFF and
                 request.action is not TelescopeAction.SYNC

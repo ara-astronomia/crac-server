@@ -12,6 +12,8 @@ from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonLabel,
     ButtonKey,
+    ButtonColor,
+    ButtonStatus,
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
@@ -19,6 +21,7 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_protobuf.curtains_pb2_grpc import CurtainServicer
 from crac_protobuf.roof_pb2 import RoofStatus
+from crac_server.component.button_control import SWITCHES
 from crac_server.component.curtains.factory_curtain import (
     CURTAIN_EAST,
     CURTAIN_WEST,
@@ -36,6 +39,7 @@ class CurtainsService(CurtainServicer):
         logger.info("Request " + str(request))
         
         roof_is_opened = ROOF.get_status() is RoofStatus.ROOF_OPENED
+        tele_is_turned_on = SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.ON
         
         curtain_east_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_EAST)
         curtain_west_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_WEST)
@@ -49,7 +53,8 @@ class CurtainsService(CurtainServicer):
                 CURTAIN_EAST.disable()
                 CURTAIN_WEST.disable()
         elif (
-                request.action is CurtainsAction.ENABLE and 
+                request.action is CurtainsAction.ENABLE and
+                tele_is_turned_on and
                 roof_is_opened
         ):
             CURTAIN_EAST.enable()
@@ -75,22 +80,26 @@ class CurtainsService(CurtainServicer):
         ):
             metadata_enable_button = CurtainsAction.ENABLE
             name_enable_button = ButtonLabel.LABEL_DISABLE
+            text_color, background_color = ("white", "red")
         else:
             metadata_enable_button = CurtainsAction.DISABLE
             name_enable_button = ButtonLabel.LABEL_ENABLE
+            text_color, background_color = ("white", "green")
             
         enable_button = ButtonGui(
             key=ButtonKey.KEY_CURTAINS,
             label=name_enable_button,
-            is_disabled=(not roof_is_opened),
             metadata=metadata_enable_button,
+            is_disabled=(not roof_is_opened),
+            button_color=ButtonColor(text_color=text_color, background_color=background_color),
         )
 
         calibrate_button = ButtonGui(
             key=ButtonKey.KEY_CALIBRATE,
             label=ButtonLabel.LABEL_CALIBRATE,
-            is_disabled=(not roof_is_opened),
+            is_disabled=True,
             metadata=CurtainsAction.CALIBRATE_CURTAINS,
+            button_color=ButtonColor(text_color="white", background_color="red"),
         )
 
         return CurtainsResponse(

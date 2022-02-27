@@ -4,6 +4,7 @@ from crac_protobuf.button_pb2 import (
     ButtonColor,
     ButtonLabel,
     ButtonKey,
+    ButtonStatus,
 )
 from crac_protobuf.curtains_pb2 import CurtainStatus
 from crac_protobuf.roof_pb2 import (
@@ -17,6 +18,7 @@ from crac_protobuf.roof_pb2_grpc import (
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
 )
+from crac_server.component.button_control import SWITCHES
 from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN_WEST
 from crac_server.component.roof.simulator.roof_control import ROOF
 from crac_server.component.telescope.indi.telescope import TELESCOPE
@@ -50,8 +52,10 @@ class RoofService(RoofServicer):
                 status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING] or
                 (
                     status is RoofStatus.ROOF_OPENED and 
-                    not telescope_is_secure and
-                    not curtains_are_secure
+                    (
+                        not telescope_is_secure or
+                        not curtains_are_secure
+                    )
                 )
         ):
             disabled = True
@@ -79,8 +83,10 @@ class RoofService(RoofServicer):
         return RoofResponse(status=status, button_gui=button_gui)
 
     def __telescope_is_secure(self):
-        return TELESCOPE.get_status(TELESCOPE.get_aa_coords()) <= TelescopeStatus.SECURE
-
+        return (
+            TELESCOPE.get_status(TELESCOPE.get_aa_coords()) <= TelescopeStatus.SECURE and
+            SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.ON
+        )
 
     def __curtains_are_secure(self):
         return (
