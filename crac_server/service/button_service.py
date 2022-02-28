@@ -13,7 +13,10 @@ from crac_protobuf.button_pb2 import (
     ButtonKey,
 )
 from crac_protobuf.button_pb2_grpc import ButtonServicer
-from crac_protobuf.telescope_pb2 import TelescopeSpeed
+from crac_protobuf.telescope_pb2 import (
+    TelescopeSpeed,
+    TelescopeStatus,
+)
 from crac_server.component.button_control import SWITCHES
 from crac_server.config import Config
 
@@ -29,7 +32,10 @@ class ButtonService(ButtonServicer):
 
         if request.action == ButtonAction.TURN_ON:
             button_control.on()
-            if request.type == ButtonType.FLAT_LIGHT:
+            if (
+                request.type == ButtonType.FLAT_LIGHT and
+                TELESCOPE.get_status(TELESCOPE.get_aa_coords()) is TelescopeStatus.FLATTER
+            ):
                 logger.info("Turned on Flat Panel")
                 TELESCOPE.set_speed(TelescopeSpeed.SPEED_TRACKING)
         elif request.action == ButtonAction.TURN_OFF:
