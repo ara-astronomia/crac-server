@@ -41,7 +41,7 @@ test = ["pytest", "pytest-cov"]
 
 [[package]]
 name = "crac-protobuf"
-version = "0.1.10"
+version = "0.1.14"
 description = "Protobuf contrat for client/server communication"
 category = "main"
 optional = false
@@ -49,7 +49,7 @@ python-versions = "^3.10"
 
 [package.source]
 type = "file"
-url = "../crac-protobuf/dist/crac-protobuf-0.1.10.tar.gz"
+url = "../crac-protobuf/dist/crac-protobuf-0.1.14.tar.gz"
 
 [[package]]
 name = "gpiozero"
@@ -197,7 +197,7 @@ sgp4 = ">=2.2"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "1034692c02571a0502a9686e50e95c8d28e80de3bfa1f9186c3d3a73be1da138"
+content-hash = "de8174c309cd3766b3d8947f90de652b9345251bd5437bb61589d97d3248539e"
 
 [metadata.files]
 astropy = [
@@ -229,7 +229,7 @@ colorzero = [
     {file = "colorzero-2.0.tar.gz", hash = "sha256:e7d5a5c26cd0dc37b164ebefc609f388de24f8593b659191e12d85f8f9d5eb58"},
 ]
 crac-protobuf = [
-    {file = "crac-protobuf-0.1.10.tar.gz", hash = "sha256:226ee0182b75e2be02f7358ec2429a95f919ec67f3e55e98fbd3c952fb040207"},
+    {file = "crac-protobuf-0.1.14.tar.gz", hash = "sha256:e09ecf50084cd67702288f19af01f6882fc308dd0bb45e7cae713e70dc4573bf"},
 ]
 gpiozero = [
     {file = "gpiozero-1.6.2-py2.py3-none-any.whl", hash = "sha256:9af00b90d4fa775aa1fc023363e4aa5539844a5b0c461be5ced5cfabba364d99"},

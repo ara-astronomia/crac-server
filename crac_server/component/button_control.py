@@ -26,8 +26,9 @@ class ButtonControl():
         else:
             return ButtonStatus.OFF
 
-
-TELE_SWITCH = ButtonControl(Config.getInt("switch_power", "panel_board"))
-CCD_SWITCH = ButtonControl(Config.getInt("switch_aux", "panel_board"))
-FLAT_LIGHT = ButtonControl(Config.getInt("switch_panel", "panel_board"))
-DOME_LIGHT = ButtonControl(Config.getInt("switch_light", "panel_board"))
+SWITCHES = {
+    "TELE_SWITCH": ButtonControl(Config.getInt("switch_power", "panel_board")),
+    "CCD_SWITCH": ButtonControl(Config.getInt("switch_aux", "panel_board")),
+    "FLAT_LIGHT": ButtonControl(Config.getInt("switch_panel", "panel_board")),
+    "DOME_LIGHT": ButtonControl(Config.getInt("switch_light", "panel_board")),
+}
