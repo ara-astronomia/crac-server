@@ -111,5 +111,5 @@ class FactoryCurtain:
         return builder_curtain.build(mock)
 
 
-CURTAIN_EAST = FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_EAST, mock=True)
-CURTAIN_WEST = FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_WEST, mock=True)
+CURTAIN_EAST = FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_EAST, mock=Config.getBoolean("gpio_mock", "server"))
+CURTAIN_WEST = FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_WEST, mock=Config.getBoolean("gpio_mock", "server"))

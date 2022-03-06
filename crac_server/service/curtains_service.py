@@ -26,7 +26,7 @@ from crac_server.component.curtains.factory_curtain import (
     CURTAIN_EAST,
     CURTAIN_WEST,
 )
-from crac_server.component.roof.simulator.roof_control import ROOF
+from crac_server.component.roof import ROOF
 from crac_server.config import Config
 
 

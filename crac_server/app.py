@@ -5,13 +5,6 @@ import logging.config
 logging.config.fileConfig('logging.conf')
 
 
-from gpiozero import Device
-from gpiozero.pins.mock import MockFactory
-if Device.pin_factory is not None:
-    Device.pin_factory.reset()
-Device.pin_factory = MockFactory()
-
-
 from signal import signal, SIGTERM
 from concurrent import futures
 from crac_server.config import Config

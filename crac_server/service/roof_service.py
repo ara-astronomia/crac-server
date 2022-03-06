@@ -20,7 +20,7 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_server.component.button_control import SWITCHES
 from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN_WEST
-from crac_server.component.roof.simulator.roof_control import ROOF
+from crac_server.component.roof import ROOF
 from crac_server.component.telescope.indi.telescope import TELESCOPE
 
 

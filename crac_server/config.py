@@ -33,6 +33,17 @@ class Config:
         if env_value:
             return int(env_value)
         return config.configparser[section].getint(key)
+    
+    @staticmethod
+    def getBoolean(key, section='automazione'):
+        config = Config()
+        env_value = Config.__check_environ__(key, section=section)
+        if env_value is not None:
+            if env_value in ("false", "off", "0", ""):
+                return False
+            else:
+                return True
+        return config.configparser[section].getboolean(key)
 
     @staticmethod
     def __check_environ__(key: str, section='automazione'):
