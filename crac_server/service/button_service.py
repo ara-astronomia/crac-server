@@ -18,7 +18,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
 )
 from crac_server.component.button_control import SWITCHES
-from crac_server.component.telescope.telescope import TELESCOPE
+from crac_server.component.telescope import TELESCOPE
 
 
 logger = logging.getLogger(__name__)

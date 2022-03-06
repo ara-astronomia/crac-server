@@ -1,11 +1,10 @@
 from configparser import ConfigParser
 from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords,
-    EquatorialCoords,
     TelescopeSpeed,
 )
 from crac_server import config
-from crac_server.component.telescope.telescope import Telescope as BaseTelescope
+from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server.config import Config
 import datetime
 import logging
@@ -16,18 +15,11 @@ from time import sleep
 logger = logging.getLogger(__name__)
 
 
-class Telescope(BaseTelescope):
+class Telescope(TelescopeBase):
     def __init__(self):
         super().__init__()
-
-    def disconnect(self) -> bool:
-        return True
     
     def sync(self):
-        """ 
-            Register the telescope in park position
-            Calculate the corrisponding equatorial coordinate
-        """
         self.sync_time = datetime.datetime.utcnow()
         aa_coords = AltazimutalCoords(
             alt=Config.getFloat("park_alt", "telescope"),
@@ -38,29 +30,6 @@ class Telescope(BaseTelescope):
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
-        self.sync_status = True
-
-    def park(self):
-        self.move(
-            aa_coords=AltazimutalCoords(
-                alt=config.Config.getFloat("park_alt", "telescope"),
-                az=config.Config.getFloat("park_az", "telescope")
-            ),
-            speed=TelescopeSpeed.SPEED_SLEWING
-        )
-        sleep(10)
-        super().queue_park()
-    
-    def flat(self):
-        self.move(
-            aa_coords=AltazimutalCoords(
-                alt=config.Config.getFloat("flat_alt", "telescope"),
-                az=config.Config.getFloat("flat_az", "telescope")
-            ),
-            speed=TelescopeSpeed.SPEED_SLEWING
-        )
-        sleep(10)
-        super().queue_flat()
 
     def set_speed(self, speed: TelescopeSpeed):
         if speed == TelescopeSpeed.SPEED_TRACKING:
@@ -80,7 +49,43 @@ class Telescope(BaseTelescope):
             telescope_config.write(telescope_file)
         logger.debug(f"Telescope coords: {aa_coords}")
 
-    def move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
+    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+        self._move(
+            aa_coords=AltazimutalCoords(
+                alt=config.Config.getFloat("park_alt", "telescope"),
+                az=config.Config.getFloat("park_az", "telescope")
+            ),
+            speed=TelescopeSpeed.SPEED_SLEWING
+        )
+        sleep(10)
+        super().queue_park()
+
+    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+        self._move(
+            aa_coords=AltazimutalCoords(
+                alt=config.Config.getFloat("flat_alt", "telescope"),
+                az=config.Config.getFloat("flat_az", "telescope")
+            ),
+            speed=TelescopeSpeed.SPEED_SLEWING
+        )
+        sleep(10)
+        super().queue_flat()
+
+    def retrieve(self):
+        aa_coords = self._retrieve_aa_coords()
+        eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
+        speed = self._retrieve_speed()
+        status = self._retrieve_status(aa_coords)
+
+        return (eq_coords, aa_coords, speed, status)
+
+    def __open_connection(self) -> bool:
+        return True
+
+    def __disconnect(self) -> bool:
+        pass
+
+    def _move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
         if speed == TelescopeSpeed.SPEED_TRACKING:
             sl = 1
             tr = 0
@@ -96,7 +101,7 @@ class Telescope(BaseTelescope):
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
-    def get_aa_coords(self) -> AltazimutalCoords:
+    def _retrieve_aa_coords(self) -> AltazimutalCoords:
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()
         telescope_config.read(telescope_path)
@@ -104,11 +109,7 @@ class Telescope(BaseTelescope):
         az = telescope_config.get("coords", "az", fallback=0)
         return AltazimutalCoords(alt=float(alt), az=float(az))
 
-    def get_eq_coords(self) -> EquatorialCoords:
-        aa_coords = self.get_aa_coords()
-        return self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
-
-    def get_speed(self) -> TelescopeSpeed:
+    def _retrieve_speed(self) -> TelescopeSpeed:
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()
         telescope_config.read(telescope_path)

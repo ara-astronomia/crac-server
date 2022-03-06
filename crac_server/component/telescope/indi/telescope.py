@@ -5,7 +5,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,
 )
 from crac_server import config
-from crac_server.component.telescope import Telescope as TelescopeBase
+from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 import logging
 import xml.etree.ElementTree as ET
 

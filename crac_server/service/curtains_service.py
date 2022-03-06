@@ -27,7 +27,7 @@ from crac_server.component.curtains.factory_curtain import (
     CURTAIN_WEST,
 )
 from crac_server.component.roof import ROOF
-from crac_server.component.telescope.telescope import TELESCOPE
+from crac_server.component.telescope import TELESCOPE
 from crac_server.config import Config
 
 
