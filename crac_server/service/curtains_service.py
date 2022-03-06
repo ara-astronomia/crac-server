@@ -27,11 +27,11 @@ from crac_server.component.curtains.factory_curtain import (
     CURTAIN_WEST,
 )
 from crac_server.component.roof.simulator.roof_control import ROOF
+from crac_server.component.telescope.telescope import TELESCOPE
 from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
-TELESCOPE = importlib.import_module(f"component.telescope.{Config.getValue('driver', 'telescope')}.telescope").TELESCOPE
 
 
 class CurtainsService(CurtainServicer):
@@ -54,7 +54,6 @@ class CurtainsService(CurtainServicer):
                 CURTAIN_WEST.disable()
         elif (
                 request.action is CurtainsAction.ENABLE and
-                tele_is_turned_on and
                 roof_is_opened
         ):
             CURTAIN_EAST.enable()
@@ -63,7 +62,7 @@ class CurtainsService(CurtainServicer):
         #     CURTAIN_EAST.manual_reset()
         #     CURTAIN_WEST.manual_reset()
 
-        if TELESCOPE.get_speed() in [TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING]:
+        if TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
             steps = self.__calculate_curtains_steps()
             CURTAIN_EAST.move(steps["east"])
             CURTAIN_WEST.move(steps["west"])
@@ -120,8 +119,8 @@ class CurtainsService(CurtainServicer):
             to based on the given Coordinates
         """
 
-        aa_coords = TELESCOPE.get_aa_coords()
-        status = TELESCOPE.get_status(aa_coords)
+        aa_coords = TELESCOPE.aa_coords
+        status = TELESCOPE.status
         steps = {}
         logger.debug("Telescope status %s", status)
         n_step_corsa = Config.getInt('n_step_corsa', "encoder_step")
@@ -137,7 +136,7 @@ class CurtainsService(CurtainServicer):
             steps["east"] = 0
 
             #   else if higher to east_max_height e ovest_max_height
-        elif TELESCOPE.is_above_curtains_area(aa_coords.alt, Config.getInt("max_est", "tende"), Config.getInt("max_west", "tende")) or not TELESCOPE.is_within_curtains_area(aa_coords):
+        elif TELESCOPE.is_above_curtains_area(aa_coords.alt, Config.getInt("max_est", "tende"), Config.getInt("max_west", "tende")) or not TELESCOPE.is_within_curtains_area():
             #   move both curtains max open
             steps["west"] = n_step_corsa
             steps["east"] = n_step_corsa

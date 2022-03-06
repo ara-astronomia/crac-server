@@ -49,7 +49,7 @@ class Telescope(BaseTelescope):
             speed=TelescopeSpeed.SPEED_SLEWING
         )
         sleep(10)
-        super().park()
+        super().queue_park()
     
     def flat(self):
         self.move(
@@ -60,7 +60,7 @@ class Telescope(BaseTelescope):
             speed=TelescopeSpeed.SPEED_SLEWING
         )
         sleep(10)
-        super().flat()
+        super().queue_flat()
 
     def set_speed(self, speed: TelescopeSpeed):
         if speed == TelescopeSpeed.SPEED_TRACKING:
@@ -106,7 +106,7 @@ class Telescope(BaseTelescope):
 
     def get_eq_coords(self) -> EquatorialCoords:
         aa_coords = self.get_aa_coords()
-        return self.__altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
+        return self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
 
     def get_speed(self) -> TelescopeSpeed:
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')

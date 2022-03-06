@@ -8,6 +8,7 @@ alongside this one so that the dependency expressed on pyprject.toml
 can find the package to install.
 
 ```
+sudo apt install libatlas3-base
 poetry shell
 poetry install
 ```

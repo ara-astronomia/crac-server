@@ -1,3 +1,4 @@
+import importlib
 import logging
 from crac_protobuf.button_pb2 import (
     ButtonGui,
@@ -21,7 +22,7 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server.component.button_control import SWITCHES
 from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN_WEST
 from crac_server.component.roof.simulator.roof_control import ROOF
-from crac_server.component.telescope.indi.telescope import TELESCOPE
+from crac_server.component.telescope.telescope import TELESCOPE
 
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class RoofService(RoofServicer):
 
     def __telescope_is_secure(self):
         return (
-            TELESCOPE.get_status(TELESCOPE.get_aa_coords()) <= TelescopeStatus.SECURE and
+            TELESCOPE.status <= TelescopeStatus.SECURE and
             SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.ON
         )
 
