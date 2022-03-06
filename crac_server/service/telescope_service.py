@@ -74,16 +74,7 @@ class TelescopeService(TelescopeServicer):
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
         speed = TELESCOPE.speed
         
-        match status:
-            case TelescopeStatus.PARKED:
-                park_button_color = ButtonColor(text_color="white", background_color="green")
-                flat_button_color = ButtonColor(text_color="black", background_color="white")
-            case TelescopeStatus.FLATTER:
-                park_button_color = ButtonColor(text_color="black", background_color="white")
-                flat_button_color = ButtonColor(text_color="white", background_color="green")
-            case _:
-                park_button_color = ButtonColor(text_color="black", background_color="white")
-                flat_button_color = ButtonColor(text_color="black", background_color="white")
+        park_button_color, flat_button_color = self.__draw_buttons(status)
         
 
         sync_button_gui = ButtonGui(
@@ -127,3 +118,28 @@ class TelescopeService(TelescopeServicer):
 
 
         return response
+
+    def __draw_buttons(self, status):
+        if status is TelescopeStatus.PARKED:
+            park_button_color = ButtonColor(text_color="white", background_color="green")
+            flat_button_color = ButtonColor(text_color="black", background_color="white")
+        elif status is TelescopeStatus.FLATTER:
+            park_button_color = ButtonColor(text_color="black", background_color="white")
+            flat_button_color = ButtonColor(text_color="white", background_color="green")
+        else:
+            park_button_color = ButtonColor(text_color="black", background_color="white")
+            flat_button_color = ButtonColor(text_color="black", background_color="white")
+        return park_button_color,flat_button_color
+
+    # def __draw_buttons310(self, status):
+    #     match status:
+    #         case TelescopeStatus.PARKED:
+    #             park_button_color = ButtonColor(text_color="white", background_color="green")
+    #             flat_button_color = ButtonColor(text_color="black", background_color="white")
+    #         case TelescopeStatus.FLATTER:
+    #             park_button_color = ButtonColor(text_color="black", background_color="white")
+    #             flat_button_color = ButtonColor(text_color="white", background_color="green")
+    #         case _:
+    #             park_button_color = ButtonColor(text_color="black", background_color="white")
+    #             flat_button_color = ButtonColor(text_color="black", background_color="white")
+    #     return park_button_color,flat_button_color

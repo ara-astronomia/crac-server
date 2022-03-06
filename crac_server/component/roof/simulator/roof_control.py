@@ -29,6 +29,3 @@ class MockRoofControl(RoofControl):
     def __wait_for_open__(self, pin):
         sleep(10)
         pin.drive_low()
-
-
-ROOF = MockRoofControl()

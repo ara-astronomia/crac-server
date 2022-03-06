@@ -21,7 +21,7 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_server.component.button_control import SWITCHES
 from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN_WEST
-from crac_server.component.roof.simulator.roof_control import ROOF
+from crac_server.component.roof import ROOF
 from crac_server.component.telescope.telescope import TELESCOPE
 
 
@@ -63,15 +63,7 @@ class RoofService(RoofServicer):
         else:
             disabled = False
 
-        match status:
-            case RoofStatus.ROOF_CLOSED:
-                label = ButtonLabel.LABEL_CLOSE
-            case RoofStatus.ROOF_OPENED:
-                label = ButtonLabel.LABEL_OPEN
-            case RoofStatus.ROOF_CLOSING:
-                label = ButtonLabel.LABEL_CLOSING
-            case RoofStatus.ROOF_OPENING:
-                label = ButtonLabel.LABEL_OPENING
+        label = self.__roof_label(status)
 
         button_gui = ButtonGui(
             key=ButtonKey.KEY_ROOF,
@@ -82,6 +74,29 @@ class RoofService(RoofServicer):
         )
 
         return RoofResponse(status=status, button_gui=button_gui)
+
+    def __roof_label(self, status):
+        if status is RoofStatus.ROOF_CLOSED:
+            label = ButtonLabel.LABEL_CLOSE
+        elif status is RoofStatus.ROOF_OPENED:
+            label = ButtonLabel.LABEL_OPEN
+        elif status is RoofStatus.ROOF_CLOSING:
+            label = ButtonLabel.LABEL_CLOSING
+        elif status is RoofStatus.ROOF_OPENING:
+            label = ButtonLabel.LABEL_OPENING
+        return label
+
+    # def __roof_label310(self, status):
+    #     match status:
+    #         case RoofStatus.ROOF_CLOSED:
+    #             label = ButtonLabel.LABEL_CLOSE
+    #         case RoofStatus.ROOF_OPENED:
+    #             label = ButtonLabel.LABEL_OPEN
+    #         case RoofStatus.ROOF_CLOSING:
+    #             label = ButtonLabel.LABEL_CLOSING
+    #         case RoofStatus.ROOF_OPENING:
+    #             label = ButtonLabel.LABEL_OPENING
+    #     return label
 
     def __telescope_is_secure(self):
         return (

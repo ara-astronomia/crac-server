@@ -12,9 +12,14 @@ grpcio-tools = "^1.43.0"
 gpiozero = "^1.6.2"
 astropy = "^5.0.1"
 skyfield = "^1.42"
+#"RPi.GPIO" = { version = "^0.7.1", markers = "platform_machine == \"armv6l\"" }
 
 [tool.poetry.dev-dependencies]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+#[[tool.poetry.source]]
+#name = "piwheels"
+#url = "https://www.piwheels.org/simple/"
