@@ -105,7 +105,7 @@ class Telescope(BaseTelescope):
         )
         self.sync_status = True
 
-    def move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.SPEED_TRACKING):
+    def move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call_indi__(
             """
                 <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
