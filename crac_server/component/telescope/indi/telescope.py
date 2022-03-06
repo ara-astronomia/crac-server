@@ -105,7 +105,7 @@ class Telescope(BaseTelescope):
         )
         self.sync_status = True
 
-    def move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.SPEED_TRACKING):
+    def move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call_indi__(
             """
                 <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
@@ -202,15 +202,23 @@ class Telescope(BaseTelescope):
         )
         state = root.attrib["state"].strip()
 
-        match state:
-            case "Ok":
-                return TelescopeSpeed.SPEED_TRACKING
-            case "Idle":
-                return TelescopeSpeed.SPEED_NOT_TRACKING
-            case "Busy":
-                return TelescopeSpeed.SPEED_SLEWING
-            case _:
-                return TelescopeSpeed.SPEED_ERROR
+        if state == "Ok":
+            return TelescopeSpeed.SPEED_TRACKING
+        elif state == "Idle":
+            return TelescopeSpeed.SPEED_NOT_TRACKING
+        elif state == "Busy":
+            return TelescopeSpeed.SPEED_SLEWING
+        else:
+            return TelescopeSpeed.SPEED_ERROR
+        # match state:
+        #     case "Ok":
+        #         return TelescopeSpeed.SPEED_TRACKING
+        #     case "Idle":
+        #         return TelescopeSpeed.SPEED_NOT_TRACKING
+        #     case "Busy":
+        #         return TelescopeSpeed.SPEED_SLEWING
+        #     case _:
+        #         return TelescopeSpeed.SPEED_ERROR
 
     def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.move(

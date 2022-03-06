@@ -9,7 +9,6 @@ from astropy import units as u
 import logging
 from datetime import datetime
 from crac_server import config
-from typing import Dict
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
     AltazimutalCoords,
@@ -127,7 +126,7 @@ class Telescope(ABC):
         logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
         return aa_coords
 
-    def __altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int, obstime: datetime):
+    def __altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: int, obstime: datetime):
         logger.debug('obstime: %s', obstime)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         logger.debug("astropy timestring: %s", timestring)

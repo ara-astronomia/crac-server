@@ -6,7 +6,7 @@ authors = ["Alessio Caradossi <alessio@theeyes.org>"]
 license = "GPL3"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 crac-protobuf = { path = "../crac-protobuf/dist/crac-protobuf-0.1.14.tar.gz" }
 grpcio-tools = "^1.43.0"
 gpiozero = "^1.6.2"
