@@ -17,20 +17,12 @@ lock = threading.Lock()
 
 class Telescope(BaseTelescope):
 
-    def __init__(self):
-        super().__init__()
-        self.hostname = config.Config.getValue("theskyx_ip", "server")
-        self.port = 3040
+    def __init__(self, hostname=config.Config.getValue("theskyx_ip", "server"), port=3040):
+        super().__init__(hostname=hostname, port=port)
         self.script = os.path.join(os.path.dirname(__file__), 'get_alt_az.js')
         self.script_move_track = os.path.join(os.path.dirname(__file__), 'set_move_track.js')
         self.script_sync_tele = os.path.join(os.path.dirname(__file__), 'sync_tele.js')
         self.script_disconnect_tele = os.path.join(os.path.dirname(__file__), 'disconnect_tele.js')
-        self.connected = False
-
-    
-    def disconnect(self) -> None:
-        self.__call_thesky__(script=self.script_disconnect_tele)
-        return True
 
     def sync(self, **kwargs) -> Dict[str, float]:
         logger.info("sincronizzo il telescopio")
@@ -48,12 +40,6 @@ class Telescope(BaseTelescope):
             self.__parse_result__(data.decode("utf-8"))
             logger.debug("sincronizzo il telescopio a queste coordinate %s", kwargs)
             self.sync_status = True
-
-    def open_connection(self) -> None:
-        if not self.connected:
-            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.s.connect((self.hostname, self.port))
-            self.connected = True
 
     def update_coords(self) -> Dict[str, int]:
         logger.info("Leggo le coordinate")
@@ -86,11 +72,6 @@ class Telescope(BaseTelescope):
             self.__disconnection__()
         else:
             self.__update_status__()
-
-    def close_connection(self) -> None:
-        if self.connected:
-            self.s.close()
-            self.connected = False
 
     def __disconnection__(self):
         logger.exception("Connessione con The Sky persa: ")

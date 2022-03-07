@@ -32,12 +32,6 @@ class ButtonService(ButtonServicer):
 
         if request.action == ButtonAction.TURN_ON:
             button_control.on()
-            if (
-                request.type == ButtonType.FLAT_LIGHT and
-                TELESCOPE.status is TelescopeStatus.FLATTER
-            ):
-                logger.info("Turned on Flat Panel")
-                TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
             if request.type == ButtonType.TELE_SWITCH:
                 TELESCOPE.polling_start()
         elif request.action == ButtonAction.TURN_OFF:
@@ -47,6 +41,14 @@ class ButtonService(ButtonServicer):
 
         status = button_control.get_status()
         logger.info("Response " + str(status))
+
+        if (
+            request.type == ButtonType.FLAT_LIGHT and
+            status is ButtonStatus.ON and
+            TELESCOPE.status is TelescopeStatus.FLATTER
+        ):
+            logger.info("Turned on Flat Panel")
+            TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
         if status is ButtonStatus.ON:
             text_color, background_color = ("white", "green")

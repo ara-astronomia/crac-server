@@ -18,58 +18,6 @@ class Telescope(TelescopeBase):
     def __init__(self, hostname="localhost", port=7624) -> None:
         super().__init__(hostname=hostname, port=port)
 
-    def retrieve(self) -> tuple:
-        root = self.__call(
-            """
-            <getProperties device="Telescope Simulator" version="1.7" name="EQUATORIAL_EOD_COORD"/>
-            """
-        )
-        eq_coords = self.__retrieve_eq_coords(root)
-        speed = self.__retrieve_speed(root)
-        aa_coords = self._retrieve_aa_coords(eq_coords)
-        status = self._retrieve_status(aa_coords)
-
-        return (eq_coords, aa_coords, speed, status)
-
-    def __retrieve_speed(self, root):
-        state = root.attrib["state"].strip() if root else None
-        if state == "Ok":
-            return TelescopeSpeed.SPEED_TRACKING
-        elif state == "Idle":
-            return TelescopeSpeed.SPEED_NOT_TRACKING
-        elif state == "Busy":
-            return TelescopeSpeed.SPEED_SLEWING
-        else:
-            return TelescopeSpeed.SPEED_ERROR
-        # match state:
-        #     case "Ok":
-        #         return TelescopeSpeed.SPEED_TRACKING
-        #     case "Idle":
-        #         return TelescopeSpeed.SPEED_NOT_TRACKING
-        #     case "Busy":
-        #         return TelescopeSpeed.SPEED_SLEWING
-        #     case _:
-        #         return TelescopeSpeed.SPEED_ERROR
-
-    def __retrieve_eq_coords(self, root):
-        for coords in root.findall("defNumber"):
-            if coords.attrib["name"] == "RA":
-                ra = round(float(coords.text), 2)
-            elif coords.attrib["name"] == "DEC":
-                dec = round(float(coords.text), 2)
-
-        return EquatorialCoords(ra=ra, dec=dec)
-
-    def __call(self, script: str):
-        self.s.sendall(script.encode('utf-8'))
-        data = self.s.recv(30000)
-        logger.debug(data)
-        try:
-            return ET.fromstring(data)
-        except ET.ParseError as err:
-            logger.error(f"Xml Malformed {err}")
-            raise err
-
     def sync(self):
         self.sync_time = datetime.utcnow()
         self.__call(
@@ -117,34 +65,6 @@ class Telescope(TelescopeBase):
                         Off
                     </oneSwitch>
                 </newSwitchVector>
-            """
-        )
-
-    def __move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.SPEED_TRACKING):
-        self.__call(
-            """
-                <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
-                    <oneSwitch name="UNPARK">
-                        On
-                    </oneSwitch>
-                </newSwitchVector>
-            """
-        )
-        eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
-        logger.debug(aa_coords)
-        logger.debug(eq_coords)
-        logger.debug(self._radec2altaz(eq_coords, obstime=datetime.utcnow()))
-        self.queue_set_speed(speed)
-        self.__call(
-            f"""
-                <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
-                    <oneNumber name="DEC">
-                      {eq_coords.dec}
-                    </oneNumber>
-                    <oneNumber name="RA">
-                      {eq_coords.ra}
-                    </oneNumber>
-                </newNumberVector>
             """
         )
 
@@ -220,6 +140,86 @@ class Telescope(TelescopeBase):
             </newSwitchVector>
             """
         )
+
+    def retrieve(self) -> tuple:
+        root = self.__call(
+            """
+            <getProperties device="Telescope Simulator" version="1.7" name="EQUATORIAL_EOD_COORD"/>
+            """
+        )
+        eq_coords = self.__retrieve_eq_coords(root)
+        speed = self.__retrieve_speed(root)
+        aa_coords = self._retrieve_aa_coords(eq_coords)
+        status = self._retrieve_status(aa_coords)
+
+        return (eq_coords, aa_coords, speed, status)
+
+    def __move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.SPEED_TRACKING):
+        self.__call(
+            """
+                <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
+                    <oneSwitch name="UNPARK">
+                        On
+                    </oneSwitch>
+                </newSwitchVector>
+            """
+        )
+        eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
+        logger.debug(aa_coords)
+        logger.debug(eq_coords)
+        logger.debug(self._radec2altaz(eq_coords, obstime=datetime.utcnow()))
+        self.queue_set_speed(speed)
+        self.__call(
+            f"""
+                <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
+                    <oneNumber name="DEC">
+                      {eq_coords.dec}
+                    </oneNumber>
+                    <oneNumber name="RA">
+                      {eq_coords.ra}
+                    </oneNumber>
+                </newNumberVector>
+            """
+        )
+
+    def __retrieve_speed(self, root):
+        state = root.attrib["state"].strip() if root else None
+        if state == "Ok":
+            return TelescopeSpeed.SPEED_TRACKING
+        elif state == "Idle":
+            return TelescopeSpeed.SPEED_NOT_TRACKING
+        elif state == "Busy":
+            return TelescopeSpeed.SPEED_SLEWING
+        else:
+            return TelescopeSpeed.SPEED_ERROR
+        # match state:
+        #     case "Ok":
+        #         return TelescopeSpeed.SPEED_TRACKING
+        #     case "Idle":
+        #         return TelescopeSpeed.SPEED_NOT_TRACKING
+        #     case "Busy":
+        #         return TelescopeSpeed.SPEED_SLEWING
+        #     case _:
+        #         return TelescopeSpeed.SPEED_ERROR
+
+    def __retrieve_eq_coords(self, root):
+        for coords in root.findall("defNumber"):
+            if coords.attrib["name"] == "RA":
+                ra = round(float(coords.text), 2)
+            elif coords.attrib["name"] == "DEC":
+                dec = round(float(coords.text), 2)
+
+        return EquatorialCoords(ra=ra, dec=dec)
+
+    def __call(self, script: str):
+        self.s.sendall(script.encode('utf-8'))
+        data = self.s.recv(30000)
+        logger.debug(data)
+        try:
+            return ET.fromstring(data)
+        except ET.ParseError as err:
+            logger.error(f"Xml Malformed {err}")
+            raise err
 
 TELESCOPE = Telescope()
 

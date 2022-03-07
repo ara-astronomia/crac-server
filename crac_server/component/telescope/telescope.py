@@ -92,7 +92,7 @@ class Telescope(ABC):
     def __open_connection(self) -> bool:
         """ Connect the server to the Telescope """
 
-        if not self.hostname or not self.port:
+        if not self._hostname or not self._port:
             return True 
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -104,7 +104,7 @@ class Telescope(ABC):
 
     def __disconnect(self) -> bool:
         """ Disconnect the server from the Telescope"""
-        if not self.hostname or not self.port:
+        if not self._hostname or not self._port:
             return
 
         if self.status is not TelescopeStatus.LOST:
@@ -123,14 +123,15 @@ class Telescope(ABC):
                 continue
 
             try:
-                logger.debug(f"there are {len(self._jobs)} jobs")
                 if len(self._jobs) > 0:
+                    logger.debug(f"there are {len(self._jobs)} jobs: {self._jobs}")
                     job = self._jobs.popleft()
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 
                 self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
             except:
+                logger.debug("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
                 continue
             finally:
@@ -148,7 +149,6 @@ class Telescope(ABC):
     def _retrieve_aa_coords(self, eq_coords):
         if eq_coords:
             aa_coords = self._radec2altaz(eq_coords, obstime=datetime.utcnow()) if eq_coords else None
-            logger.debug(f"Coordinate altazimutali {aa_coords}")
             return aa_coords
 
     def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
@@ -188,10 +188,7 @@ class Telescope(ABC):
         return coord - 1 <= check <= coord + 1
 
     def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime):
-        logger.debug("astropy ra received: %s", eq_coords.ra)
-        logger.debug("astropy dec received: %s", eq_coords.dec)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
-        logger.debug("astropy timestring: %s", timestring)
         observing_time = Time(timestring)
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
@@ -202,15 +199,11 @@ class Telescope(ABC):
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="fk5")
         altaz_coords = coord.transform_to(aa)
         aa_coords = AltazimutalCoords(alt=float(altaz_coords.alt / u.deg), az=float(altaz_coords.az / u.deg))
-        logger.debug("astropy altaz calculated: alt %s az %s", aa_coords.alt, aa_coords.az)
         return aa_coords
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int, obstime: datetime):
-        logger.debug('obstime: %s', obstime)
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
-        logger.debug("astropy timestring: %s", timestring)
         time = Time(timestring)
-        logger.debug("astropy time: %s", time)
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
@@ -221,8 +214,6 @@ class Telescope(ABC):
         ra_dec = alt_az.transform_to('fk5')
         ra = float((ra_dec.ra / 15) / u.deg)
         dec = float(ra_dec.dec / u.deg)
-        logger.debug('ar park (orario decimale): %s', ra)
-        logger.debug('dec park (declinazione decimale): %s', dec)
         if decimal_places:
             ra = round(ra, decimal_places)
             dec = round(dec, decimal_places)
