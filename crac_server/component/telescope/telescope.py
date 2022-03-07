@@ -131,7 +131,7 @@ class Telescope(ABC):
 
                 self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
             except:
-                logger.debug("Error in completing job", exc_info=1)
+                logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
                 continue
             finally:
@@ -201,7 +201,7 @@ class Telescope(ABC):
         aa_coords = AltazimutalCoords(alt=float(altaz_coords.alt / u.deg), az=float(altaz_coords.az / u.deg))
         return aa_coords
 
-    def _altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: None | int, obstime: datetime):
+    def _altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: int, obstime: datetime):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
         lat = config.Config.getValue("lat", "geography")

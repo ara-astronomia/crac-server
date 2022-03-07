@@ -18,12 +18,13 @@ class Telescope(TelescopeBase):
     # default port 7624
     def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
         super().__init__(hostname=hostname, port=port)
+        self._name = config.Config.getValue("name", "indi")
 
     def sync(self):
         self.sync_time = datetime.utcnow()
         self.__call(
-            """
-                <newSwitchVector device="Telescope Simulator" name="ON_COORD_SET">
+            f"""
+                <newSwitchVector device="{self._name}" name="ON_COORD_SET">
                     <oneSwitch name="SLEW">
                         Off
                     </oneSwitch>
@@ -43,7 +44,7 @@ class Telescope(TelescopeBase):
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
         self.__call(
             f"""
-                <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
+                <newNumberVector device="{self._name}" name="EQUATORIAL_EOD_COORD">
                     <oneNumber name="DEC">
                       {eq_coords.dec}
                     </oneNumber>
@@ -54,8 +55,8 @@ class Telescope(TelescopeBase):
             """
         )
         self.__call(
-            """
-                <newSwitchVector device="Telescope Simulator" name="ON_COORD_SET">
+            f"""
+                <newSwitchVector device="{self._name}" name="ON_COORD_SET">
                     <oneSwitch name="SLEW">
                         Off
                     </oneSwitch>
@@ -72,8 +73,8 @@ class Telescope(TelescopeBase):
     def set_speed(self, speed: TelescopeSpeed):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
-                """
-                    <newSwitchVector device="Telescope Simulator" name="TELESCOPE_TRACK_STATE">
+                f"""
+                    <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                         <oneSwitch name="TRACK_OFF">
                             On
                         </oneSwitch>
@@ -82,8 +83,8 @@ class Telescope(TelescopeBase):
             )
         else:
             self.__call(
-                """
-                    <newSwitchVector device="Telescope Simulator" name="TELESCOPE_TRACK_STATE">
+                f"""
+                    <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                         <oneSwitch name="TRACK_ON">
                             On
                         </oneSwitch>
@@ -92,7 +93,7 @@ class Telescope(TelescopeBase):
             )
             self.__call(
                 f"""
-                    <newSwitchVector device="Telescope Simulator" name="ON_COORD_SET">
+                    <newSwitchVector device="{self._name}" name="ON_COORD_SET">
                         <oneSwitch name="SLEW">
                             {"On" if speed == TelescopeSpeed.SPEED_SLEWING else "Off"}
                         </oneSwitch>
@@ -115,8 +116,8 @@ class Telescope(TelescopeBase):
             speed=speed
         )
         self.__call(
-            """
-            <newSwitchVector device="Telescope Simulator" name="TELESCOPE_TRACK_STATE">
+            f"""
+            <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                 <oneSwitch name="TRACK_OFF">
                     On
                 </oneSwitch>
@@ -133,8 +134,8 @@ class Telescope(TelescopeBase):
             speed=speed
         )
         self.__call(
-            """
-            <newSwitchVector device="Telescope Simulator" name="TELESCOPE_TRACK_STATE">
+            f"""
+            <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                 <oneSwitch name="TRACK_OFF">
                     On
                 </oneSwitch>
@@ -144,8 +145,8 @@ class Telescope(TelescopeBase):
 
     def retrieve(self) -> tuple:
         root = self.__call(
-            """
-            <getProperties device="Telescope Simulator" version="1.7" name="EQUATORIAL_EOD_COORD"/>
+            f"""
+            <getProperties device="{self._name}" version="1.7" name="EQUATORIAL_EOD_COORD"/>
             """
         )
         eq_coords = self.__retrieve_eq_coords(root)
@@ -157,8 +158,8 @@ class Telescope(TelescopeBase):
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call(
-            """
-                <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
+            f"""
+                <newSwitchVector device="{self._name}" name="TELESCOPE_PARK">
                     <oneSwitch name="UNPARK">
                         On
                     </oneSwitch>
@@ -168,11 +169,10 @@ class Telescope(TelescopeBase):
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug(aa_coords)
         logger.debug(eq_coords)
-        logger.debug(self._radec2altaz(eq_coords, obstime=datetime.utcnow()))
         self.queue_set_speed(speed)
         self.__call(
             f"""
-                <newNumberVector device="Telescope Simulator" name="EQUATORIAL_EOD_COORD">
+                <newNumberVector device="{self._name}" name="EQUATORIAL_EOD_COORD">
                     <oneNumber name="DEC">
                       {eq_coords.dec}
                     </oneNumber>
@@ -214,21 +214,10 @@ class Telescope(TelescopeBase):
 
     def __call(self, script: str):
         self.s.sendall(script.encode('utf-8'))
-        data = self.s.recv(30000)
-        logger.debug(data)
+        data = self.s.recv(30000).decode("utf-8")
+        logger.debug(f"data received from xml: {data}")
         try:
             return ET.fromstring(data)
         except ET.ParseError as err:
             logger.error(f"Xml Malformed {err}")
             raise err
-
-TELESCOPE = Telescope()
-
-# while True:
-#     print(TELESCOPE.aa_coords)
-#     print(TELESCOPE.eq_coords)
-#     if TELESCOPE.speed:
-#         print(TelescopeSpeed.Name(TELESCOPE.speed))
-#     if TELESCOPE.status:
-#         print(TelescopeStatus.Name(TELESCOPE.status))
-#     sleep(2)

@@ -109,6 +109,3 @@ class Telescope(TelescopeBase):
             return TelescopeSpeed.SPEED_TRACKING
         elif tr == "1" and sl == "0":
             return TelescopeSpeed.SPEED_SLEWING
-
-
-TELESCOPE = Telescope()
