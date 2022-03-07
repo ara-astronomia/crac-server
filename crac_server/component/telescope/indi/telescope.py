@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class Telescope(TelescopeBase):
 
     # default port 7624
-    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getValue("port", "telescope")) -> None:
+    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
         super().__init__(hostname=hostname, port=port)
 
     def sync(self):
