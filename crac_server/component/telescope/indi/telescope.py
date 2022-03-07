@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 class Telescope(TelescopeBase):
 
-    def __init__(self, hostname="localhost", port=7624) -> None:
+    # default port 7624
+    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getValue("port", "telescope")) -> None:
         super().__init__(hostname=hostname, port=port)
 
     def sync(self):
@@ -154,7 +155,7 @@ class Telescope(TelescopeBase):
 
         return (eq_coords, aa_coords, speed, status)
 
-    def __move(self, aa_coords: AltazimutalCoords | EquatorialCoords, speed=TelescopeSpeed.SPEED_TRACKING):
+    def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call(
             """
                 <newSwitchVector device="Telescope Simulator" name="TELESCOPE_PARK">
