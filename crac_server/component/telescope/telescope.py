@@ -57,13 +57,15 @@ class Telescope(ABC):
         """ Retrieve coordinate and speed from the Telescope """
     
     def polling_start(self):
-        self._polling = True
-        self.t = Thread(target=self.__read)
-        self.t.start()
+        if not self._polling:
+            self._polling = True
+            self.t = Thread(target=self.__read)
+            self.t.start()
     
     def polling_end(self):
-        self._polling = False
-        self.t.join()
+        if self._polling:
+            self._polling = False
+            self.t.join()
     
     def queue_sync(self):
         self._jobs.append({"action": self.sync})
@@ -141,7 +143,7 @@ class Telescope(ABC):
             self.__disconnect()
 
     def _reset(self):
-        self.status = TelescopeStatus.LOST
+        self.status = TelescopeStatus.DISCONNECTED
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
@@ -152,7 +154,9 @@ class Telescope(ABC):
             return aa_coords
 
     def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
-        if self.__within_park_alt_range(aa_coords.alt) and self.__within_park_az_range(aa_coords.az):
+        if not self._polling:
+            return TelescopeStatus.DISCONNECTED
+        elif self.__within_park_alt_range(aa_coords.alt) and self.__within_park_az_range(aa_coords.az):
             return TelescopeStatus.PARKED
         elif self.__within_flat_alt_range(aa_coords.alt) and self.__within_flat_az_range(aa_coords.az):
             return TelescopeStatus.FLATTER
