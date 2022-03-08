@@ -1,6 +1,5 @@
 from datetime import datetime
 from crac_protobuf.telescope_pb2 import (
-    TelescopeStatus,
     TelescopeSpeed,
     AltazimutalCoords,
 )
@@ -9,7 +8,6 @@ from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 import logging
 import json
 import os
-import re
 from typing import Dict
 
 
@@ -26,7 +24,7 @@ class Telescope(TelescopeBase):
         self.script_sync_tele = os.path.join(os.path.dirname(__file__), 'sync_tele.js')
         self.script_disconnect_tele = os.path.join(os.path.dirname(__file__), 'disconnect_tele.js')
 
-    def sync(self, **kwargs) -> Dict[str, float]:
+    def sync(self) -> Dict[str, float]:
         aa_coords = AltazimutalCoords(
             alt=config.Config.getFloat("park_alt", "telescope"),
             az=config.Config.getFloat("park_az", "telescope")
@@ -35,26 +33,25 @@ class Telescope(TelescopeBase):
         self.__call(script=self.script_sync_tele, ra=eq_coords.ra, dec=eq_coords.dec)
     
     def set_speed(self, speed: TelescopeSpeed):
-        tr = 1 if speed is TelescopeSpeed.SPEED_NOT_TRACKING else 0
+        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         self.__call(script=self.script_move_track, tr=tr)
     
     def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
-        tr = 1 if speed is TelescopeSpeed.SPEED_NOT_TRACKING else 0
+        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         alt_deg = config.Config.getFloat("park_alt", "telescope")
         az_deg = config.Config.getFloat("park_az", "telescope")
         self.__call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)
 
     def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
-        tr = 1 if speed is TelescopeSpeed.SPEED_NOT_TRACKING else 0
-        alt_deg = config.Config.getFloat("park_alt", "telescope")
-        az_deg = config.Config.getFloat("park_az", "telescope")
-        self._call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)
+        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
+        alt_deg = config.Config.getFloat("flat_alt", "telescope")
+        az_deg = config.Config.getFloat("flat_az", "telescope")
+        self.__call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)
 
     def retrieve(self) -> tuple:
         data = self.__call(script=self.script)
         aa_coords, speed = self.__parse_result(data)
         eq_coords = self._altaz2radec(aa_coords=aa_coords, decimal_places=2, obstime=datetime.utcnow())
-        aa_coords = self._retrieve_aa_coords(eq_coords)
         status = self._retrieve_status(aa_coords)
 
         return (eq_coords, aa_coords, speed, status)
@@ -82,14 +79,14 @@ class Telescope(TelescopeBase):
 
     def __parse_result(self, jsonLoad: dict) -> tuple:
         #coords["error"] = self.__is_error__(jsonLoad)
-
+        logger.debug(f"json result is: {jsonLoad}")
         #if not self.coords["error"]:
         aa_coords = AltazimutalCoords(alt=round(jsonLoad["alt"], 2), az=round(jsonLoad["az"], 2))
         if jsonLoad["tr"] == 1 and jsonLoad["sl"] == 1:
             speed = TelescopeSpeed.SPEED_NOT_TRACKING 
-        elif jsonLoad["tr"] == 1 and jsonLoad["sl"] == 0:
+        elif jsonLoad["sl"] == 0:
             speed = TelescopeSpeed.SPEED_SLEWING
-        elif jsonLoad["tr"] == 0 and jsonLoad["sl"] == 1:
+        elif jsonLoad["tr"] == 0:
             speed = TelescopeSpeed.SPEED_TRACKING
         else:
             speed = TelescopeSpeed.SPEED_ERROR
