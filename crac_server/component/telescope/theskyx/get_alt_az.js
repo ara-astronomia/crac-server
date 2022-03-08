@@ -1,14 +1,9 @@
 /* Java Script */
-/* Socket Start Packet */
 var Out;
 
 sky6RASCOMTele.Connect();
 
-if (sky6RASCOMTele.IsConnected == 0)
-{
-	Out = "Not connected";
-}
-else
+if (sky6RASCOMTele.IsConnected)
 {
 	sky6RASCOMTele.GetAzAlt();
 	obj = {
@@ -19,4 +14,3 @@ else
   	};
 	Out = JSON.stringify(obj);
 }
-/* Socket End Packet */
