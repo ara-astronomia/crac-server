@@ -67,7 +67,7 @@ class TelescopeService(TelescopeServicer):
         elif request.action is TelescopeAction.TELESCOPE_DISCONNECT:
             TELESCOPE.polling_end()
         elif request.action is TelescopeAction.SYNC:
-            TELESCOPE.queue_sync()
+            TELESCOPE.queue_sync(SWITCHES["TELE_SWITCH"].turned_on_at)
         elif request.action is TelescopeAction.PARK_POSITION:
             TELESCOPE.queue_park()
         elif request.action is TelescopeAction.FLAT_POSITION:

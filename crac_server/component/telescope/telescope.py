@@ -67,8 +67,8 @@ class Telescope(ABC):
             self._polling = False
             self.t.join()
     
-    def queue_sync(self):
-        self._jobs.append({"action": self.sync})
+    def queue_sync(self, started_at: datetime):
+        self._jobs.append({"action": self.sync, "started_at": started_at})
     
     def queue_set_speed(self, speed: TelescopeSpeed):
         self._jobs.append({"action": self.set_speed, "speed": speed})
@@ -190,6 +190,20 @@ class Telescope(ABC):
 
     def __within_range(self, coord: float, check: float):
         return coord - 1 <= check <= coord + 1
+
+    def _calculate_telescope_position(self, aa_coords: AltazimutalCoords, started_at: datetime, decimal_places: int):
+        started_at = datetime.utcnow() if started_at is None else started_at
+        eq_coords = self._altaz2radec(
+            aa_coords=aa_coords, 
+            decimal_places=decimal_places, 
+            obstime=started_at
+        )
+        timestamp_started_at = datetime.timestamp(started_at)
+        timestamp_now = datetime.timestamp(datetime.utcnow())
+        delta_timestamp = timestamp_now - timestamp_started_at
+        eq_coords.ra = round((delta_timestamp / 3600) + eq_coords.ra, 2)
+        logger.debug(f"equatorial coordinate for synced position {eq_coords}")
+        return eq_coords
 
     def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
