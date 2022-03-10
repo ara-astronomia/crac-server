@@ -40,7 +40,12 @@ class Telescope(TelescopeBase):
             alt=config.Config.getFloat("park_alt", "telescope"), 
             az=config.Config.getFloat("park_az", "telescope")
         )
-        eq_coords = self._calculate_telescope_position(aa_coords=aa_coords, started_at=started_at, decimal_places=2)
+        eq_coords = self._calculate_telescope_position(
+            aa_coords=aa_coords, 
+            started_at=started_at, 
+            decimal_places=2,
+            speed=self.speed
+        )
         self.__call(
             f"""
                 <newNumberVector device="{self._name}" name="EQUATORIAL_EOD_COORD">

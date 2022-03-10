@@ -8,7 +8,6 @@ from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 import logging
 import json
 import os
-from typing import Dict
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,12 @@ class Telescope(TelescopeBase):
             alt=config.Config.getFloat("park_alt", "telescope"), 
             az=config.Config.getFloat("park_az", "telescope")
         )
-        eq_coords = self._calculate_telescope_position(aa_coords=aa_coords, started_at=started_at, decimal_places=2)
+        eq_coords = self._calculate_telescope_position(
+            aa_coords=aa_coords, 
+            started_at=started_at, 
+            decimal_places=2,
+            speed=self.speed
+        )
         self.__call(script=self.script_sync_tele, ra=eq_coords.ra, dec=eq_coords.dec)
     
     def set_speed(self, speed: TelescopeSpeed):

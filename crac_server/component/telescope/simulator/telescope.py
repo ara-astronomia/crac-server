@@ -23,7 +23,12 @@ class Telescope(TelescopeBase):
             alt=Config.getFloat("park_alt", "telescope"),
             az=Config.getFloat("park_az", "telescope")
         )
-        eq_coords = self._calculate_telescope_position(aa_coords=aa_coords, started_at=started_at, decimal_places=2)
+        eq_coords = self._calculate_telescope_position(
+            aa_coords=aa_coords, 
+            started_at=started_at, 
+            decimal_places=2,
+            speed=self.speed
+        )
         synced_aa_coords = self._radec2altaz(eq_coords=eq_coords, obstime=datetime.utcnow())
         telescope_config = ConfigParser()
         telescope_config["coords"] = {'alt': str(synced_aa_coords.alt), 'az': str(synced_aa_coords.az), 'tr': 1, 'sl': 1, 'error': 0}
