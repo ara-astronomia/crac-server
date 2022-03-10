@@ -32,11 +32,8 @@ class ButtonService(ButtonServicer):
 
         if request.action == ButtonAction.TURN_ON:
             button_control.on()
-            if request.type == ButtonType.TELE_SWITCH:
-                TELESCOPE.polling_start()
         elif request.action == ButtonAction.TURN_OFF:
-            if request.type == ButtonType.TELE_SWITCH:
-                TELESCOPE.polling_end()
+            TELESCOPE.polling_end()
             button_control.off()
 
         status = button_control.get_status()

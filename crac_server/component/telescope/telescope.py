@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 from collections import deque
+from os import sync
 import socket
 from threading import Thread
+from unicodedata import decimal
 from astropy.coordinates import (
     EarthLocation,
     AltAz,
@@ -33,7 +35,7 @@ class Telescope(ABC):
         self._reset()
 
     @abstractmethod
-    def sync(self):
+    def sync(self, started_at: datetime):
         """ 
             Register the telescope in park position
             Calculate the corrisponding equatorial coordinate
@@ -57,16 +59,18 @@ class Telescope(ABC):
         """ Retrieve coordinate and speed from the Telescope """
     
     def polling_start(self):
-        self._polling = True
-        self.t = Thread(target=self.__read)
-        self.t.start()
+        if not self._polling:
+            self._polling = True
+            self.t = Thread(target=self.__read)
+            self.t.start()
     
     def polling_end(self):
-        self._polling = False
-        self.t.join()
+        if self._polling:
+            self._polling = False
+            self.t.join()
     
-    def queue_sync(self):
-        self._jobs.append({"action": self.sync})
+    def queue_sync(self, started_at: datetime):
+        self._jobs.append({"action": self.sync, "started_at": started_at})
     
     def queue_set_speed(self, speed: TelescopeSpeed):
         self._jobs.append({"action": self.set_speed, "speed": speed})
@@ -141,7 +145,7 @@ class Telescope(ABC):
             self.__disconnect()
 
     def _reset(self):
-        self.status = TelescopeStatus.LOST
+        self.status = TelescopeStatus.DISCONNECTED
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
@@ -152,7 +156,9 @@ class Telescope(ABC):
             return aa_coords
 
     def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
-        if self.__within_park_alt_range(aa_coords.alt) and self.__within_park_az_range(aa_coords.az):
+        if not self._polling:
+            return TelescopeStatus.DISCONNECTED
+        elif self.__within_park_alt_range(aa_coords.alt) and self.__within_park_az_range(aa_coords.az):
             return TelescopeStatus.PARKED
         elif self.__within_flat_alt_range(aa_coords.alt) and self.__within_flat_az_range(aa_coords.az):
             return TelescopeStatus.FLATTER
@@ -187,7 +193,24 @@ class Telescope(ABC):
     def __within_range(self, coord: float, check: float):
         return coord - 1 <= check <= coord + 1
 
-    def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime):
+    def _calculate_telescope_position(self, aa_coords: AltazimutalCoords, started_at: datetime, decimal_places: int, speed: TelescopeSpeed = TelescopeSpeed.SPEED_TRACKING) -> AltazimutalCoords:
+        started_at = datetime.utcnow() if started_at is None else started_at
+        eq_coords = self._altaz2radec(
+            aa_coords=aa_coords, 
+            obstime=started_at
+        )
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            timestamp_started_at = datetime.timestamp(started_at)
+            timestamp_now = datetime.timestamp(datetime.utcnow())
+            delta_timestamp = timestamp_now - timestamp_started_at
+            ra = (delta_timestamp / 3600) + eq_coords.ra
+            synced_eq_coords = EquatorialCoords(ra=round(ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
+            logger.debug(f"equatorial coordinate for synced position when telescope is not tracking {synced_eq_coords}")
+        logger.debug(f"equatorial coordinate for synced position when telescope is tracking  {eq_coords}")
+        synced_eq_coords = EquatorialCoords(ra=round(eq_coords.ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
+        return synced_eq_coords
+
+    def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime, decimal_places: int = None):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         observing_time = Time(timestring)
         lat = config.Config.getValue("lat", "geography")
@@ -198,10 +221,14 @@ class Telescope(ABC):
         equinox = config.Config.getValue("equinox", "geography")
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="fk5")
         altaz_coords = coord.transform_to(aa)
-        aa_coords = AltazimutalCoords(alt=float(altaz_coords.alt / u.deg), az=float(altaz_coords.az / u.deg))
-        return aa_coords
+        alt = float(altaz_coords.alt / u.deg)
+        az = float(altaz_coords.az / u.deg)
+        if decimal_places:
+            alt = round(alt, decimal_places)
+            az = round(az, decimal_places)
+        return AltazimutalCoords(alt=alt, az=az)
 
-    def _altaz2radec(self, aa_coords: AltazimutalCoords, decimal_places: int, obstime: datetime):
+    def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = None):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
         lat = config.Config.getValue("lat", "geography")
