@@ -33,8 +33,8 @@ class ButtonService(ButtonServicer):
         if request.action == ButtonAction.TURN_ON:
             button_control.on()
         elif request.action == ButtonAction.TURN_OFF:
-            button_control.off()
             TELESCOPE.polling_end()
+            button_control.off()
 
         status = button_control.get_status()
         logger.info("Response " + str(status))
