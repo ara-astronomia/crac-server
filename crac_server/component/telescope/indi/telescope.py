@@ -75,7 +75,7 @@ class Telescope(TelescopeBase):
         )
 
     def set_speed(self, speed: TelescopeSpeed):
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING and self.has_tracking_off_capability():
             self.__call(
                 f"""
                     <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
@@ -119,15 +119,16 @@ class Telescope(TelescopeBase):
             ),
             speed=speed
         )
-        self.__call(
-            f"""
-            <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
-                <oneSwitch name="TRACK_OFF">
-                    On
-                </oneSwitch>
-            </newSwitchVector>
-            """
-        )
+        if self.has_tracking_off_capability():
+            self.__call(
+                f"""
+                <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                    <oneSwitch name="TRACK_OFF">
+                        On
+                    </oneSwitch>
+                </newSwitchVector>
+                """
+            )
 
     def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
         self.__move(
@@ -137,15 +138,16 @@ class Telescope(TelescopeBase):
             ),
             speed=speed
         )
-        self.__call(
-            f"""
-            <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
-                <oneSwitch name="TRACK_OFF">
-                    On
-                </oneSwitch>
-            </newSwitchVector>
-            """
-        )
+        if self.has_tracking_off_capability():
+            self.__call(
+                f"""
+                <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                    <oneSwitch name="TRACK_OFF">
+                        On
+                    </oneSwitch>
+                </newSwitchVector>
+                """
+            )
 
     def retrieve(self) -> tuple:
         root = self.__call(

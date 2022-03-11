@@ -32,6 +32,7 @@ class Telescope(ABC):
         self._port = port
         self._polling = False
         self._jobs = deque()
+        self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
         self._reset()
 
     @abstractmethod
@@ -40,7 +41,6 @@ class Telescope(ABC):
             Register the telescope in park position
             Calculate the corrisponding equatorial coordinate
         """
-
 
     @abstractmethod
     def set_speed(self, speed: TelescopeSpeed):
@@ -80,6 +80,10 @@ class Telescope(ABC):
 
     def queue_flat(self):
         self._jobs.append({"action": self.flat})
+    
+    @property
+    def has_tracking_off_capability(self):
+        return self._has_tracking_off_capability
 
     def is_below_curtains_area(self, alt: float) -> bool:
         return alt <= config.Config.getFloat("max_secure_alt", "telescope")
