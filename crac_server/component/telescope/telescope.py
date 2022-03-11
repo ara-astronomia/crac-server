@@ -33,6 +33,7 @@ class Telescope(ABC):
         self._polling = False
         self._jobs = deque()
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
+        self._connection_retry = 0
         self._reset()
 
     @abstractmethod
@@ -88,6 +89,10 @@ class Telescope(ABC):
     @property
     def has_tracking_off_capability(self):
         return self._has_tracking_off_capability
+    
+    @property
+    def polling(self):
+        return self._polling
 
     def is_below_curtains_area(self, alt: float) -> bool:
         return alt <= config.Config.getFloat("max_secure_alt", "telescope")
@@ -107,12 +112,14 @@ class Telescope(ABC):
         if not self._hostname or not self._port:
             return True 
         try:
-            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.s.connect((self._hostname, self._port))
+            #self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.s = socket.create_connection((self._hostname, self._port), timeout=2)
             return True
-        except ConnectionRefusedError as e: 
-            logger.error(f"Connection error: {e}")
+        except (ConnectionRefusedError, socket.error, socket.herror, TimeoutError) as e: 
+            logger.error(f"Connection error: {e}", exc_info=1)
             return False
+        except:
+            logger.error("Generic connection error", exc_info=1)
 
     def __disconnect(self) -> bool:
         """ Disconnect the server from the Telescope"""
