@@ -47,11 +47,11 @@ class Telescope(ABC):
         """ Set the speed of the Telescope """
 
     @abstractmethod
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def park(self, speed: TelescopeSpeed):
         """ Move the Telescope in the park position """
 
     @abstractmethod
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def flat(self, speed: TelescopeSpeed):
         """ Move the Telescope in the flat position """
 
     @abstractmethod
@@ -73,13 +73,17 @@ class Telescope(ABC):
         self._jobs.append({"action": self.sync, "started_at": started_at})
     
     def queue_set_speed(self, speed: TelescopeSpeed):
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
+            speed = TelescopeSpeed.SPEED_TRACKING
         self._jobs.append({"action": self.set_speed, "speed": speed})
     
     def queue_park(self):
-        self._jobs.append({"action": self.park})
+        speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
+        self._jobs.append({"action": self.park, "speed": speed})
 
     def queue_flat(self):
-        self._jobs.append({"action": self.flat})
+        speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
+        self._jobs.append({"action": self.flat, "speed": speed})
     
     @property
     def has_tracking_off_capability(self):

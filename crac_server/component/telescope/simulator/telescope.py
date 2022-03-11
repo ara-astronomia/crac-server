@@ -31,8 +31,11 @@ class Telescope(TelescopeBase):
         )
         synced_aa_coords = self._radec2altaz(eq_coords=eq_coords, obstime=datetime.utcnow())
         telescope_config = ConfigParser()
-        telescope_config["coords"] = {'alt': str(synced_aa_coords.alt), 'az': str(synced_aa_coords.az), 'tr': 1, 'sl': 1, 'error': 0}
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
+        telescope_config.read(telescope_path)
+        tr = telescope_config.get("coords", "tr", fallback=0)
+        sl = telescope_config.get("coords", "sl", fallback=1)
+        telescope_config["coords"] = {'alt': str(synced_aa_coords.alt), 'az': str(synced_aa_coords.az), 'tr': tr, 'sl': sl, 'error': 0}
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
@@ -53,7 +56,7 @@ class Telescope(TelescopeBase):
         with open(telescope_path, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def park(self, speed: TelescopeSpeed):
         self._move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
@@ -62,7 +65,7 @@ class Telescope(TelescopeBase):
             speed=speed
         )
 
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def flat(self, speed: TelescopeSpeed):
         self._move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),

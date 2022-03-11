@@ -37,17 +37,17 @@ class Telescope(TelescopeBase):
         self.__call(script=self.script_sync_tele, ra=eq_coords.ra, dec=eq_coords.dec)
     
     def set_speed(self, speed: TelescopeSpeed):
-        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING and self.has_tracking_off_capability() else "0"
+        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         self.__call(script=self.script_move_track, tr=tr)
     
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
-        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING and self.has_tracking_off_capability() else "0"
+    def park(self, speed: TelescopeSpeed):
+        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         alt_deg = config.Config.getFloat("park_alt", "telescope")
         az_deg = config.Config.getFloat("park_az", "telescope")
         self.__call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)
 
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
-        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING and self.has_tracking_off_capability() else "0"
+    def flat(self, speed: TelescopeSpeed):
+        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         alt_deg = config.Config.getFloat("flat_alt", "telescope")
         az_deg = config.Config.getFloat("flat_az", "telescope")
         self.__call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)

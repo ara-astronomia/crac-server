@@ -75,7 +75,7 @@ class Telescope(TelescopeBase):
         )
 
     def set_speed(self, speed: TelescopeSpeed):
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING and self.has_tracking_off_capability():
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
                     <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
@@ -111,7 +111,7 @@ class Telescope(TelescopeBase):
                 """
             )
 
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def park(self, speed: TelescopeSpeed):
         self.__move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
@@ -119,7 +119,7 @@ class Telescope(TelescopeBase):
             ),
             speed=speed
         )
-        if self.has_tracking_off_capability():
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
                 <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
@@ -130,7 +130,7 @@ class Telescope(TelescopeBase):
                 """
             )
 
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def flat(self, speed: TelescopeSpeed):
         self.__move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),
@@ -138,7 +138,7 @@ class Telescope(TelescopeBase):
             ),
             speed=speed
         )
-        if self.has_tracking_off_capability():
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
                 <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
