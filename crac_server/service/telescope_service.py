@@ -76,9 +76,9 @@ class TelescopeService(TelescopeServicer):
         aa_coords = TELESCOPE.aa_coords
         status = TELESCOPE.status
         logger.debug(f"The Telescope Status is: {status}")
-        if status is TelescopeStatus.DISCONNECTED:
+        if status is TelescopeStatus.DISCONNECTED or not TELESCOPE.polling:
             return TelescopeResponse(
-                status=TelescopeStatus.LOST, 
+                status=status, 
                 speed=TelescopeSpeed.SPEED_ERROR,
                 buttons_gui=[
                     ButtonGui(

@@ -111,7 +111,7 @@ class Telescope(TelescopeBase):
                 """
             )
 
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def park(self, speed: TelescopeSpeed):
         self.__move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("park_alt", "telescope"),
@@ -119,17 +119,18 @@ class Telescope(TelescopeBase):
             ),
             speed=speed
         )
-        self.__call(
-            f"""
-            <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
-                <oneSwitch name="TRACK_OFF">
-                    On
-                </oneSwitch>
-            </newSwitchVector>
-            """
-        )
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            self.__call(
+                f"""
+                <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                    <oneSwitch name="TRACK_OFF">
+                        On
+                    </oneSwitch>
+                </newSwitchVector>
+                """
+            )
 
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def flat(self, speed: TelescopeSpeed):
         self.__move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),
@@ -137,15 +138,16 @@ class Telescope(TelescopeBase):
             ),
             speed=speed
         )
-        self.__call(
-            f"""
-            <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
-                <oneSwitch name="TRACK_OFF">
-                    On
-                </oneSwitch>
-            </newSwitchVector>
-            """
-        )
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            self.__call(
+                f"""
+                <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                    <oneSwitch name="TRACK_OFF">
+                        On
+                    </oneSwitch>
+                </newSwitchVector>
+                """
+            )
 
     def retrieve(self) -> tuple:
         root = self.__call(

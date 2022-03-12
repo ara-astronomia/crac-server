@@ -32,6 +32,8 @@ class Telescope(ABC):
         self._port = port
         self._polling = False
         self._jobs = deque()
+        self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
+        self._connection_retry = 0
         self._reset()
 
     @abstractmethod
@@ -41,17 +43,16 @@ class Telescope(ABC):
             Calculate the corrisponding equatorial coordinate
         """
 
-
     @abstractmethod
     def set_speed(self, speed: TelescopeSpeed):
         """ Set the speed of the Telescope """
 
     @abstractmethod
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def park(self, speed: TelescopeSpeed):
         """ Move the Telescope in the park position """
 
     @abstractmethod
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
+    def flat(self, speed: TelescopeSpeed):
         """ Move the Telescope in the flat position """
 
     @abstractmethod
@@ -73,13 +74,25 @@ class Telescope(ABC):
         self._jobs.append({"action": self.sync, "started_at": started_at})
     
     def queue_set_speed(self, speed: TelescopeSpeed):
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
+            speed = TelescopeSpeed.SPEED_TRACKING
         self._jobs.append({"action": self.set_speed, "speed": speed})
     
     def queue_park(self):
-        self._jobs.append({"action": self.park})
+        speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
+        self._jobs.append({"action": self.park, "speed": speed})
 
     def queue_flat(self):
-        self._jobs.append({"action": self.flat})
+        speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
+        self._jobs.append({"action": self.flat, "speed": speed})
+    
+    @property
+    def has_tracking_off_capability(self):
+        return self._has_tracking_off_capability
+    
+    @property
+    def polling(self):
+        return self._polling
 
     def is_below_curtains_area(self, alt: float) -> bool:
         return alt <= config.Config.getFloat("max_secure_alt", "telescope")
@@ -99,12 +112,14 @@ class Telescope(ABC):
         if not self._hostname or not self._port:
             return True 
         try:
-            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.s.connect((self._hostname, self._port))
+            #self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.s = socket.create_connection((self._hostname, self._port), timeout=2)
             return True
-        except ConnectionRefusedError as e: 
-            logger.error(f"Connection error: {e}")
+        except (ConnectionRefusedError, socket.error, socket.herror, TimeoutError) as e: 
+            logger.error(f"Connection error: {e}", exc_info=1)
             return False
+        except:
+            logger.error("Generic connection error", exc_info=1)
 
     def __disconnect(self) -> bool:
         """ Disconnect the server from the Telescope"""

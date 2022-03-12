@@ -8,6 +8,7 @@ from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 import logging
 import json
 import os
+import re
 
 
 logger = logging.getLogger(__name__)
@@ -37,17 +38,22 @@ class Telescope(TelescopeBase):
         self.__call(script=self.script_sync_tele, ra=eq_coords.ra, dec=eq_coords.dec)
     
     def set_speed(self, speed: TelescopeSpeed):
-        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
-        self.__call(script=self.script_move_track, tr=tr)
+        if self.has_tracking_off_capability:
+            tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
+            self.__call(script=self.script_move_track, tr=tr)
     
-    def park(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
-        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
+    def park(self, speed: TelescopeSpeed):
+        tr = ""
+        if self.has_tracking_off_capability:
+            tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         alt_deg = config.Config.getFloat("park_alt", "telescope")
         az_deg = config.Config.getFloat("park_az", "telescope")
         self.__call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)
 
-    def flat(self, speed=TelescopeSpeed.SPEED_NOT_TRACKING):
-        tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
+    def flat(self, speed: TelescopeSpeed):
+        tr = ""
+        if self.has_tracking_off_capability:
+            tr = "1" if speed is TelescopeSpeed.SPEED_NOT_TRACKING else "0"
         alt_deg = config.Config.getFloat("flat_alt", "telescope")
         az_deg = config.Config.getFloat("flat_az", "telescope")
         self.__call(script=self.script_move_track, tr=tr, alt=alt_deg, az=az_deg)
@@ -69,9 +75,16 @@ class Telescope(TelescopeBase):
                 if kwargs.get("alt") is None:
                     kwargs["alt"] = ""
                 file = file.format(**kwargs)
-            self.s.sendall(file.encode('utf-8'))
+            command = file.encode('utf-8')
+            logger.debug(f"Command sent su theskyx: {command}")
+            self.s.sendall(command)
 
         data = self.s.recv(1024).decode("utf-8")
+        error = self.__is_error__(data)
+        if error:
+            msg = f"Error code: {error}"
+            logger.error(msg)
+            raise ValueError(msg)
         logger.debug(f"Data received from js: {data}")
         jsonStringEnd = data.find("|")
         jsonString = data[:jsonStringEnd]
@@ -97,11 +110,11 @@ class Telescope(TelescopeBase):
         
         return (aa_coords, speed)
         
-    # def __is_error__(self, input_str, search_reg="Error = ([1-9][^\\d]|\\d{2,})") -> int:
-    #     r = re.search(search_reg, input_str)
-    #     error_code = 0
-    #     if r:
-    #         r2 = re.search('\\d+', r.group(1))
-    #         if r2:
-    #             error_code = int(r2.group(0))
-    #     return error_code
+    def __is_error__(self, input_str, search_reg="Error = ([1-9][^\\d]|\\d{2,})") -> int:
+        r = re.search(search_reg, input_str)
+        error_code = 0
+        if r:
+            r2 = re.search('\\d+', r.group(1))
+            if r2:
+                error_code = int(r2.group(0))
+        return error_code
