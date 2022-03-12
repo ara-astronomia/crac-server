@@ -78,7 +78,7 @@ class TelescopeService(TelescopeServicer):
         logger.debug(f"The Telescope Status is: {status}")
         if status is TelescopeStatus.DISCONNECTED or not TELESCOPE.polling:
             return TelescopeResponse(
-                status=TelescopeStatus.LOST, 
+                status=status, 
                 speed=TelescopeSpeed.SPEED_ERROR,
                 buttons_gui=[
                     ButtonGui(
