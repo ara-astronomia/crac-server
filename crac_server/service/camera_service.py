@@ -37,7 +37,7 @@ class CameraService(CameraServicer):
                     frame + 
                     b'\r\n'
                 )
-            yield CameraResponse(move=Move.MOVE_STOP, video=video, ir=False)
+            yield CameraResponse(move=Move.MOVE_STOP, video=video, ir=False, status=CAMERA.status)
 
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
         if request.action is CameraAction.CAMERA_DISCONNECT:
@@ -71,7 +71,10 @@ class CameraService(CameraServicer):
                 background_color = "red"
             )
             display_metadata = CameraAction.CAMERA_SHOW
-            display_is_disabled = False if CameraStatus.CAMERA_HIDDEN else True
+            if CAMERA.status is CameraStatus.CAMERA_DISCONNECTED:
+                display_is_disabled = True
+            else:
+                display_is_disabled = False
         else:
             display_label = ButtonLabel.LABEL_CAMERA_SHOWN
             display_color = ButtonColor(
