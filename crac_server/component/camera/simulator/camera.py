@@ -30,7 +30,10 @@ class Camera:
     
     def close(self):
         self._status = CameraStatus.CAMERA_DISCONNECTED
-        return self._camera.release()
+        if self._camera:
+            is_closed = self._camera.release()
+            self._camera = None
+            return is_closed
 
     def open(self):
         self._camera = cv2.VideoCapture(self._source)
