@@ -1,5 +1,4 @@
 from curses import meta
-import importlib
 import logging
 from crac_protobuf.curtains_pb2 import (
     CurtainsAction,
