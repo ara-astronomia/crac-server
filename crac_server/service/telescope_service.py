@@ -17,6 +17,7 @@ from crac_protobuf.telescope_pb2_grpc import (
 )
 from crac_server.component.button_control import SWITCHES
 from crac_server.component.telescope import TELESCOPE
+from crac_server.component.camera import CAMERA
 
 
 logger = logging.getLogger(__name__)
@@ -167,8 +168,11 @@ class TelescopeService(TelescopeServicer):
         if request.autolight:
             if speed is TelescopeSpeed.SPEED_SLEWING:
                 SWITCHES["DOME_LIGHT"].on()
+                CAMERA["camera1"].show()
             else:
                 SWITCHES["DOME_LIGHT"].off()
+                CAMERA["camera1"].hide()
+        
 
 
         return response

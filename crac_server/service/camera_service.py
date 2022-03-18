@@ -3,17 +3,15 @@ from crac_protobuf.button_pb2 import (
     ButtonLabel,
     ButtonKey,
     ButtonColor,
-    ButtonStatus,
 )
 from crac_protobuf.camera_pb2 import (
     CameraRequest, 
     CameraResponse,
-    Move,
     CameraAction,
     CameraStatus
 )
 from crac_protobuf.camera_pb2_grpc import CameraServicer
-from crac_server.component.camera.simulator.camera import CAMERA
+from crac_server.component.camera import CAMERA
 import cv2
 
 
@@ -22,8 +20,9 @@ class CameraService(CameraServicer):
         super().__init__()
 
     def Video(self, request: CameraRequest, context) -> CameraResponse:
+        camera = CAMERA[request.name]
         while True:
-            success, frame = CAMERA.read()  # read the camera frame
+            success, frame = camera.read()  # read the camera frame
             if not success:
                 break
             else:
@@ -37,19 +36,20 @@ class CameraService(CameraServicer):
                     frame + 
                     b'\r\n'
                 )
-            yield CameraResponse(move=Move.MOVE_STOP, video=video, ir=False, status=CAMERA.status)
+            yield CameraResponse(video=video, ir=False, status=camera.status)
 
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
+        camera = CAMERA[request.name]
         if request.action is CameraAction.CAMERA_DISCONNECT:
-            CAMERA.close()
+            camera.close()
         elif request.action is CameraAction.CAMERA_CONNECT:
-            CAMERA.open()
+            camera.open()
         elif request.action is CameraAction.CAMERA_HIDE:
-            CAMERA.hide()
+            camera.hide()
         elif request.action is CameraAction.CAMERA_SHOW:
-            CAMERA.show()
+            camera.show()
 
-        if CAMERA.status is CameraStatus.CAMERA_DISCONNECTED:
+        if camera.status is CameraStatus.CAMERA_DISCONNECTED:
             connect_label = ButtonLabel.LABEL_CAMERA_DISCONNECTED
             connect_color = ButtonColor(
                 text_color = "white",
@@ -64,14 +64,14 @@ class CameraService(CameraServicer):
             )
             connect_metadata = CameraAction.CAMERA_DISCONNECT
 
-        if CAMERA.status in (CameraStatus.CAMERA_DISCONNECTED, CameraStatus.CAMERA_HIDDEN):
+        if camera.status in (CameraStatus.CAMERA_DISCONNECTED, CameraStatus.CAMERA_HIDDEN):
             display_label = ButtonLabel.LABEL_CAMERA_HIDDEN
             display_color = ButtonColor(
                 text_color = "white",
                 background_color = "red"
             )
             display_metadata = CameraAction.CAMERA_SHOW
-            if CAMERA.status is CameraStatus.CAMERA_DISCONNECTED:
+            if camera.status is CameraStatus.CAMERA_DISCONNECTED:
                 display_is_disabled = True
             else:
                 display_is_disabled = False
@@ -100,4 +100,4 @@ class CameraService(CameraServicer):
         )
         buttons = (connection_button, display_button)
         
-        return CameraResponse(move=Move.MOVE_STOP, ir=False, status=CAMERA.status, buttons_gui=buttons)
+        return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons)

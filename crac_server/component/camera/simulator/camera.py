@@ -1,18 +1,17 @@
+from typing import Any
 from crac_protobuf.camera_pb2 import (
-    CameraRequest, 
-    CameraResponse,
-    Move,
-    CameraAction,
     CameraStatus
 )
 import cv2
 import numpy as np
 
+from crac_server.config import Config
+
 
 class Camera:
-    def __init__(self, source="./component/camera/simulator/video/simulated.mp4", width=1280, height=720) -> None:
+    def __init__(self, source: str, width=1280, height=720) -> None:
         self._status = CameraStatus.CAMERA_DISCONNECTED
-        self._source = source
+        self._source = 0 if source == "0" else source
         self._camera = None
         self._width = width
         self._height = height
@@ -43,9 +42,9 @@ class Camera:
         self._status = CameraStatus.CAMERA_HIDDEN
 
     def show(self):
-        self._status = CameraStatus.CAMERA_SHOWN
+        if self._status is not CameraStatus.CAMERA_DISCONNECTED:
+            self._status = CameraStatus.CAMERA_SHOWN
 
     def hide(self):
-        self._status = CameraStatus.CAMERA_HIDDEN
-
-CAMERA = Camera(0)
+        if self._status is not CameraStatus.CAMERA_DISCONNECTED:
+            self._status = CameraStatus.CAMERA_HIDDEN
