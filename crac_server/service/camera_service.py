@@ -1,8 +1,10 @@
+from unicodedata import name
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonLabel,
     ButtonKey,
     ButtonColor,
+    ButtonStatus
 )
 from crac_protobuf.camera_pb2 import (
     CameraRequest, 
@@ -11,8 +13,14 @@ from crac_protobuf.camera_pb2 import (
     CameraStatus
 )
 from crac_protobuf.camera_pb2_grpc import CameraServicer
+from crac_protobuf.roof_pb2 import RoofStatus
+from crac_protobuf.telescope_pb2 import TelescopeSpeed
+from crac_server.component.button_control import SWITCHES
 from crac_server.component.camera import CAMERA
 import cv2
+from crac_server.component.roof import ROOF
+
+from crac_server.component.telescope import TELESCOPE
 
 
 class CameraService(CameraServicer):
@@ -36,7 +44,7 @@ class CameraService(CameraServicer):
                     frame + 
                     b'\r\n'
                 )
-            yield CameraResponse(video=video, ir=False, status=camera.status)
+            yield CameraResponse(video=video, ir=False, status=camera.status, name=request.name)
 
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
         camera = CAMERA[request.name]
@@ -44,9 +52,9 @@ class CameraService(CameraServicer):
             camera.close()
         elif request.action is CameraAction.CAMERA_CONNECT:
             camera.open()
-        elif request.action is CameraAction.CAMERA_HIDE:
+        elif request.action is CameraAction.CAMERA_HIDE or (request.autodisplay and not self.show_camera()):
             camera.hide()
-        elif request.action is CameraAction.CAMERA_SHOW:
+        elif request.action is CameraAction.CAMERA_SHOW or (request.autodisplay and self.show_camera()):
             camera.show()
 
         if camera.status is CameraStatus.CAMERA_DISCONNECTED:
@@ -85,14 +93,14 @@ class CameraService(CameraServicer):
             display_is_disabled = False
 
         connection_button = ButtonGui(
-            key=ButtonKey.KEY_CAMERA_CONNECTION,
+            key=ButtonKey.KEY_CAMERA1_CONNECTION if request.name == "camera1" else ButtonKey.KEY_CAMERA2_CONNECTION,
             label=connect_label,
             is_disabled=False,
             metadata=connect_metadata,
             button_color=connect_color,
         )
         display_button = ButtonGui(
-            key=ButtonKey.KEY_CAMERA_DISPLAY,
+            key=ButtonKey.KEY_CAMERA1_DISPLAY if request.name == "camera1" else ButtonKey.KEY_CAMERA2_DISPLAY,
             label=display_label,
             is_disabled=display_is_disabled,
             metadata=display_metadata,
@@ -100,4 +108,11 @@ class CameraService(CameraServicer):
         )
         buttons = (connection_button, display_button)
         
-        return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons)
+        return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons, name=request.name)
+
+    def show_camera(self) -> bool:
+        return (
+            TELESCOPE.speed is TelescopeSpeed.SPEED_SLEWING or
+            SWITCHES["DOME_LIGHT"].get_status() is ButtonStatus.ON or 
+            ROOF.get_status() in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING]
+        )
