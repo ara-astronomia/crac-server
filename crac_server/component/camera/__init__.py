@@ -5,6 +5,6 @@ from crac_server.config import Config
 
 
 CAMERA = {
-    "camera1": Camera(Config.getValue("source", "camera1")),
-    "camera2": Camera(Config.getValue("source", "camera2")),
+    "camera1": Camera(source=Config.getValue("source", "camera1"), name=Config.getValue("name", "camera1")),
+    "camera2": Camera(source=Config.getValue("source", "camera2"), name=Config.getValue("name", "camera2")),
 }

@@ -9,9 +9,10 @@ from crac_server.config import Config
 
 
 class Camera:
-    def __init__(self, source: str, width=1280, height=720) -> None:
+    def __init__(self, source: str, name: str, width=1280, height=720) -> None:
         self._status = CameraStatus.CAMERA_DISCONNECTED
         self._source = 0 if source == "0" else source
+        self._name = name
         self._camera = None
         self._width = width
         self._height = height
@@ -20,6 +21,10 @@ class Camera:
     @property
     def status(self):
         return self._status
+    
+    @property
+    def name(self):
+        return self._name
     
     def read(self):
         if self._camera and self.status is CameraStatus.CAMERA_SHOWN:

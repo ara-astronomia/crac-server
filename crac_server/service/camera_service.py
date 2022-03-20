@@ -9,6 +9,7 @@ from crac_protobuf.button_pb2 import (
 from crac_protobuf.camera_pb2 import (
     CameraRequest, 
     CameraResponse,
+    CamerasResponse,
     CameraAction,
     CameraStatus
 )
@@ -21,6 +22,7 @@ import cv2
 from crac_server.component.roof import ROOF
 
 from crac_server.component.telescope import TELESCOPE
+from crac_server.config import Config
 
 
 class CameraService(CameraServicer):
@@ -52,9 +54,9 @@ class CameraService(CameraServicer):
             camera.close()
         elif request.action is CameraAction.CAMERA_CONNECT:
             camera.open()
-        elif request.action is CameraAction.CAMERA_HIDE or (request.autodisplay and not self.show_camera()):
+        elif request.action is CameraAction.CAMERA_HIDE or (request.autodisplay and not self.__show_camera()):
             camera.hide()
-        elif request.action is CameraAction.CAMERA_SHOW or (request.autodisplay and self.show_camera()):
+        elif request.action is CameraAction.CAMERA_SHOW or (request.autodisplay and self.__show_camera()):
             camera.show()
 
         if camera.status is CameraStatus.CAMERA_DISCONNECTED:
@@ -109,8 +111,12 @@ class CameraService(CameraServicer):
         buttons = (connection_button, display_button)
         
         return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons, name=request.name)
+    
+    def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
 
-    def show_camera(self) -> bool:
+        return CamerasResponse(camera1=Config.getValue("name", "camera1"), camera2=Config.getValue("name", "camera2"))
+
+    def __show_camera(self) -> bool:
         return (
             TELESCOPE.speed is TelescopeSpeed.SPEED_SLEWING or
             SWITCHES["DOME_LIGHT"].get_status() is ButtonStatus.ON or 
