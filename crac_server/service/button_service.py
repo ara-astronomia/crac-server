@@ -1,4 +1,3 @@
-import importlib
 import logging
 from crac_protobuf.button_pb2 import (
     ButtonRequest,

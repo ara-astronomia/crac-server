@@ -7,12 +7,13 @@ license = "GPL3"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-crac-protobuf = { path = "../crac-protobuf/dist/crac-protobuf-0.1.15.tar.gz" }
+crac-protobuf = { path = "../crac-protobuf/dist/crac-protobuf-0.1.16.tar.gz" }
 grpcio-tools = "^1.43.0"
 gpiozero = "^1.6.2"
 astropy = "^5.0.1"
-skyfield = "^1.42"
-#"RPi.GPIO" = { version = "^0.7.1", markers = "platform_machine == \"armv6l\"" }
+# skyfield = "^1.42"
+# "RPi.GPIO" = { version = "^0.7.1", markers = "platform_machine == \"armv6l\"" }
+opencv-python = "^4.5.5"
 
 [tool.poetry.dev-dependencies]
 

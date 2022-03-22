@@ -3,7 +3,6 @@ from collections import deque
 from os import sync
 import socket
 from threading import Thread
-from unicodedata import decimal
 from astropy.coordinates import (
     EarthLocation,
     AltAz,

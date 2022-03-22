@@ -44,7 +44,7 @@ class RoofService(RoofServicer):
         status = ROOF.get_status()
         logger.info("Response " + str(status))
 
-        if status in [RoofStatus.ROOF_OPENED, RoofStatus.ROOF_OPENING]:
+        if status in [RoofStatus.ROOF_OPENED]:
             text_color, background_color = ("white", "green")
         else:
             text_color, background_color = ("white", "red")

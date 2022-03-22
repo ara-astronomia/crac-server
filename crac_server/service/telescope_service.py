@@ -170,7 +170,6 @@ class TelescopeService(TelescopeServicer):
             else:
                 SWITCHES["DOME_LIGHT"].off()
 
-
         return response
 
     def __draw_buttons(self, status):
