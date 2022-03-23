@@ -50,3 +50,9 @@ class Config:
         env_key = section.upper() + '_' + key.upper()
         env_value = os.environ.get(env_key)
         return env_value
+    
+    @staticmethod
+    def get_section(section: str):
+        config = Config()
+        section = config.configparser[section]
+        return {key: section[key] for key in section}
