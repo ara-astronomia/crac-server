@@ -28,11 +28,13 @@ class Camera(CameraBase):
 
     def show(self):
         if self._status is not CameraStatus.CAMERA_DISCONNECTED:
+            self._tapo.refreshStok()
             self._tapo.setPrivacyMode(False)
             self._status = CameraStatus.CAMERA_SHOWN
 
     def hide(self):
         if self._status is not CameraStatus.CAMERA_DISCONNECTED:
+            self._tapo.refreshStok()
             self._tapo.setPrivacyMode(True)
             self._status = CameraStatus.CAMERA_HIDDEN
     
