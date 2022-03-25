@@ -5,13 +5,11 @@ import numpy as np
 
 class Streaming:
 
-    def __init__(self, source: str, name: str, width: int, height: int) -> None:
+    def __init__(self, source: str, name: str) -> None:
         self._source = 0 if source == "0" else source
         self._name = name
         self._video_capture: VideoCapture = None
-        self._width = width
-        self._height = height
-        self._black_frame = np.zeros((height, width, 3), dtype = "uint8")
+        self._black_frame = None
     
     def close(self):
         self._video_capture = None
@@ -20,9 +18,9 @@ class Streaming:
         try:
             if not self._video_capture:
                 self._video_capture = cv2.VideoCapture(self._source)
-                self._width = int(self._video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-                self._height = int(self._video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                self._black_frame = np.zeros((self._height, self._width, 3), dtype = "uint8")
+                width = int(self._video_capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(self._video_capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                self._black_frame = self.__set_black_frame(width=width, height=height)
             return True
         except:
             return False
@@ -32,6 +30,9 @@ class Streaming:
             return self._video_capture.read()
         else:
             raise StreamingError(f"Streaming for camera {self._name} is not open")
+    
+    def __set_black_frame(self, width: int, height: int):
+        return np.zeros((height, width, 3), dtype = "uint8")
 
 class StreamingError(Exception):
     pass

@@ -8,14 +8,9 @@ import numpy as np
 
 class Camera(ABC):
 
-    def __init__(self, source: str, name: str, width: int, height: int) -> None:
-        self._status = CameraStatus.CAMERA_DISCONNECTED
-        self._streaming = Streaming(source, name, width, height)
+    def __init__(self, source: str, name: str) -> None:
         self._name = name
-        self._width = width
-        self._height = height
-        self._black_frame = np.zeros((height, width, 3), dtype = "uint8")
-
+        self._streaming = Streaming(source, name)
 
     @property
     def status(self):

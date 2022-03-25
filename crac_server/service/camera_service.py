@@ -1,4 +1,3 @@
-from unicodedata import name
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonLabel,
@@ -97,7 +96,7 @@ class CameraService(CameraServicer):
         connection_button = ButtonGui(
             key=ButtonKey.KEY_CAMERA1_CONNECTION if request.name == "camera1" else ButtonKey.KEY_CAMERA2_CONNECTION,
             label=connect_label,
-            is_disabled=False,
+            is_disabled=True,
             metadata=connect_metadata,
             button_color=connect_color,
         )
