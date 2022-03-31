@@ -1,6 +1,9 @@
 import configparser
+from dotenv import load_dotenv
 import os
-#from base.singleton import Singleton
+
+
+load_dotenv()
 
 
 class Config:
@@ -52,7 +55,7 @@ class Config:
         return env_value
     
     @staticmethod
-    def get_section(section: str):
+    def get_section(section_name: str):
         config = Config()
-        section = config.configparser[section]
-        return {key: section[key] for key in section}
+        section = config.configparser[section_name]
+        return {key: config.getValue(key, section_name) for key in section}

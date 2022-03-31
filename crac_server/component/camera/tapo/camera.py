@@ -8,7 +8,7 @@ import urllib
 
 
 class Camera(CameraBase):
-    def __init__(self, source: str, name: str, user: str, password: str, host: str, port = 554) -> None:
+    def __init__(self, source: str, name: str, user: str, password: str, host: str, port = "554") -> None:
         self._tapo = Tapo(host, user, password)
         super().__init__(self.streamUrl(user, password, host, port, source), name)
         self.refresh_status()
@@ -39,7 +39,7 @@ class Camera(CameraBase):
         self._tapo.setPrivacyMode(True)
         self._status = CameraStatus.CAMERA_HIDDEN
         
-    def streamUrl(self, user: str, password: str, host: str, port: int, stream: str):
+    def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
         return f"rtsp://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}@{host}:{port}/{stream}"
 
 if __name__ == "__main__":
