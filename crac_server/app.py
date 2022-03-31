@@ -1,8 +1,6 @@
 import logging
 import logging.config
 
-from crac_server.service.camera_service import CameraService
-
 
 logging.config.fileConfig('logging.conf')
 
@@ -11,6 +9,7 @@ from signal import signal, SIGTERM
 from concurrent import futures
 from crac_server.config import Config
 from crac_server.service.button_service import ButtonService
+from crac_server.service.camera_service import CameraService
 from crac_server.service.curtains_service import CurtainsService
 from crac_server.service.roof_service import RoofService
 from crac_server.service.telescope_service import TelescopeService

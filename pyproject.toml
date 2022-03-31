@@ -14,6 +14,8 @@ astropy = "^5.0.1"
 # skyfield = "^1.42"
 # "RPi.GPIO" = { version = "^0.7.1", markers = "platform_machine == \"armv6l\"" }
 opencv-python = "^4.5.5"
+pytapo = "^2.0"
+python-dotenv = "^0.20.0"
 
 [tool.poetry.dev-dependencies]
 
