@@ -38,11 +38,11 @@ class CameraService(CameraServicer):
                 ret, buffer = cv2.imencode('.jpg', frame)
                 if not ret:
                     break
-                frame = buffer.tobytes()
+                frame_bytes = buffer.tobytes()
                 video = (
                     b'--frame\r\n' +
                     b'Content-Type: image/jpeg\r\n\r\n' + 
-                    frame + 
+                    frame_bytes + 
                     b'\r\n'
                 )
             yield CameraResponse(video=video, ir=False, status=camera.status, name=request.name)
