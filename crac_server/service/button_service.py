@@ -1,4 +1,5 @@
 import logging
+import os
 from crac_protobuf.button_pb2 import (
     ButtonRequest,
     ButtonAction,
@@ -26,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 class ButtonService(ButtonServicer):
     def SetAction(self, request: ButtonRequest, context):
-        logger.info("Request " + str(request))
+        logger.debug(f"Pid in use in method SetAction is: {os.getpid()}")
+        logger.debug("Request " + str(request))
         button_control = SWITCHES[ButtonType.Name(request.type)]
 
         if request.action == ButtonAction.TURN_ON:
@@ -66,6 +68,7 @@ class ButtonService(ButtonServicer):
         )
 
     def GetStatus(self, request, context):
+        logger.debug(f"Pid in use in method GetStatus is: {os.getpid()}")
         tele_switch_button = self.SetAction(
             request = ButtonRequest(
                 action=ButtonAction.CHECK_BUTTON,

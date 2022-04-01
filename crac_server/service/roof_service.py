@@ -1,5 +1,5 @@
-import importlib
 import logging
+import os
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonColor,
@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 class RoofService(RoofServicer):
     def SetAction(self, request, context):
-        logger.info("Request " + str(request))
+        logger.debug(f"Pid in use in method SetAction is: {os.getpid()}")
+        logger.debug("Request " + str(request))
         telescope_is_secure = self.__telescope_is_secure()
         curtains_are_secure = self.__curtains_are_secure()
         if request.action is RoofAction.OPEN:
@@ -85,18 +86,6 @@ class RoofService(RoofServicer):
         elif status is RoofStatus.ROOF_OPENING:
             label = ButtonLabel.LABEL_OPENING
         return label
-
-    # def __roof_label310(self, status):
-    #     match status:
-    #         case RoofStatus.ROOF_CLOSED:
-    #             label = ButtonLabel.LABEL_CLOSE
-    #         case RoofStatus.ROOF_OPENED:
-    #             label = ButtonLabel.LABEL_OPEN
-    #         case RoofStatus.ROOF_CLOSING:
-    #             label = ButtonLabel.LABEL_CLOSING
-    #         case RoofStatus.ROOF_OPENING:
-    #             label = ButtonLabel.LABEL_OPENING
-    #     return label
 
     def __telescope_is_secure(self):
         return (

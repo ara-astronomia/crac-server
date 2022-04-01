@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class TelescopeService(TelescopeServicer):
     def SetAction(self, request, context):
-        logger.info("TelescopeRequest TelescopeService" + str(request))
+        logger.info("TelescopeRequest TelescopeService: " + str(request))
         if (
                 SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.OFF
             ):

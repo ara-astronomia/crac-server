@@ -1,3 +1,5 @@
+import logging
+import os
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonLabel,
@@ -16,20 +18,25 @@ from crac_protobuf.camera_pb2_grpc import CameraServicer
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_protobuf.telescope_pb2 import TelescopeSpeed
 from crac_server.component.button_control import SWITCHES
-from crac_server.component.camera import CAMERA
-import cv2
+from crac_server.component.camera import get_camera
 from crac_server.component.roof import ROOF
-
 from crac_server.component.telescope import TELESCOPE
 from crac_server.config import Config
+import cv2
+
+
+logger = logging.getLogger(__name__)
 
 
 class CameraService(CameraServicer):
-    def __init__(self) -> None:
+    def __init__(self, camera) -> None:
         super().__init__()
+        self.camera = camera
 
     def Video(self, request: CameraRequest, context) -> CameraResponse:
-        camera = CAMERA[request.name]
+        logger.debug(f"Pid in use in method Video is: {os.getpid()}")
+        logger.debug("Request " + str(request))
+        camera = self.camera[request.name]
         while True:
             success, frame = camera.read()  # read the camera frame
             if not success:
@@ -48,7 +55,9 @@ class CameraService(CameraServicer):
             yield CameraResponse(video=video, ir=False, status=camera.status, name=request.name)
 
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
-        camera = CAMERA[request.name]
+        logger.debug(f"Pid in use in method SetAction is: {os.getpid()}")
+        logger.debug("Request " + str(request))
+        camera = self.camera[request.name]
         if request.action is CameraAction.CAMERA_DISCONNECT:
             camera.close()
         elif request.action is CameraAction.CAMERA_CONNECT:
@@ -112,7 +121,8 @@ class CameraService(CameraServicer):
         return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons, name=request.name)
     
     def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
-
+        logger.debug(f"Pid in use in method ListCameras is: {os.getpid()}")
+        logger.debug("Request " + str(request))
         return CamerasResponse(camera1=Config.getValue("name", "camera1"), camera2=Config.getValue("name", "camera2"))
 
     def __show_camera(self) -> bool:

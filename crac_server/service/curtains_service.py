@@ -1,5 +1,5 @@
-from curses import meta
 import logging
+import os
 from crac_protobuf.curtains_pb2 import (
     CurtainsAction,
     CurtainsResponse,
@@ -12,7 +12,6 @@ from crac_protobuf.button_pb2 import (
     ButtonLabel,
     ButtonKey,
     ButtonColor,
-    ButtonStatus,
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,
@@ -35,11 +34,10 @@ logger = logging.getLogger(__name__)
 
 class CurtainsService(CurtainServicer):
     def SetAction(self, request, context):
-        logger.info("Request " + str(request))
+        logger.debug(f"Pid in use in method SetAction is: {os.getpid()}")
+        logger.debug("Request " + str(request))
         
         roof_is_opened = ROOF.get_status() is RoofStatus.ROOF_OPENED
-        tele_is_turned_on = SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.ON
-        
         curtain_east_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_EAST)
         curtain_west_entry = CurtainEntryResponse(orientation=CurtainOrientation.CURTAIN_WEST)
         if request.action is CurtainsAction.DISABLE:
