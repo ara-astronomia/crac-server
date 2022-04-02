@@ -19,6 +19,14 @@ class Camera(ABC):
     @property
     def name(self):
         return self._name
+    
+    def read(self):
+        """ Read the streaming frame by frame """
+
+        if self.status is CameraStatus.CAMERA_SHOWN:
+            return self._streaming.read()
+        else:
+            return (True, self._streaming._black_frame)
 
     def close(self):
         self._streaming.close()
@@ -35,7 +43,3 @@ class Camera(ABC):
     def hide(self):
         if self._status is not CameraStatus.CAMERA_DISCONNECTED:
             self._status = CameraStatus.CAMERA_HIDDEN
-
-    @abstractmethod
-    def read(self):
-        """ Read the streaming frame by frame """

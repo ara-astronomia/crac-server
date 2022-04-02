@@ -27,9 +27,6 @@ class Camera(CameraBase):
         else:
             self._status = CameraStatus.CAMERA_SHOWN
 
-    def read(self):
-        return self._streaming.read()
-
     def show(self):
         self._tapo.setPrivacyMode(False)
         self._status = CameraStatus.CAMERA_SHOWN
