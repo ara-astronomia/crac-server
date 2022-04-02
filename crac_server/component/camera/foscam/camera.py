@@ -20,7 +20,10 @@ class Camera(CameraBase):
             self._status = CameraStatus.CAMERA_SHOWN
 
     def read(self):
-        return self._streaming.read()
+        if self.status is CameraStatus.CAMERA_SHOWN:
+            return self._streaming.read()
+        else:
+            return (True, self._streaming._black_frame)
 
     def show(self):
         self._status = CameraStatus.CAMERA_SHOWN
