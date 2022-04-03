@@ -7,4 +7,3 @@ from crac_protobuf.camera_pb2 import (
 class Camera(CameraBase):
     def __init__(self, source: str, name: str) -> None:
         super().__init__(source, name)
-
