@@ -12,14 +12,17 @@ class Camera(CameraBase):
         super().__init__(self.streamUrl(user, password, host, port, source), name)
         self.refresh_status()
     
+    def open(self):
+        self._tapo.setPrivacyMode(False)
+        super().open()
+    
+    def close(self):
+        self._tapo.setPrivacyMode(True)
+        super().close()
+    
     @property
     def tapo(self):
         return self._tapo
-    
-    @property
-    def is_hidden(self):
-        privacy_mode = self._tapo.getPrivacyMode()
-        return bool(privacy_mode["enabled"])
     
     def refresh_status(self):
         if self.is_hidden:
@@ -27,13 +30,5 @@ class Camera(CameraBase):
         else:
             self._status = CameraStatus.CAMERA_SHOWN
 
-    def show(self):
-        self._tapo.setPrivacyMode(False)
-        self._status = CameraStatus.CAMERA_SHOWN
-
-    def hide(self):
-        self._tapo.setPrivacyMode(True)
-        self._status = CameraStatus.CAMERA_HIDDEN
-        
     def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
         return f"rtsp://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}@{host}:{port}/{stream}"

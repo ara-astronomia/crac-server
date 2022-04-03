@@ -1,3 +1,5 @@
+import logging
+import os
 from crac_protobuf.button_pb2 import (
     ButtonGui,
     ButtonLabel,
@@ -24,16 +26,22 @@ from crac_server.component.telescope import TELESCOPE
 from crac_server.config import Config
 
 
+logger = logging.getLogger(__name__)
+
+
 class CameraService(CameraServicer):
     def __init__(self) -> None:
         super().__init__()
 
     def Video(self, request: CameraRequest, context) -> CameraResponse:
+        logger.debug(f"Process id is {os.getpid()}")
         camera = CAMERA[request.name]
         while True:
             success, frame = camera.read()  # read the camera frame
             if not success:
                 break
+            elif frame.size == 0:
+                continue
             else:
                 ret, buffer = cv2.imencode('.jpg', frame)
                 if not ret:
