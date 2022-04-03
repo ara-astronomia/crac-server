@@ -30,9 +30,15 @@ class Streaming:
             ret, frame = self._video_capture.read()
             if ret:
                 return (ret, frame)
-            else:
+            elif self._source.endswith(".mp4"):
                 self._video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                return self.read()
+                ret, frame = self._video_capture.read()
+                if ret:
+                    return (ret, frame)
+                else:
+                    return (True, self._black_frame)
+            else:
+                return (True, self._black_frame)
         else:
             raise StreamingError(f"Streaming for camera {self._name} is not open")
     
