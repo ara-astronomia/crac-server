@@ -112,6 +112,14 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
+name = "libpyfoscam"
+version = "1.1"
+description = "Python Library for Foscam IP Cameras"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "numpy"
 version = "1.22.2"
 description = "NumPy is the fundamental package for array computing with Python."
@@ -262,7 +270,7 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "584be638730f3856efae57b527920a8cb7f7880256d881888232b7c352b0b731"
+content-hash = "e667087ba7123fb2f06265cd718f2929100814c71fda69a244eb67f7680fd377"
 
 [metadata.files]
 astropy = [
@@ -399,6 +407,10 @@ grpcio-tools = [
 idna = [
     {file = "idna-3.3-py3-none-any.whl", hash = "sha256:84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff"},
     {file = "idna-3.3.tar.gz", hash = "sha256:9d643ff0a55b762d5cdb124b8eaa99c66322e2157b69160bc32796e824360e6d"},
+]
+libpyfoscam = [
+    {file = "libpyfoscam-1.1-py3-none-any.whl", hash = "sha256:04d505461ba12f4da726ccfa0297cfaf3a452546b7930db4873cfe9b668df6f9"},
+    {file = "libpyfoscam-1.1.tar.gz", hash = "sha256:c274cafd2c6493ab397fe9f0f8aae0b2c35c7c661fe76dde3bd2f1cd56b8fc32"},
 ]
 numpy = [
     {file = "numpy-1.22.2-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:515a8b6edbb904594685da6e176ac9fbea8f73a5ebae947281de6613e27f1956"},
