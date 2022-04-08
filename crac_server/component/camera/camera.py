@@ -47,3 +47,43 @@ class Camera(ABC):
     def hide(self):
         if self._status is not CameraStatus.CAMERA_DISCONNECTED:
             self._status = CameraStatus.CAMERA_HIDDEN
+
+    @abstractmethod
+    def move_top_left(self, seconds: float):
+        """ Move camera top left """
+
+    @abstractmethod
+    def move_up(self, seconds: float):
+        """ Move camera up """
+    
+    @abstractmethod
+    def move_top_right(self, seconds: float):
+        """ Move camera top right """
+
+    @abstractmethod
+    def move_right(self, seconds: float):
+        """ Move camera right """
+
+    @abstractmethod
+    def move_bottom_right(self, seconds: float):
+        """ Move camera top left """
+    
+    @abstractmethod
+    def move_down(self, seconds: float):
+        """ Move camera bottom """
+
+    @abstractmethod
+    def move_bottom_left(self, seconds: float):
+        """ Move camera top left """
+
+    @abstractmethod
+    def move_left(self, seconds: float):
+        """ Move camera left """
+
+    @abstractmethod
+    def stop(self):
+        """ Stop camera """
+
+    @abstractmethod
+    def can_move(self) -> bool:
+        """ Check if the camera can be moved """
