@@ -2,6 +2,7 @@ from crac_server.component.camera.camera import Camera as CameraBase
 from crac_protobuf.camera_pb2 import (
     CameraStatus
 )
+from crac_protobuf.button_pb2 import ButtonKey
 
 
 class Camera(CameraBase):
@@ -39,3 +40,11 @@ class Camera(CameraBase):
 
     def stop(self, seconds: float):
         raise NotImplementedError()
+    
+    def supported_features(self, key: str):
+        supported = []
+        if key == "camera1":
+            supported.append(ButtonKey.KEY_CAMERA1_DISPLAY)
+        elif key == "camera2":
+            supported.append(ButtonKey.KEY_CAMERA2_DISPLAY)
+        return supported

@@ -2,6 +2,7 @@ import logging
 from crac_protobuf.camera_pb2 import (
     CameraStatus
 )
+from crac_protobuf.button_pb2 import ButtonKey
 from crac_server.component.camera.camera import Camera as CameraBase
 from pytapo import Tapo
 import urllib
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class Camera(CameraBase):
-    def __init__(self, source: str, name: str, user: str, password: str, host: str, port = "554") -> None:
+    def __init__(self, name: str, user: str, password: str, host: str, port = "554", source: str = None) -> None:
         self._tapo = Tapo(host, user, password)
         super().__init__(self.streamUrl(user, password, host, port, source), name)
         self._move = True
@@ -42,33 +43,33 @@ class Camera(CameraBase):
     def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
         return f"rtsp://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}@{host}:{port}/{stream}"
 
-    def move_top_left(self, distance: float = None):
-        self.__ptz("UP", distance=distance)
-        self.__ptz(pan="LEFT", distance=distance)
+    def move_top_left(self):
+        self.__ptz("UP")
+        self.__ptz(pan="LEFT")
 
-    def move_up(self, distance: float = None):
-        self.__ptz("UP", distance=distance)
+    def move_up(self):
+        self.__ptz("UP")
 
-    def move_top_right(self, distance: float = None):
-        self.__ptz("UP", distance=distance)
-        self.__ptz(pan="RIGHT", distance=distance)
+    def move_top_right(self):
+        self.__ptz("UP")
+        self.__ptz(pan="RIGHT")
 
-    def move_right(self, distance: float = None):
-        self.__ptz(pan="RIGHT", distance=distance)
+    def move_right(self):
+        self.__ptz(pan="RIGHT")
 
-    def move_bottom_right(self, distance: float = None):
-        self.__ptz("BOTTOM", distance=distance)
-        self.__ptz(pan="RIGHT", distance=distance)
+    def move_bottom_right(self):
+        self.__ptz("BOTTOM")
+        self.__ptz(pan="RIGHT")
     
-    def move_down(self, distance: float = None):
-        self.__ptz("BOTTOM", distance=distance)
+    def move_down(self):
+        self.__ptz("BOTTOM")
 
-    def move_bottom_left(self, distance: float = None):
-        self.__ptz("BOTTOM", distance=distance)
-        self.__ptz(pan="LEFT", distance=distance)
+    def move_bottom_left(self):
+        self.__ptz("BOTTOM")
+        self.__ptz(pan="LEFT")
 
-    def move_left(self, distance: float = None):
-        self.__ptz(pan="LEFT", distance=distance)
+    def move_left(self):
+        self.__ptz(pan="LEFT")
 
     def stop(self):
         raise NotImplementedError()
@@ -122,3 +123,26 @@ class Camera(CameraBase):
                     preset,
                 """
             )
+    
+    def supported_features(self, key: str) -> list[ButtonKey]:
+        supported = []
+        if key == "camera1" and self._streaming:
+            supported.append(ButtonKey.KEY_CAMERA1_DISPLAY)
+        elif key == "camera2" and self._streaming:
+            supported.append(ButtonKey.KEY_CAMERA2_DISPLAY)
+
+        supported.extend(
+            (
+                ButtonKey.KEY_CAMERA_MOVE_UP,
+                ButtonKey.KEY_CAMERA_MOVE_TOP_RIGHT,
+                ButtonKey.KEY_CAMERA_MOVE_RIGHT,
+                ButtonKey.KEY_CAMERA_MOVE_BOTTOM_RIGHT,
+                ButtonKey.KEY_CAMERA_MOVE_DOWN,
+                ButtonKey.KEY_CAMERA_MOVE_BOTTOM_LEFT,
+                ButtonKey.KEY_CAMERA_MOVE_LEFT,
+                ButtonKey.KEY_CAMERA_MOVE_TOP_LEFT,
+                ButtonKey.KEY_CAMERA_IR_TOGGLE,
+            )
+        )
+
+        return supported
