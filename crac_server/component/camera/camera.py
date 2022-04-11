@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import urllib
 from crac_protobuf.camera_pb2 import (
     CameraStatus
 )
@@ -10,8 +11,7 @@ class Camera(ABC):
 
     def __init__(self, source: str, name: str) -> None:
         self._name = name
-        if source:
-            self._streaming = Streaming(source, name)
+        self._streaming = Streaming(source, name) if source else None
         self._status = CameraStatus.CAMERA_HIDDEN
 
     @property
@@ -25,6 +25,10 @@ class Camera(ABC):
     @property
     def is_hidden(self):
         return True if self._status is CameraStatus.CAMERA_HIDDEN else False
+
+    def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
+        if stream:
+            return f"rtsp://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}@{host}:{port}/{stream}"
     
     def read(self):
         """ Read the streaming frame by frame """

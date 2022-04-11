@@ -4,7 +4,6 @@ from crac_protobuf.camera_pb2 import (
 )
 from crac_protobuf.button_pb2 import ButtonKey
 from crac_server.component.camera.camera import Camera as CameraBase
-import urllib
 from libpyfoscam import FoscamCamera
 
 
@@ -19,9 +18,6 @@ class Camera(CameraBase):
             self._status = CameraStatus.CAMERA_HIDDEN
         else:
             self._status = CameraStatus.CAMERA_SHOWN
-        
-    def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
-        return f"rtsp://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}@{host}:{port}/{stream}"
     
     def __callback(self, code, params):
         sleep(0.5)

@@ -40,9 +40,6 @@ class Camera(CameraBase):
         else:
             self._status = CameraStatus.CAMERA_SHOWN
 
-    def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
-        return f"rtsp://{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(password)}@{host}:{port}/{stream}"
-
     def move_top_left(self):
         self.__ptz("UP")
         self.__ptz(pan="LEFT")
