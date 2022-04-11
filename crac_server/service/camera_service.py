@@ -72,6 +72,10 @@ class CameraService(CameraServicer):
             camera.hide()
         elif request.action is CameraAction.CAMERA_SHOW or (CameraAction.CAMERA_CHECK and request.autodisplay and self.__show_camera()):
             camera.show()
+        elif request.action is CameraAction.CAMERA_IR_ENABLE:
+            pass
+        elif request.action is CameraAction.CAMERA_IR_DISABLE:
+            pass
         
         camera_display = self.__display(key)
 
@@ -129,8 +133,20 @@ class CameraService(CameraServicer):
         return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons, name=key)
     
     def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
-        camera_device1 = CameraDevice(name=Config.getValue("name", "camera1"))
-        camera_device2 = CameraDevice(name=Config.getValue("name", "camera2"))
+        key1 = "camera1"
+        key2 = "camera2"
+        logger.debug(f"camera1 is {CAMERA[key1]}")
+        logger.debug(f"camera2 is {CAMERA[key2]}")
+        if CAMERA[key1]:
+            camera_device1 = CameraDevice(name=Config.getValue("name", key1), features=CAMERA[key1].supported_features(key1))
+        else:
+            camera_device1 = None
+
+        if CAMERA[key2]:
+            camera_device2 = CameraDevice(name=Config.getValue("name", key2), features=CAMERA[key2].supported_features(key2))
+        else:
+            camera_device2 = None
+
         return CamerasResponse(camera1=camera_device1, camera2=camera_device2)
 
     def __show_camera(self) -> bool:
@@ -165,7 +181,7 @@ class CameraService(CameraServicer):
         camera = CAMERA.get(name_or_key)
         return (name_or_key, camera) if camera else get_camera(name_or_key)
 
-    def __display(key: str):
+    def __display(self, key: str):
         if str == "camera1":
             return ButtonKey.KEY_CAMERA1_DISPLAY
         if str == "camera2":

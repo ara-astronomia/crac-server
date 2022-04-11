@@ -5,7 +5,6 @@ from crac_protobuf.camera_pb2 import (
 from crac_protobuf.button_pb2 import ButtonKey
 from crac_server.component.camera.camera import Camera as CameraBase
 from pytapo import Tapo
-import urllib
 
 
 logger = logging.getLogger(__name__)
@@ -120,26 +119,3 @@ class Camera(CameraBase):
                     preset,
                 """
             )
-    
-    def supported_features(self, key: str) -> list[ButtonKey]:
-        supported = []
-        if key == "camera1" and self._streaming:
-            supported.append(ButtonKey.KEY_CAMERA1_DISPLAY)
-        elif key == "camera2" and self._streaming:
-            supported.append(ButtonKey.KEY_CAMERA2_DISPLAY)
-
-        supported.extend(
-            (
-                ButtonKey.KEY_CAMERA_MOVE_UP,
-                ButtonKey.KEY_CAMERA_MOVE_TOP_RIGHT,
-                ButtonKey.KEY_CAMERA_MOVE_RIGHT,
-                ButtonKey.KEY_CAMERA_MOVE_BOTTOM_RIGHT,
-                ButtonKey.KEY_CAMERA_MOVE_DOWN,
-                ButtonKey.KEY_CAMERA_MOVE_BOTTOM_LEFT,
-                ButtonKey.KEY_CAMERA_MOVE_LEFT,
-                ButtonKey.KEY_CAMERA_MOVE_TOP_LEFT,
-                ButtonKey.KEY_CAMERA_IR_TOGGLE,
-            )
-        )
-
-        return supported
