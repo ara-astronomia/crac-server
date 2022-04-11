@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def camera(section) -> Camera:
-    if section.get("drier"):
+    if section.get("driver"):
         driver = section.pop("driver")
         return importlib.import_module(f"crac_server.component.camera.{driver}.camera").Camera(**section)
 
@@ -18,6 +18,8 @@ CAMERA = {
     "camera1": camera(Config.get_section("camera1")),
     "camera2": camera(Config.get_section("camera2")),
 }
+
+logger.debug(f"cameras are: {CAMERA}")
 
 def get_camera(name: str) -> Camera:
     logger.debug(f"camera for name: {name}")
