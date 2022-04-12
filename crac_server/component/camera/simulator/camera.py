@@ -8,37 +8,35 @@ from crac_protobuf.button_pb2 import ButtonKey
 class Camera(CameraBase):
     def __init__(self, source: str, name: str) -> None:
         super().__init__(source, name)
-        self._move = False
-    
-    @property
-    def can_move(self):
-        return self._move
 
-    def move_top_left(self, seconds: float):
+    def move_top_left(self):
         raise NotImplementedError()
 
-    def move_up(self, seconds: float):
+    def move_up(self):
         raise NotImplementedError()
 
-    def move_top_right(self, seconds: float):
+    def move_top_right(self):
         raise NotImplementedError()
 
-    def move_right(self, seconds: float):
+    def move_right(self):
         raise NotImplementedError()
 
-    def move_bottom_right(self, seconds: float):
+    def move_bottom_right(self):
         raise NotImplementedError()
     
-    def move_down(self, seconds: float):
+    def move_down(self):
         raise NotImplementedError()
 
-    def move_bottom_left(self, seconds: float):
+    def move_bottom_left(self):
         raise NotImplementedError()
 
-    def move_left(self, seconds: float):
+    def move_left(self):
         raise NotImplementedError()
 
-    def stop(self, seconds: float):
+    def stop(self):
+        raise NotImplementedError()
+    
+    def ir(self, mode: int):
         raise NotImplementedError()
     
     def supported_features(self, key: str):

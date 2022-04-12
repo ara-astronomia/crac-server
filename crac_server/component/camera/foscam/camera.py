@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from time import sleep
 from crac_protobuf.camera_pb2 import (
     CameraStatus
@@ -9,9 +10,8 @@ from libpyfoscam import FoscamCamera
 
 class Camera(CameraBase):
     def __init__(self, name: str, user: str, host: str, port = "88", password: str = "", source: str = None) -> None:
-        super().__init__(self.streamUrl(user, password, host, port, source), name)
         self._foscam = FoscamCamera(host, port, user, password)
-        self._move = True
+        super().__init__(self.streamUrl(user, password, host, port, source), name)
     
     def refresh_status(self):
         if self.is_hidden:
@@ -22,10 +22,6 @@ class Camera(CameraBase):
     def __callback(self, code, params):
         sleep(0.5)
         self.stop()
-    
-    @property
-    def can_move(self):
-        return self._move
 
     def move_top_left(self):
         self._foscam.ptz_move_top_left(self.__callback)
@@ -53,6 +49,29 @@ class Camera(CameraBase):
 
     def stop(self):
         self._foscam.ptz_stop_run()
+    
+    @property
+    def ir(self):
+        return self._ir
+    
+    @ir.setter
+    def ir(self, mode: int):
+        logger.debug(f"Setting ir mode on foscam: {mode}")
+        if mode == 2:
+            config = 0
+        elif mode in (0, 1):
+            config = 1
+        else:
+            raise Exception("Invalid inf_type, can be off, on or auto")
+
+        self._foscam.set_infra_led_config(mode=config)
+
+        if mode == 0:
+            self._foscam.close_infra_led()
+        elif mode == 1:
+            self._foscam.open_infra_led()
+        
+        self._ir = mode
 
     def supported_features(self, key: str) -> list[ButtonKey]:
         supported = super().supported_features(key)

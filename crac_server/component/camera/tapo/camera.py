@@ -14,7 +14,6 @@ class Camera(CameraBase):
     def __init__(self, name: str, user: str, password: str, host: str, port = "554", source: str = None) -> None:
         self._tapo = Tapo(host, user, password)
         super().__init__(self.streamUrl(user, password, host, port, source), name)
-        self._move = True
         self.refresh_status()
     
     def open(self):
@@ -28,10 +27,6 @@ class Camera(CameraBase):
     @property
     def tapo(self):
         return self._tapo
-
-    @property
-    def can_move(self):
-        return self._move
     
     def refresh_status(self):
         if self.is_hidden:
@@ -69,6 +64,26 @@ class Camera(CameraBase):
 
     def stop(self):
         raise NotImplementedError()
+    
+    @property
+    def ir(self):
+        return self._ir
+    
+    @ir.setter
+    def ir(self, mode: int):
+        logger.debug(f"Setting ir mode on foscam: {mode}")
+        if mode == 0:
+            inf_type = "off"
+        elif mode == 1:
+            inf_type = "on"
+        elif mode == 2:
+            inf_type = "auto"
+        else:
+            raise Exception("Invalid inf_type, can be off, on or auto")
+        
+        self._tapo.setDayNightMode(inf_type)
+        
+        self._ir = mode
 
     def __ptz(self, tilt=None, pan=None, preset=None, distance=None):
         if preset:

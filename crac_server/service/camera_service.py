@@ -61,6 +61,7 @@ class CameraService(CameraServicer):
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
         logger.info("Request " + str(request))
         key, camera = self.__get_camera(request.name)
+        logger.debug(f"Key={key}, Camera={camera}, ir={camera.ir}")
         if request.action is CameraAction.CAMERA_DISCONNECT:
             camera.close()
         elif request.action is CameraAction.CAMERA_CONNECT:
@@ -68,15 +69,21 @@ class CameraService(CameraServicer):
         elif request.action is CameraAction.CAMERA_MOVE:
             logger.debug("Camera is moving")
             self.__move_camera(camera, request.move)
-        elif request.action is CameraAction.CAMERA_HIDE or (CameraAction.CAMERA_CHECK and request.autodisplay and not self.__show_camera()):
+        elif request.action is CameraAction.CAMERA_HIDE or (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and not self.__show_camera()):
             camera.hide()
-        elif request.action is CameraAction.CAMERA_SHOW or (CameraAction.CAMERA_CHECK and request.autodisplay and self.__show_camera()):
+        elif request.action is CameraAction.CAMERA_SHOW or (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and self.__show_camera()):
             camera.show()
-        elif request.action is CameraAction.CAMERA_IR_ENABLE:
-            pass
-        elif request.action is CameraAction.CAMERA_IR_DISABLE:
-            pass
-        
+        elif request.action == CameraAction.CAMERA_IR_ENABLE:
+            logger.debug("Camera is enabling ir")
+            camera.ir = 1
+        elif request.action == CameraAction.CAMERA_IR_DISABLE:
+            logger.debug("Camera is disabling ir")
+            camera.ir = 0
+        elif request.action == CameraAction.CAMERA_IR_AUTO:
+            logger.debug("Camera is auto ir")
+            camera.ir = 2
+        logger.debug(f"IR mode is {camera.ir}")
+
         camera_display = self.__display(key)
 
         if camera.status is CameraStatus.CAMERA_DISCONNECTED:
@@ -128,9 +135,21 @@ class CameraService(CameraServicer):
             metadata=display_metadata,
             button_color=display_color,
         )
-        buttons = (connection_button, display_button)
+        ir_key = ButtonKey.KEY_CAMERA1_IR_TOGGLE if key == "camera1" else ButtonKey.KEY_CAMERA2_IR_TOGGLE
+        ir_button = ButtonGui(
+            key=ir_key,
+            label=ButtonLabel.LABEL_CAMERA_IR_ENABLED if camera.ir == 1 else ButtonLabel.LABEL_CAMERA_IR_DISABLED,
+            is_disabled=ir_key not in camera.supported_features(key),
+            metadata=CameraAction.CAMERA_IR_DISABLE if camera.ir == 1 else CameraAction.CAMERA_IR_ENABLE,
+            button_color=ButtonColor(
+                text_color = "white",
+                background_color = "green" if camera.ir == 1 else "red"
+            ),
+        )
+
+        buttons = (connection_button, display_button, ir_button)
         
-        return CameraResponse(ir=False, status=camera.status, buttons_gui=buttons, name=key)
+        return CameraResponse(ir=camera.ir == 1, status=camera.status, buttons_gui=buttons, name=key)
     
     def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
         key1 = "camera1"

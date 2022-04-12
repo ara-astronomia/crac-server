@@ -13,6 +13,7 @@ class Camera(ABC):
         self._name = name
         self._streaming = Streaming(source, name) if source else None
         self._status = CameraStatus.CAMERA_HIDDEN
+        self.ir = 0
 
     @property
     def status(self):
@@ -25,6 +26,19 @@ class Camera(ABC):
     @property
     def is_hidden(self):
         return True if self._status is CameraStatus.CAMERA_HIDDEN else False
+    
+    @abstractmethod
+    def ir(self, mode: int):
+        """ 
+            Let the cam to turn of ir if needed 
+            0 - off
+            1 - on
+            2 - auto
+
+            when off, the ir is never turned on
+            when on, the ir is always used
+            when auto, the ir is enabled by the camera itself
+        """
 
     def streamUrl(self, user: str, password: str, host: str, port: str, stream: str):
         if stream:
@@ -90,18 +104,16 @@ class Camera(ABC):
     def stop(self):
         """ Stop camera """
 
-    @abstractmethod
-    def can_move(self) -> bool:
-        """ Check if the camera can be moved """
-
     def supported_features(self, key: str) -> list[ButtonKey]:
         """ List of supported features """
 
         supported = []
         if key == "camera1" and self._streaming:
             supported.append(ButtonKey.KEY_CAMERA1_DISPLAY)
+            supported.append(ButtonKey.KEY_CAMERA1_IR_TOGGLE)
         elif key == "camera2" and self._streaming:
             supported.append(ButtonKey.KEY_CAMERA2_DISPLAY)
+            supported.append(ButtonKey.KEY_CAMERA2_IR_TOGGLE)
 
         supported.extend(
             (
@@ -113,7 +125,6 @@ class Camera(ABC):
                 ButtonKey.KEY_CAMERA_MOVE_BOTTOM_LEFT,
                 ButtonKey.KEY_CAMERA_MOVE_LEFT,
                 ButtonKey.KEY_CAMERA_MOVE_TOP_LEFT,
-                ButtonKey.KEY_CAMERA_IR_TOGGLE,
             )
         )
 
