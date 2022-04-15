@@ -61,30 +61,47 @@ class CameraService(CameraServicer):
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
         logger.info("Request " + str(request))
         key, camera = self.__get_camera(request.name)
+
+        camera_display = self.__display(key)
+        camera_connection = self.__connection(key)
+        camera_ir = ButtonKey.KEY_CAMERA1_IR_TOGGLE if key == "camera1" else ButtonKey.KEY_CAMERA2_IR_TOGGLE
+
+        supported_features = camera.supported_features(key)
+
         logger.debug(f"Key={key}, Camera={camera}, ir={camera.ir}")
-        if request.action is CameraAction.CAMERA_DISCONNECT:
+        if request.action is CameraAction.CAMERA_DISCONNECT and camera_connection in supported_features:
             camera.close()
-        elif request.action is CameraAction.CAMERA_CONNECT:
+        elif request.action is CameraAction.CAMERA_CONNECT and camera_connection in supported_features:
             camera.open()
-        elif request.action is CameraAction.CAMERA_MOVE:
+        elif request.action is CameraAction.CAMERA_MOVE and self.__move_to_key(request.move) in supported_features:
             logger.debug("Camera is moving")
             self.__move_camera(camera, request.move)
-        elif request.action is CameraAction.CAMERA_HIDE or (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and not self.__show_camera()):
+        elif (
+            request.action is CameraAction.CAMERA_HIDE or 
+            (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and not self.__show_camera()) and 
+            camera_display in supported_features
+        ):
             camera.hide()
-        elif request.action is CameraAction.CAMERA_SHOW or (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and self.__show_camera()):
+        elif (
+            request.action is CameraAction.CAMERA_SHOW or 
+            (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and self.__show_camera()) and
+            camera_display in supported_features
+        ):
             camera.show()
-        elif request.action == CameraAction.CAMERA_IR_ENABLE:
+        elif request.action == CameraAction.CAMERA_IR_ENABLE and camera_ir in supported_features:
             logger.debug("Camera is enabling ir")
             camera.ir = 1
-        elif request.action == CameraAction.CAMERA_IR_DISABLE:
+        elif request.action == CameraAction.CAMERA_IR_DISABLE and camera_ir in supported_features:
             logger.debug("Camera is disabling ir")
             camera.ir = 0
-        elif request.action == CameraAction.CAMERA_IR_AUTO:
+        elif request.action == CameraAction.CAMERA_IR_AUTO and camera_ir in supported_features:
             logger.debug("Camera is auto ir")
             camera.ir = 2
         logger.debug(f"IR mode is {camera.ir}")
 
-        camera_display = self.__display(key)
+        logger.debug(f"camera connection: {camera_connection}")
+        logger.debug(f"camera display: {camera_display}")
+        logger.debug(f"camera ir: {camera_ir}")
 
         if camera.status is CameraStatus.CAMERA_DISCONNECTED:
             connect_label = ButtonLabel.LABEL_CAMERA_DISCONNECTED
@@ -108,7 +125,7 @@ class CameraService(CameraServicer):
                 background_color = "red"
             )
             display_metadata = CameraAction.CAMERA_SHOW
-            if camera.status is CameraStatus.CAMERA_DISCONNECTED or camera_display not in camera.supported_features(key):
+            if camera.status is CameraStatus.CAMERA_DISCONNECTED or camera_display not in supported_features:
                 display_is_disabled = True
             else:
                 display_is_disabled = False
@@ -119,43 +136,53 @@ class CameraService(CameraServicer):
                 background_color = "green"
             )
             display_metadata = CameraAction.CAMERA_HIDE
-            display_is_disabled = camera_display not in camera.supported_features(key)
+            display_is_disabled = False
+        
+        connection_visible = camera_connection in supported_features
+        display_visible = camera_display in supported_features
+        ir_visible = camera_ir in supported_features
+        ir_metadata = CameraAction.CAMERA_IR_DISABLE if camera.ir == 1 else CameraAction.CAMERA_IR_ENABLE
+        ir_background = "green" if camera.ir == 1 else "red"
+        ir_label = ButtonLabel.LABEL_CAMERA_IR_ENABLED if camera.ir != 0 else ButtonLabel.LABEL_CAMERA_IR_DISABLED
 
         connection_button = ButtonGui(
-            key=ButtonKey.KEY_CAMERA1_CONNECTION if key == "camera1" else ButtonKey.KEY_CAMERA2_CONNECTION,
+            key=camera_connection,
             label=connect_label,
             is_disabled=True,
             metadata=connect_metadata,
             button_color=connect_color,
+            is_visible=connection_visible
         )
         display_button = ButtonGui(
-            key=ButtonKey.KEY_CAMERA1_DISPLAY if key == "camera1" else ButtonKey.KEY_CAMERA2_DISPLAY,
+            key=camera_display,
             label=display_label,
             is_disabled=display_is_disabled,
             metadata=display_metadata,
             button_color=display_color,
+            is_visible=display_visible
         )
-        ir_key = ButtonKey.KEY_CAMERA1_IR_TOGGLE if key == "camera1" else ButtonKey.KEY_CAMERA2_IR_TOGGLE
         ir_button = ButtonGui(
-            key=ir_key,
-            label=ButtonLabel.LABEL_CAMERA_IR_ENABLED if camera.ir == 1 else ButtonLabel.LABEL_CAMERA_IR_DISABLED,
-            is_disabled=ir_key not in camera.supported_features(key),
-            metadata=CameraAction.CAMERA_IR_DISABLE if camera.ir == 1 else CameraAction.CAMERA_IR_ENABLE,
-            button_color=ButtonColor(
+            key = camera_ir,
+            label = ir_label,
+            is_disabled = False,
+            metadata = ir_metadata,
+            button_color = ButtonColor(
                 text_color = "white",
-                background_color = "green" if camera.ir == 1 else "red"
+                background_color = ir_background
             ),
+            is_visible = ir_visible
         )
 
         buttons = (connection_button, display_button, ir_button)
-        
-        return CameraResponse(ir=camera.ir == 1, status=camera.status, buttons_gui=buttons, name=key)
+        logger.debug(f"Supported features are {supported_features}")
+        logger.debug(f"buttons are {(connection_button, display_button, ir_button)}")
+        return CameraResponse(ir=camera.ir != 0, status=camera.status, buttons_gui=buttons, name=key)
     
     def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
         key1 = "camera1"
         key2 = "camera2"
-        logger.debug(f"camera1 is {CAMERA[key1]}")
-        logger.debug(f"camera2 is {CAMERA[key2]}")
+        logger.debug(f"camera1 is {CAMERA[key1].supported_features(key1)}")
+        logger.debug(f"camera2 is {CAMERA[key2].supported_features(key2)}")
         if CAMERA[key1]:
             camera_device1 = CameraDevice(name=Config.getValue("name", key1), features=CAMERA[key1].supported_features(key1))
         else:
@@ -196,12 +223,32 @@ class CameraService(CameraServicer):
         elif move is Move.MOVE_STOP:
             camera.stop()
     
-    def __get_camera(self, name_or_key: str):
+    def __get_camera(self, name_or_key: str) -> tuple[str, Camera]:
         camera = CAMERA.get(name_or_key)
+        logger.debug(f"Camera col get: {camera}")
         return (name_or_key, camera) if camera else get_camera(name_or_key)
 
-    def __display(self, key: str):
-        if str == "camera1":
+    def __display(self, key: str) -> ButtonKey:
+        if key == "camera1":
             return ButtonKey.KEY_CAMERA1_DISPLAY
-        if str == "camera2":
+        if key == "camera2":
             return ButtonKey.KEY_CAMERA2_DISPLAY
+
+    def __connection(self, key: str) -> ButtonKey:
+        if key == "camera1":
+            return ButtonKey.KEY_CAMERA1_CONNECTION
+        if key == "camera2":
+            return ButtonKey.KEY_CAMERA2_CONNECTION
+    
+    def __move_to_key(self, move: Move) -> ButtonKey:
+        return {
+            Move.MOVE_STOP: ButtonKey.KEY_CAMERA_STOP_MOVE,
+            Move.MOVE_UP: ButtonKey.KEY_CAMERA_MOVE_UP,
+            Move.MOVE_TOP_RIGHT: ButtonKey.KEY_CAMERA_MOVE_TOP_RIGHT,
+            Move.MOVE_RIGHT: ButtonKey.KEY_CAMERA_MOVE_RIGHT,
+            Move.MOVE_BOTTOM_RIGHT: ButtonKey.KEY_CAMERA_MOVE_BOTTOM_RIGHT,
+            Move.MOVE_DOWN: ButtonKey.KEY_CAMERA_MOVE_DOWN,
+            Move.MOVE_BOTTOM_LEFT: ButtonKey.KEY_CAMERA_MOVE_BOTTOM_LEFT,
+            Move.MOVE_LEFT: ButtonKey.KEY_CAMERA_MOVE_LEFT,
+            Move.MOVE_TOP_LEFT: ButtonKey.KEY_CAMERA_MOVE_TOP_LEFT,
+        }[move]

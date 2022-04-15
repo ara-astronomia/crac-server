@@ -1,4 +1,5 @@
 from asyncio.log import logger
+from distutils.util import strtobool
 from time import sleep
 from crac_protobuf.camera_pb2 import (
     CameraStatus
@@ -9,9 +10,9 @@ from libpyfoscam import FoscamCamera
 
 
 class Camera(CameraBase):
-    def __init__(self, name: str, user: str, host: str, port = "88", password: str = "", source: str = None) -> None:
-        self._foscam = FoscamCamera(host, port, user, password)
-        super().__init__(self.streamUrl(user, password, host, port, source), name)
+    def __init__(self, name: str, source: str, user: str, host: str, port = "88", password: str = "", streaming: bool = True, settings: bool = True) -> None:
+        self._foscam = FoscamCamera(host, port, user, password) if strtobool(settings) else None
+        super().__init__(source=self.streamUrl(user, password, host, port, source), name=name, streaming=strtobool(streaming), settings=strtobool(settings))
     
     def refresh_status(self):
         if self.is_hidden:
@@ -56,7 +57,10 @@ class Camera(CameraBase):
     
     @ir.setter
     def ir(self, mode: int):
-        logger.debug(f"Setting ir mode on foscam: {mode}")
+        if not self._settings:
+            self._ir = 0
+            return
+
         if mode == 2:
             config = 0
         elif mode in (0, 1):
@@ -75,5 +79,6 @@ class Camera(CameraBase):
 
     def supported_features(self, key: str) -> list[ButtonKey]:
         supported = super().supported_features(key)
-        supported.append(ButtonKey.KEY_CAMERA_STOP_MOVE)
+        if self._settings:
+            supported.append(ButtonKey.KEY_CAMERA_STOP_MOVE)
         return supported

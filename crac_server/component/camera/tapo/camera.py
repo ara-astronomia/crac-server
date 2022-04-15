@@ -1,3 +1,4 @@
+from distutils.util import strtobool
 import logging
 from crac_protobuf.camera_pb2 import (
     CameraStatus
@@ -11,18 +12,22 @@ logger = logging.getLogger(__name__)
 
 
 class Camera(CameraBase):
-    def __init__(self, name: str, user: str, password: str, host: str, port = "554", source: str = None) -> None:
-        self._tapo = Tapo(host, user, password)
-        super().__init__(self.streamUrl(user, password, host, port, source), name)
+    def __init__(self, name: str, source: str, user: str, password: str, host: str, port = "554", streaming: str = "True", settings: str = "True") -> None:
+        self._tapo = Tapo(host, user, password) if strtobool(settings) else None
+        super().__init__(source=self.streamUrl(user, password, host, port, source), name=name, streaming=strtobool(streaming), settings=strtobool(settings))
+        logger.debug(f"streaming is {self._streaming}")
+        logger.debug(f"settings is {self._settings}")
         self.refresh_status()
     
     def open(self):
-        self._tapo.setPrivacyMode(False)
-        super().open()
+        if self._settings:
+            self._tapo.setPrivacyMode(False)
+            super().open()
     
     def close(self):
-        self._tapo.setPrivacyMode(True)
-        super().close()
+        if self._settings:
+            self._tapo.setPrivacyMode(True)
+            super().close()
     
     @property
     def tapo(self):
@@ -71,6 +76,10 @@ class Camera(CameraBase):
     
     @ir.setter
     def ir(self, mode: int):
+        if not self._settings:
+            self._ir = 0
+            return
+
         logger.debug(f"Setting ir mode on foscam: {mode}")
         if mode == 0:
             inf_type = "off"

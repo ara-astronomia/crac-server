@@ -1,13 +1,10 @@
+from distutils.util import strtobool
 from crac_server.component.camera.camera import Camera as CameraBase
-from crac_protobuf.camera_pb2 import (
-    CameraStatus
-)
-from crac_protobuf.button_pb2 import ButtonKey
 
 
 class Camera(CameraBase):
-    def __init__(self, source: str, name: str) -> None:
-        super().__init__(source, name)
+    def __init__(self, name: str, source: str, user=None, host=None, port=None, password=None, streaming: bool = True, settings: bool = False) -> None:
+        super().__init__(source=source, name=name, streaming=strtobool(streaming), settings=strtobool(settings))
 
     def move_top_left(self):
         raise NotImplementedError()
@@ -40,9 +37,4 @@ class Camera(CameraBase):
         raise NotImplementedError()
     
     def supported_features(self, key: str):
-        supported = []
-        if key == "camera1":
-            supported.append(ButtonKey.KEY_CAMERA1_DISPLAY)
-        elif key == "camera2":
-            supported.append(ButtonKey.KEY_CAMERA2_DISPLAY)
-        return supported
+        return self._base_supported_features(key)

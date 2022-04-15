@@ -1,6 +1,7 @@
 
 
 import logging
+from shutil import move
 from crac_server.component.camera.camera import Camera
 from crac_server.config import Config
 import importlib
@@ -9,10 +10,20 @@ import importlib
 logger = logging.getLogger(__name__)
 
 
-def camera(section) -> Camera:
-    if section.get("driver"):
-        driver = section.pop("driver")
-        return importlib.import_module(f"crac_server.component.camera.{driver}.camera").Camera(**section)
+def __is_enabled(section: dict) -> bool:
+    streaming = False
+    settings = False
+
+    if bool(section.get("streaming")):
+        streaming = True
+    if bool(section.get("settings")):
+        settings = True
+    
+    return streaming or settings
+
+def camera(section: dict) -> Camera:
+    driver = section.pop("driver")
+    return importlib.import_module(f"crac_server.component.camera.{driver}.camera").Camera(**section)
 
 CAMERA = {
     "camera1": camera(Config.get_section("camera1")),
