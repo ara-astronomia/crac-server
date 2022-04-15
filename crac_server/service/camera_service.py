@@ -8,7 +8,7 @@ from crac_protobuf.button_pb2 import (
     ButtonStatus
 )
 from crac_protobuf.camera_pb2 import (
-    CameraRequest, 
+    CameraRequest,
     CameraResponse,
     CamerasResponse,
     CameraAction,
@@ -52,8 +52,8 @@ class CameraService(CameraServicer):
                 frame_bytes = buffer.tobytes()
                 video = (
                     b'--frame\r\n' +
-                    b'Content-Type: image/jpeg\r\n\r\n' + 
-                    frame_bytes + 
+                    b'Content-Type: image/jpeg\r\n\r\n' +
+                    frame_bytes +
                     b'\r\n'
                 )
             yield CameraResponse(video=video, ir=False, status=camera.status, name=key)
@@ -77,13 +77,13 @@ class CameraService(CameraServicer):
             logger.debug("Camera is moving")
             self.__move_camera(camera, request.move)
         elif (
-            request.action is CameraAction.CAMERA_HIDE or 
-            (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and not self.__show_camera()) and 
+            request.action is CameraAction.CAMERA_HIDE or
+            (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and not self.__show_camera()) and
             camera_display in supported_features
         ):
             camera.hide()
         elif (
-            request.action is CameraAction.CAMERA_SHOW or 
+            request.action is CameraAction.CAMERA_SHOW or
             (request.action is CameraAction.CAMERA_CHECK and request.autodisplay and self.__show_camera()) and
             camera_display in supported_features
         ):
@@ -106,23 +106,23 @@ class CameraService(CameraServicer):
         if camera.status is CameraStatus.CAMERA_DISCONNECTED:
             connect_label = ButtonLabel.LABEL_CAMERA_DISCONNECTED
             connect_color = ButtonColor(
-                text_color = "white",
-                background_color = "red"
+                text_color="white",
+                background_color="red"
             )
             connect_metadata = CameraAction.CAMERA_CONNECT
         else:
             connect_label = ButtonLabel.LABEL_CAMERA_CONNECTED
             connect_color = ButtonColor(
-                text_color = "white",
-                background_color = "green"
+                text_color="white",
+                background_color="green"
             )
             connect_metadata = CameraAction.CAMERA_DISCONNECT
 
         if camera.status in (CameraStatus.CAMERA_DISCONNECTED, CameraStatus.CAMERA_HIDDEN):
             display_label = ButtonLabel.LABEL_CAMERA_HIDDEN
             display_color = ButtonColor(
-                text_color = "white",
-                background_color = "red"
+                text_color="white",
+                background_color="red"
             )
             display_metadata = CameraAction.CAMERA_SHOW
             if camera.status is CameraStatus.CAMERA_DISCONNECTED or camera_display not in supported_features:
@@ -132,12 +132,12 @@ class CameraService(CameraServicer):
         else:
             display_label = ButtonLabel.LABEL_CAMERA_SHOWN
             display_color = ButtonColor(
-                text_color = "white",
-                background_color = "green"
+                text_color="white",
+                background_color="green"
             )
             display_metadata = CameraAction.CAMERA_HIDE
             display_is_disabled = False
-        
+
         connection_visible = camera_connection in supported_features
         display_visible = camera_display in supported_features
         ir_visible = camera_ir in supported_features
@@ -162,34 +162,37 @@ class CameraService(CameraServicer):
             is_visible=display_visible
         )
         ir_button = ButtonGui(
-            key = camera_ir,
-            label = ir_label,
-            is_disabled = False,
-            metadata = ir_metadata,
-            button_color = ButtonColor(
-                text_color = "white",
-                background_color = ir_background
+            key=camera_ir,
+            label=ir_label,
+            is_disabled=False,
+            metadata=ir_metadata,
+            button_color=ButtonColor(
+                text_color="white",
+                background_color=ir_background
             ),
-            is_visible = ir_visible
+            is_visible=ir_visible
         )
 
         buttons = (connection_button, display_button, ir_button)
         logger.debug(f"Supported features are {supported_features}")
-        logger.debug(f"buttons are {(connection_button, display_button, ir_button)}")
+        logger.debug(
+            f"buttons are {(connection_button, display_button, ir_button)}")
         return CameraResponse(ir=camera.ir != 0, status=camera.status, buttons_gui=buttons, name=key)
-    
+
     def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
         key1 = "camera1"
         key2 = "camera2"
         logger.debug(f"camera1 is {CAMERA[key1].supported_features(key1)}")
         logger.debug(f"camera2 is {CAMERA[key2].supported_features(key2)}")
         if CAMERA[key1]:
-            camera_device1 = CameraDevice(name=Config.getValue("name", key1), features=CAMERA[key1].supported_features(key1))
+            camera_device1 = CameraDevice(name=Config.getValue(
+                "name", key1), features=CAMERA[key1].supported_features(key1))
         else:
             camera_device1 = None
 
         if CAMERA[key2]:
-            camera_device2 = CameraDevice(name=Config.getValue("name", key2), features=CAMERA[key2].supported_features(key2))
+            camera_device2 = CameraDevice(name=Config.getValue(
+                "name", key2), features=CAMERA[key2].supported_features(key2))
         else:
             camera_device2 = None
 
@@ -198,8 +201,9 @@ class CameraService(CameraServicer):
     def __show_camera(self) -> bool:
         return (
             TELESCOPE.speed is TelescopeSpeed.SPEED_SLEWING or
-            SWITCHES["DOME_LIGHT"].get_status() is ButtonStatus.ON or 
-            ROOF.get_status() in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING]
+            SWITCHES["DOME_LIGHT"].get_status() is ButtonStatus.ON or
+            ROOF.get_status() in [RoofStatus.ROOF_OPENING,
+                                  RoofStatus.ROOF_CLOSING]
         )
 
     def __move_camera(self, camera: Camera, move: Move):
@@ -222,7 +226,7 @@ class CameraService(CameraServicer):
             camera.move_top_left()
         elif move is Move.MOVE_STOP:
             camera.stop()
-    
+
     def __get_camera(self, name_or_key: str) -> tuple[str, Camera]:
         camera = CAMERA.get(name_or_key)
         logger.debug(f"Camera col get: {camera}")
@@ -239,7 +243,7 @@ class CameraService(CameraServicer):
             return ButtonKey.KEY_CAMERA1_CONNECTION
         if key == "camera2":
             return ButtonKey.KEY_CAMERA2_CONNECTION
-    
+
     def __move_to_key(self, move: Move) -> ButtonKey:
         return {
             Move.MOVE_STOP: ButtonKey.KEY_CAMERA_STOP_MOVE,
