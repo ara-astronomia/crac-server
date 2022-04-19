@@ -1,4 +1,5 @@
 import configparser
+from distutils.util import strtobool
 from dotenv import load_dotenv
 import os
 
@@ -42,10 +43,7 @@ class Config:
         config = Config()
         env_value = Config.__check_environ__(key, section=section)
         if env_value is not None:
-            if env_value in ("false", "off", "0", ""):
-                return False
-            else:
-                return True
+            return strtobool(env_value)
         return config.configparser[section].getboolean(key)
 
     @staticmethod
