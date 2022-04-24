@@ -3,7 +3,6 @@ import logging
 from crac_protobuf.camera_pb2 import (
     CameraStatus
 )
-from crac_protobuf.button_pb2 import ButtonKey
 from crac_server.component.camera.camera import Camera as CameraBase
 from pytapo import Tapo
 
