@@ -1,16 +1,17 @@
-from datetime import datetime
 import unittest
-from unittest.mock import MagicMock, Mock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 from crac_server.component.weather.weather import Weather
 from crac_server.service.weather_service import WeatherService
+
 
 class TestWeatherService(unittest.TestCase):
 
     def setUp(self):
-        self.weather = MagicMock()
+        self.weather: Weather = MagicMock()
         self.weather_service = WeatherService(self.weather)
     
-    def test_get_status(self):
+    @patch("crac_server.config.Config.getInt", return_value=5)
+    def test_get_status(self, mock_config_int):
         wind_speed = PropertyMock(return_value=(7, "km/h"))
         type(self.weather).wind_speed = wind_speed
         wind_gust_speed = PropertyMock(return_value=(12, "km/h"))

@@ -62,11 +62,12 @@ class Weather:
     def __retrieve_data(self):
         with urllib.request.urlopen(self.url) as url:
             json_result = json.loads(url.read().decode())
-            self.json = json_result["current"]
-            self.updated_at = json_result["time"]
+        
+        return json_result["current"], json_result["time"]
 
     def __get_sensor(self, name: str) -> tuple[float, str]:
         if self.is_expired():
-            self.__retrieve_data()
+            self.json, self.updated_at = self.__retrieve_data()
+        
         sensor = self.json[name]
         return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()
