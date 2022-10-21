@@ -206,6 +206,18 @@ class Telescope(ABC):
 
     def __within_range(self, coord: float, check: float):
         return coord - 1 <= check <= coord + 1
+    
+    def _calculate_eq_coords_of_park_position(self, started_at: datetime) -> EquatorialCoords:
+        aa_coords = AltazimutalCoords(
+            alt=config.Config.getFloat("park_alt", "telescope"), 
+            az=config.Config.getFloat("park_az", "telescope")
+        )
+        return self._calculate_telescope_position(
+            aa_coords=aa_coords, 
+            started_at=started_at, 
+            decimal_places=2,
+            speed=self.speed
+        )
 
     def _calculate_telescope_position(self, aa_coords: AltazimutalCoords, started_at: datetime, decimal_places: int, speed: TelescopeSpeed = TelescopeSpeed.SPEED_TRACKING) -> AltazimutalCoords:
         started_at = datetime.utcnow() if started_at is None else started_at
