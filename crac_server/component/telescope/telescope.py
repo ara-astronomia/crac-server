@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from collections import deque
-from os import sync
 import socket
 from threading import Thread
 from astropy.coordinates import (
@@ -55,7 +54,7 @@ class Telescope(ABC):
         """ Move the Telescope in the flat position """
 
     @abstractmethod
-    def retrieve(self):
+    def retrieve(self) -> tuple:
         """ Retrieve coordinate and speed from the Telescope """
     
     def polling_start(self):
@@ -120,12 +119,12 @@ class Telescope(ABC):
         except:
             logger.error("Generic connection error", exc_info=1)
 
-    def __disconnect(self) -> bool:
+    def __disconnect(self):
         """ Disconnect the server from the Telescope"""
         if not self._hostname or not self._port:
             return
 
-        if self.status is not TelescopeStatus.LOST:
+        if self.status is not TelescopeStatus.LOST:  # type: ignore
             self.s.close()
 
     def __read(self):
@@ -219,19 +218,20 @@ class Telescope(ABC):
             speed=self.speed
         )
 
-    def _calculate_telescope_position(self, aa_coords: AltazimutalCoords, started_at: datetime, decimal_places: int, speed: TelescopeSpeed = TelescopeSpeed.SPEED_TRACKING) -> AltazimutalCoords:
+    def _calculate_telescope_position(self, aa_coords: AltazimutalCoords, started_at: datetime, decimal_places: int, speed: TelescopeSpeed = TelescopeSpeed.SPEED_TRACKING) -> EquatorialCoords:
         started_at = datetime.utcnow() if started_at is None else started_at
         eq_coords = self._altaz2radec(
             aa_coords=aa_coords, 
             obstime=started_at
         )
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:  # type: ignore
             timestamp_started_at = datetime.timestamp(started_at)
             timestamp_now = datetime.timestamp(datetime.utcnow())
             delta_timestamp = timestamp_now - timestamp_started_at
             ra = (delta_timestamp / 3600) + eq_coords.ra
             synced_eq_coords = EquatorialCoords(ra=round(ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
             logger.debug(f"equatorial coordinate for synced position when telescope is not tracking {synced_eq_coords}")
+            return synced_eq_coords
         logger.debug(f"equatorial coordinate for synced position when telescope is tracking  {eq_coords}")
         synced_eq_coords = EquatorialCoords(ra=round(eq_coords.ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
         return synced_eq_coords
@@ -254,20 +254,20 @@ class Telescope(ABC):
             az = round(az, decimal_places)
         return AltazimutalCoords(alt=alt, az=az)
 
-    def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = None):
+    def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
         equinox = config.Config.getValue("equinox", "geography")
-        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
+        observing_location = EarthLocation(lat=lat, lon=lon, height=height * u.m)  # type: ignore
         aa = AltAz(location=observing_location, obstime=time)
-        alt_az = SkyCoord(alt=aa_coords.alt * u.deg, az=aa_coords.az * u.deg, frame=aa, equinox=equinox)
+        alt_az = SkyCoord(alt=aa_coords.alt * u.deg, az=aa_coords.az * u.deg, frame=aa, equinox=equinox)  # type: ignore
         ra_dec = alt_az.transform_to('fk5')
-        ra = float((ra_dec.ra / 15) / u.deg)
-        dec = float(ra_dec.dec / u.deg)
-        if decimal_places:
+        ra = float((ra_dec.ra / 15) / u.deg)  # type: ignore
+        dec = float(ra_dec.dec / u.deg)  # type: ignore
+        if decimal_places > 0:
             ra = round(ra, decimal_places)
             dec = round(dec, decimal_places)
         return EquatorialCoords(ra=ra, dec=dec)
