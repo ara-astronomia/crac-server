@@ -25,6 +25,7 @@ class Telescope(TelescopeBase):
         self.client_transaction_id = 0
     
     def sync(self, started_at: datetime):
+        self._unpark_and_track()
         eq_coords = self._calculate_eq_coords_of_park_position(started_at)
         logger.debug(f"Coordinates for syncing: ra: {eq_coords.ra} dec: {eq_coords.dec}")  # type: ignore
         self._put_response("synctocoordinates", {"RightAscension": eq_coords.ra, "Declination": eq_coords.dec})  # type: ignore
@@ -37,14 +38,14 @@ class Telescope(TelescopeBase):
             self._put_response("tracking", {"Tracking": tracking})
 
     def park(self, speed: TelescopeSpeed):  # type: ignore
-        self._put_response("park")
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING and self.has_tracking_off_capability:  # type: ignore
-            self._put_response("tracking", {"Tracking": False})
+        self._park_and_untrack()
 
     def flat(self, speed: TelescopeSpeed):  # type: ignore
+        self._unpark_and_track()
         alt_deg = config.Config.getFloat("flat_alt", "telescope")
         az_deg = config.Config.getFloat("flat_az", "telescope")
         self._put_response("slewtoaltaz", {"Azimuth": az_deg, "Altitude": alt_deg})
+        self._put_response("tracking", {"Tracking": False})
 
     def retrieve(self):
         aa_coords = self._retrieve_aa_coords()
@@ -55,6 +56,14 @@ class Telescope(TelescopeBase):
         logger.debug("those are the indicators")
         logger.debug(indicators)
         return indicators
+
+    def _unpark_and_track(self):
+        self.set_speed(TelescopeSpeed.SPEED_TRACKING)
+        self._put_response("unpark")
+    
+    def _park_and_untrack(self):
+        self._put_response("park")
+        self.set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
 
     def _retrieve_aa_coords(self):
         altitude_response = self._get_response("altitude")
@@ -67,15 +76,15 @@ class Telescope(TelescopeBase):
         return EquatorialCoords(dec=float(declination_response.json()["Value"]), ra=float(right_ascension_response.json()["Value"]))
 
     def _retrieve_speed(self):
-        tracking_response = self._get_response("tracking")
-        slewing_response = self._get_response("slewing")
-        logger.info(f"tracking value: {tracking_response.json()}")
-        logger.info(f"slewing value: {slewing_response.json()}")
-        if bool(tracking_response.json()["Value"]) and slewing_response.json()["Value"]:
+        is_tracking = bool(self._get_response("tracking").json()["Value"])
+        is_slewing = bool(self._get_response("slewing").json()["Value"])
+        logger.info(f"tracking value: {is_tracking}")
+        logger.info(f"slewing value: {is_slewing}")
+        if is_tracking and is_slewing:
             return TelescopeSpeed.SPEED_ERROR  # type: ignore
-        elif tracking_response:
+        elif is_tracking:
             return TelescopeSpeed.SPEED_TRACKING  # type: ignore
-        elif slewing_response:
+        elif is_slewing:
             return TelescopeSpeed.SPEED_SLEWING  # type: ignore
         else:
             return TelescopeSpeed.SPEED_NOT_TRACKING  # type: ignore
