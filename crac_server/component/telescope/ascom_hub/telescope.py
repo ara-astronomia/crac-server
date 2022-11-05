@@ -30,21 +30,18 @@ class Telescope(TelescopeBase):
         logger.debug(f"Coordinates for syncing: ra: {eq_coords.ra} dec: {eq_coords.dec}")  # type: ignore
         self._put_response("synctocoordinates", {"RightAscension": eq_coords.ra, "Declination": eq_coords.dec})  # type: ignore
         self._put_response("setpark")
-        self._put_response("park")
 
     def set_speed(self, speed: TelescopeSpeed):  # type: ignore
         if self.has_tracking_off_capability:
             tracking = False if speed is TelescopeSpeed.SPEED_NOT_TRACKING else True  # type: ignore
             self._put_response("tracking", {"Tracking": tracking})
 
-    def park(self, speed: TelescopeSpeed):  # type: ignore
+    def park(self, speed: TelescopeSpeed = None):  # type: ignore
         self._park_and_untrack()
 
-    def flat(self, speed: TelescopeSpeed):  # type: ignore
+    def flat(self, speed: TelescopeSpeed = None):  # type: ignore
         self._unpark_and_track()
-        alt_deg = config.Config.getFloat("flat_alt", "telescope")
-        az_deg = config.Config.getFloat("flat_az", "telescope")
-        self._put_response("slewtoaltaz", {"Azimuth": az_deg, "Altitude": alt_deg})
+        self._put_response("slewtoaltaz", {"Azimuth": self._flat_coordinate.az, "Altitude": self._flat_coordinate.alt})
         self._put_response("tracking", {"Tracking": False})
 
     def retrieve(self):

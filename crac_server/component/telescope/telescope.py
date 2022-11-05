@@ -25,13 +25,14 @@ logger = logging.getLogger(__name__)
 
 class Telescope(ABC):
 
-    def __init__(self, hostname: str = None, port: int = None) -> None:
+    def __init__(self, hostname: str | None = None, port: int | None = None) -> None:
         self._hostname = hostname
         self._port = port
         self._polling = False
         self._jobs = deque()
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
         self._connection_retry = 0
+        self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._reset()
 
     @abstractmethod

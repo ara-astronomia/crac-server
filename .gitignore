@@ -132,3 +132,5 @@ dmypy.json
 .DS_Store
 telescope.ini
 de421.bsp
+*.code-workspace
+.vscode/settings.json
