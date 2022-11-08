@@ -1,7 +1,7 @@
 from typing import Any
 import unittest
-from datetime import datetime
-from unittest.mock import ANY, DEFAULT, MagicMock, PropertyMock, call, patch
+from datetime import datetime, timezone
+from unittest.mock import ANY, MagicMock, patch
 from crac_server.component.telescope.ascom_hub.telescope import Telescope
 from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords, 
@@ -102,3 +102,27 @@ class TestTelescope(unittest.TestCase):
         self.telescope._retrieve_speed = MagicMock(return_value=TelescopeSpeed.SPEED_TRACKING)
         indicators = self.telescope.retrieve()
         self.assertEqual(indicators, (eq_coords, az_coords, TelescopeSpeed.SPEED_TRACKING, ANY))
+    
+    def test_radec2altaz(self):
+        eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)
+        aa_coords = self.telescope._radec2altaz(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc))
+        self.assertEqual(aa_coords.az, 0.20000345603265943)
+        self.assertEqual(aa_coords.alt, 0.09999827706661533)
+    
+    def test_altaz2radec(self):
+        eq_coords = AltazimutalCoords(az=0.20000345603265943, alt=0.09999827706661533)
+        eq_coords = self.telescope._altaz2radec(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc))
+        self.assertEqual(eq_coords.ra, 9.364493538085952)
+        self.assertEqual(eq_coords.dec, 47.96211229051406)
+
+    def test_rounded_radec2altaz(self):
+        eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)
+        aa_coords = self.telescope._radec2altaz(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc), 2)
+        self.assertEqual(aa_coords.az, 0.20)
+        self.assertEqual(aa_coords.alt, 0.1)
+    
+    def test_rounded_altaz2radec(self):
+        eq_coords = AltazimutalCoords(az=0.20000345603265943, alt=0.09999827706661533)
+        eq_coords = self.telescope._altaz2radec(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc), 2)
+        self.assertEqual(eq_coords.ra, 9.36)
+        self.assertEqual(eq_coords.dec, 47.96)

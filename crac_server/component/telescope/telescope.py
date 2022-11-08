@@ -237,7 +237,7 @@ class Telescope(ABC):
         synced_eq_coords = EquatorialCoords(ra=round(eq_coords.ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
         return synced_eq_coords
 
-    def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime, decimal_places: int = None):
+    def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         observing_time = Time(timestring)
         lat = config.Config.getValue("lat", "geography")
@@ -250,7 +250,7 @@ class Telescope(ABC):
         altaz_coords = coord.transform_to(aa)
         alt = float(altaz_coords.alt / u.deg)
         az = float(altaz_coords.az / u.deg)
-        if decimal_places:
+        if decimal_places > 0:
             alt = round(alt, decimal_places)
             az = round(az, decimal_places)
         return AltazimutalCoords(alt=alt, az=az)

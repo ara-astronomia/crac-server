@@ -48,12 +48,12 @@ or you can clone the crac-client repository (https://github.com/ara-astronomia/c
 run the unit tests:
 
 ```
-coverage -m unittest discover
+coverage run -m unittest discover
 ```
 
 produce the report for coverage:
 
 ```
-coverage report -m
-coverage html
+coverage report -m -i
+coverage html -i
 ```
