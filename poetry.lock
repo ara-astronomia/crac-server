@@ -83,7 +83,7 @@ python-versions = "^3.9"
 
 [package.source]
 type = "file"
-url = "../crac-protobuf/dist/crac-protobuf-0.1.18.tar.gz"
+url = "../crac-protobuf/dist/crac_protobuf-0.1.18.tar.gz"
 
 [[package]]
 name = "gpiozero"
