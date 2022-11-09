@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class Telescope(ABC):
 
-    def __init__(self, hostname: str | None = None, port: int | None = None) -> None:
+    def __init__(self, hostname: str = None, port: int = None) -> None:  # type: ignore
         self._hostname = hostname
         self._port = port
         self._polling = False
