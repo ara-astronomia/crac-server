@@ -155,7 +155,7 @@ class Telescope(ABC):
                 continue
             finally:
                 self.__disconnect()
-                sleep(config.Config.getInt("polling_interval", "telescope"))
+                sleep(config.Config.getFloat("polling_interval", "telescope"))
         else:
             self._reset()
             self.__disconnect()
