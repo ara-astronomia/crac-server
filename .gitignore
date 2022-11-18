@@ -130,5 +130,10 @@ dmypy.json
 .pyre/
 
 .DS_Store
+
+# crac configuration
 telescope.ini
 de421.bsp
+*.code-workspace
+.vscode/settings.json
+poetry.lock

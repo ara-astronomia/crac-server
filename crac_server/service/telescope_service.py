@@ -112,11 +112,8 @@ class TelescopeService(TelescopeServicer):
                 ]
             )
         elif (
-                status is TelescopeStatus.PARKED or 
-                (
-                    status is TelescopeStatus.FLATTER and 
-                    SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.OFF
-                )
+                status is TelescopeStatus.FLATTER and 
+                SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.OFF
             ):
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
         speed = TELESCOPE.speed
