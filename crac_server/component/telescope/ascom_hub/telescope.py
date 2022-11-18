@@ -107,13 +107,6 @@ class Telescope(TelescopeBase):
         self.client_transaction_id = self.client_transaction_id + 1
         return data | {"ClientId": 154, "ClientTransactionID": self.client_transaction_id}
 
-    def polling_start(self):
-        if not self._polling:
-            self._polling = True
-            self.t = Thread(target=self.__read)
-            self.t.start()
-            logger.debug(f"Telescope connected via ascom remote - alpaca")
-
     def __open_connection(self):
         return True
 
