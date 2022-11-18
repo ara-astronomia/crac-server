@@ -14,5 +14,5 @@ if (sky6RASCOMTele.IsConnected)
   if (Track) {{
     sky6RASCOMTele.SetTracking(Track, 1, 0, 0);
   }}
-  Out = sky6RASCOMTele.LastSlewError();
+  Out;
 }}
