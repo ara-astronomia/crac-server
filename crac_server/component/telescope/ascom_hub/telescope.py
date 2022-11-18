@@ -1,7 +1,6 @@
 from datetime import datetime
 import logging
 from threading import Thread
-from time import sleep
 from typing import Any
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server import config
@@ -9,7 +8,6 @@ from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,
     AltazimutalCoords,
     TelescopeSpeed,
-    TelescopeStatus,
 )
 import requests
 
@@ -116,29 +114,8 @@ class Telescope(TelescopeBase):
             self.t.start()
             logger.debug(f"Telescope connected via ascom remote - alpaca")
 
-    def __read(self):
-        """ 
-            Polling the Telescope for coordinate and speed
-            If there are some actions to do like move it or sync it
-            then they will be dequeued and worked here
-        """
+    def __open_connection(self):
+        return True
 
-        while self._polling:
-            try:
-                if len(self._jobs) > 0:
-                    logger.debug(f"there are {len(self._jobs)} jobs: {self._jobs}")
-                    job = self._jobs.popleft()
-                    args = {key: val for key ,val in job.items() if key != "action"}
-                    job['action'](**args)
-
-                self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
-            except:
-                logger.error("Error in completing job", exc_info=1)
-                self.status = TelescopeStatus.ERROR  # type: ignore
-                continue
-            finally:
-                sleep(1)
-                #self.__disconnect()
-        else:
-            self._reset()
-            #self.__disconnect()
+    def __disconnect(self):
+        pass

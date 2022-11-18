@@ -78,8 +78,9 @@ class TestTelescope(unittest.TestCase):
     @patch('requests.put')
     def test_flat(self, request):
         request.return_value = self.mocked_put_request()
+        eq_coords = self.telescope._altaz2radec(aa_coords=self.telescope._flat_coordinate, obstime=datetime.utcnow())
         self.telescope.flat()
-        request.assert_any_call(f'http://{self._host}:{self._port}/api/v1/telescope/0/slewtoaltaz', data={"Azimuth": 2, "Altitude": 0, "ClientId": 1, "ClientTransactionID": 1})
+        request.assert_any_call(f'http://{self._host}:{self._port}/api/v1/telescope/0/slewtocoordinates', data={"RightAscension": eq_coords.ra, "Declination": eq_coords.dec, "ClientId": 1, "ClientTransactionID": 1})
         request.assert_any_call(f'http://{self._host}:{self._port}/api/v1/telescope/0/tracking', data={"Tracking": False, "ClientId": 1, "ClientTransactionID": 1})
         request.reset_mock()
     
