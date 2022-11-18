@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 import socket
 from threading import Thread
+from time import sleep
 from astropy.coordinates import (
     EarthLocation,
     AltAz,
@@ -154,6 +155,7 @@ class Telescope(ABC):
                 continue
             finally:
                 self.__disconnect()
+                sleep(1)
         else:
             self._reset()
             self.__disconnect()
@@ -212,6 +214,7 @@ class Telescope(ABC):
             alt=config.Config.getFloat("park_alt", "telescope"), 
             az=config.Config.getFloat("park_az", "telescope")
         )
+        logger.debug(f"This is the aa coordinate for park position: {aa_coords}")
         return self._calculate_telescope_position(
             aa_coords=aa_coords, 
             started_at=started_at, 

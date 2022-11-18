@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 from threading import Thread
+from time import sleep
 from typing import Any
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server import config
@@ -41,7 +42,9 @@ class Telescope(TelescopeBase):
 
     def flat(self, speed: TelescopeSpeed = None):  # type: ignore
         self._unpark_and_track()
-        self._put_response("slewtoaltaz", {"Azimuth": self._flat_coordinate.az, "Altitude": self._flat_coordinate.alt})
+        eq_coords = self._altaz2radec(aa_coords=self._flat_coordinate, obstime=datetime.utcnow())
+        logger.debug(f"Coordinates for flat: ra: {eq_coords.ra} dec: {eq_coords.dec}")  # type: ignore
+        self._put_response("slewtocoordinates", {"RightAscension": eq_coords.ra, "Declination": eq_coords.dec})
         self._put_response("tracking", {"Tracking": False})
 
     def retrieve(self):
@@ -111,6 +114,7 @@ class Telescope(TelescopeBase):
             self._polling = True
             self.t = Thread(target=self.__read)
             self.t.start()
+            logger.debug(f"Telescope connected via ascom remote - alpaca")
 
     def __read(self):
         """ 
@@ -132,7 +136,8 @@ class Telescope(TelescopeBase):
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR  # type: ignore
                 continue
-            #finally:
+            finally:
+                sleep(1)
                 #self.__disconnect()
         else:
             self._reset()
