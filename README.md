@@ -40,3 +40,20 @@ client.SetAction(request)
 ```
 
 or you can clone the crac-client repository (https://github.com/ara-astronomia/crac-client) and start it
+
+# Test
+
+## unit tests:
+
+run the unit tests:
+
+```
+coverage run -m unittest discover
+```
+
+produce the report for coverage:
+
+```
+coverage report -m -i
+coverage html -i
+```

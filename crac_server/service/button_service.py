@@ -32,18 +32,24 @@ class ButtonService(ButtonServicer):
         if request.action == ButtonAction.TURN_ON:
             button_control.on()
         elif request.action == ButtonAction.TURN_OFF:
-            TELESCOPE.polling_end()
             button_control.off()
 
         status = button_control.get_status()
         logger.info("Response " + str(status))
 
         if (
+            request.type == ButtonType.TELE_SWITCH and
+            request.action == ButtonAction.TURN_OFF
+        ):
+            logger.info("Turned off telescope connection when telescope is turned off")
+            TELESCOPE.polling_end()
+
+        if (
             request.type == ButtonType.FLAT_LIGHT and
             status is ButtonStatus.ON and
             TELESCOPE.status is TelescopeStatus.FLATTER
         ):
-            logger.info("Turned on Flat Panel")
+            logger.info("Track telescope on when Flat Panel is switched on")
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
         if status is ButtonStatus.ON:
