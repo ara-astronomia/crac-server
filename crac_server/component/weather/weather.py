@@ -55,6 +55,10 @@ class Weather:
     @property
     def barometer(self):
         return self.__get_sensor("barometer")
+    
+    @property
+    def barometer_trend(self):
+        return self.__get_sensor("barometerTrend")
 
     def is_expired(self):
         return not self.updated_at or (datetime.now() - self.updated_at).seconds >= self._time_expired
