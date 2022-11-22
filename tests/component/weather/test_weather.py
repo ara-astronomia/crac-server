@@ -33,6 +33,10 @@ class TestWeather(unittest.TestCase):
                 "value": self.input_barometer[0],
                 "unit_of_measurement": self.input_barometer[1]
             },
+            "barometerTrend": {
+                "value": self.input_barometer_trend[0],
+                "unit_of_measurement": self.input_barometer_trend[1]
+            },
         }
         updated_at = datetime.now().strftime(self.format)
 
@@ -76,6 +80,9 @@ class TestWeather(unittest.TestCase):
 
         self.input_barometer = ("1002", "mbar")
         self.expected_barometer = self.__to_expected(self.input_barometer)
+
+        self.input_barometer_trend = ("-3", "mbar")
+        self.expected_barometer_trend = self.__to_expected(self.input_barometer_trend)
     
     def tearDown(self) -> None:
         self.weather = None
@@ -101,6 +108,7 @@ class TestWeather(unittest.TestCase):
         self.assertEqual(self.expected_wind_gust_speed, weather.wind_gust_speed)
         self.assertEqual(self.expected_rain_rate, weather.rain_rate)
         self.assertEqual(self.expected_barometer, weather.barometer)
+        self.assertEqual(self.expected_barometer_trend, weather.barometer_trend)
         mock_urlopen.assert_called()
 
     def test_url(self):
