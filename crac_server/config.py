@@ -28,7 +28,10 @@ class Config:
         env_value = Config.__check_environ__(key, section=section)
         if env_value:
             return float(env_value)
-        return config.configparser[section].getfloat(key)
+        env_value = config.configparser[section][key]
+        if env_value:
+            return config.configparser[section].getfloat(key)
+        return 0
 
     @staticmethod
     def getInt(key, section='automazione'):
@@ -36,7 +39,11 @@ class Config:
         env_value = Config.__check_environ__(key, section=section)
         if env_value:
             return int(env_value)
-        return config.configparser[section].getint(key)
+        env_value = config.configparser[section][key]
+        if env_value:
+            return config.configparser[section].getint(key)
+        return 0
+
     
     @staticmethod
     def getBoolean(key, section='automazione'):

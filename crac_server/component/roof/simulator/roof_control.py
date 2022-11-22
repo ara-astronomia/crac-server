@@ -1,7 +1,7 @@
-from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.roof.roof_control import RoofControl
 from threading import Thread
 from time import sleep
+
 
 class MockRoofControl(RoofControl):
 
@@ -13,7 +13,10 @@ class MockRoofControl(RoofControl):
     def open(self):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_high()
-        t = Thread(target=self.__wait_for_open__, args=(self.roof_open_switch.pin,))
+        t = Thread(
+            target=self.__wait_for_open__,
+            args=(self.roof_open_switch.pin,)
+        )
         t.start()
         super().open()
         t.join()
@@ -21,7 +24,10 @@ class MockRoofControl(RoofControl):
     def close(self):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_high()
-        t = Thread(target=self.__wait_for_open__, args=(self.roof_closed_switch.pin,))
+        t = Thread(
+            target=self.__wait_for_open__,
+            args=(self.roof_closed_switch.pin,)
+        )
         t.start()
         super().close()
         t.join()
