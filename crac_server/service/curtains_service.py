@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 class CurtainsService(CurtainServicer):
     def SetAction(self, request, context):
-        logger.info("Request " + str(request))
+        logger.debug("Request " + str(request))
         
         roof_is_opened = ROOF.get_status() is RoofStatus.ROOF_OPENED
         tele_is_turned_on = SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.ON

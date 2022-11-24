@@ -1,3 +1,4 @@
+import logging
 from crac_protobuf.button_pb2 import (
     ButtonAction,  # type: ignore
     ButtonColor,  # type: ignore
@@ -9,8 +10,10 @@ from crac_protobuf.button_pb2 import (
     ButtonStatus,  # type: ignore
     ButtonType,  # type: ignore
 )
-
 from crac_server.component.button_control import SWITCHES, ButtonControl
+
+
+logger = logging.getLogger(__name__)
 
 
 class ButtonMediator:
@@ -53,6 +56,7 @@ class ButtonMediator:
 
 class ButtonConverter:
     def convert(self, button_mediator: ButtonMediator) -> ButtonResponse:
+        logger.info(button_mediator)
         if button_mediator.status is ButtonStatus.ON:
             text_color, background_color = ("white", "green")
         else:
@@ -66,8 +70,11 @@ class ButtonConverter:
             button_color=ButtonColor(text_color=text_color, background_color=background_color),
         )
 
-        return ButtonResponse(
+        response = ButtonResponse(
             status=button_mediator.status, 
             type=button_mediator.type, 
             button_gui=button_gui
         )
+        logger.info(response)
+
+        return response
