@@ -1,6 +1,5 @@
 from datetime import datetime
 import logging
-from threading import Thread
 from typing import Any
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server import config

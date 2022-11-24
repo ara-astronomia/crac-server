@@ -1,95 +1,77 @@
 import logging
-from crac_server.component.button_control import SWITCHES
 from crac_server.component.telescope import TELESCOPE
+from crac_server.component.weather import WEATHER
+from crac_server.converter.button_converter import ButtonConverter, ButtonMediator
+from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
 from crac_protobuf.button_pb2 import (
-    ButtonRequest,
-    ButtonAction,
-    ButtonType,
-    ButtonResponse,
-    ButtonStatus,
-    ButtonGui,
-    ButtonColor,
-    ButtonLabel,
-    ButtonKey,
+    ButtonAction,  # type: ignore
+    ButtonType,  # type: ignore
+    ButtonResponse,  # type: ignore
+    ButtonStatus,  # type: ignore
 )
 from crac_protobuf.telescope_pb2 import (
-    TelescopeSpeed,
-    TelescopeStatus,
+    TelescopeSpeed,  # type: ignore
+    TelescopeStatus,  # type: ignore
 )
-
+from crac_protobuf.chart_pb2 import (
+    WeatherStatus,  # type: ignore
+)
 
 logger = logging.getLogger(__name__)
 
 
 class AbstractButtonHandler(AbstractHandler):
-    def handle(self, request: ButtonRequest) -> ButtonResponse:
+    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if self._next_handler:
-            return self._next_handler.handle(request)
+            return self._next_handler.handle(mediator)
         
-        button_control = SWITCHES[ButtonType.Name(request.type)]
-        status = button_control.get_status()
+        return ButtonConverter().convert(mediator)
 
-        if status is ButtonStatus.ON:
-            text_color, background_color = ("white", "green")
-        else:
-            text_color, background_color = ("white", "red")
-    
-        button_gui = ButtonGui(
-            key=ButtonKey.Value(f"KEY_{ButtonType.Name(request.type)}"),
-            label=(ButtonLabel.LABEL_ON if status is ButtonStatus.ON else ButtonLabel.LABEL_OFF),
-            metadata=(ButtonAction.TURN_OFF if status is ButtonStatus.ON else ButtonAction.TURN_ON),
-            is_disabled=False,
-            button_color=ButtonColor(text_color=text_color, background_color=background_color),
-        )
 
-        return ButtonResponse(
-            status=status, 
-            type=request.type, 
-            button_gui=button_gui
-        )
+class WeatherHandler(AbstractButtonHandler):
+    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
+        if mediator.action in (ButtonAction.TURN_ON, ButtonAction.CHECK_ACTION):
+            weather_converter = WeatherConverter()
+            weather_response = weather_converter.convert(WEATHER)
+            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGE:
+                mediator.is_disabled = True
+                self._next_handler = None
 
+            return super().handle(mediator)
 
 class ButtonActionHandler(AbstractButtonHandler):
-    def handle(self, request: ButtonRequest) -> ButtonResponse:
-        button_control = SWITCHES[ButtonType.Name(request.type)]
-         
-        if request.action == ButtonAction.TURN_ON:
-            button_control.on()
-        elif request.action == ButtonAction.TURN_OFF:
-            button_control.off()
+    def handle(self, mediator: ButtonMediator) -> ButtonResponse:         
+        if mediator.action == ButtonAction.TURN_ON:
+            mediator.button.on()
+        elif mediator.action == ButtonAction.TURN_OFF:
+            mediator.button.off()
 
-        return super().handle(request)
+        return super().handle(mediator)
 
 
 class TelescopeHandler(AbstractButtonHandler):
-    def handle(self, request: ButtonRequest) -> ButtonResponse:
-        button_control = SWITCHES[ButtonType.Name(request.type)]
-
+    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
-            request.type == ButtonType.TELE_SWITCH and
-            request.action == ButtonAction.TURN_OFF
+            mediator.type == ButtonType.TELE_SWITCH and
+            mediator.action == ButtonAction.TURN_OFF
         ):
-        
-            button_control.off()
+            mediator.button.off()
             logger.info("Turned off telescope connection when telescope is turned off")
             TELESCOPE.polling_end()
 
-        return super().handle(request)
+        return super().handle(mediator)
 
 
 class FlatHandler(AbstractButtonHandler):
-    def handle(self, request: ButtonRequest) -> ButtonResponse:
-        button_control = SWITCHES[ButtonType.Name(request.type)]
-        status = button_control.get_status()
-
+    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
-            request.type == ButtonType.FLAT_LIGHT and
-            status is ButtonStatus.ON and
+            mediator.type == ButtonType.FLAT_LIGHT and
+            mediator.status is ButtonStatus.ON and
             TELESCOPE.status is TelescopeStatus.FLATTER
         ):
-            button_control.on()
+            mediator.button.on()
             logger.info("Track telescope on when Flat Panel is switched on")
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
-        return super().handle(request)
+        return super().handle(mediator)
