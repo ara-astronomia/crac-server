@@ -1,23 +1,12 @@
 import logging
 from crac_protobuf.button_pb2 import (
-    ButtonRequest,
-    ButtonAction,
-    ButtonType,
-    ButtonResponse,
-    ButtonsResponse,
-    ButtonStatus,
-    ButtonGui,
-    ButtonColor,
-    ButtonLabel,
-    ButtonKey,
+    ButtonRequest,  # type: ignore
+    ButtonAction,  # type: ignore
+    ButtonType,  # type: ignore
+    ButtonsResponse,  # type: ignore
 )
 from crac_protobuf.button_pb2_grpc import ButtonServicer
-from crac_protobuf.telescope_pb2 import (
-    TelescopeSpeed,
-    TelescopeStatus,
-)
-from crac_server.component.button_control import SWITCHES
-from crac_server.component.telescope import TELESCOPE
+from crac_server.converter.button_converter import ButtonMediator
 from crac_server.handler.button_handler import ButtonActionHandler, FlatHandler, TelescopeHandler
 
 
@@ -27,14 +16,15 @@ logger = logging.getLogger(__name__)
 
 class ButtonService(ButtonServicer):
     def SetAction(self, request: ButtonRequest, context):
-        logger.info("Request " + str(request))
+        logger.debug("Request " + str(request))
+        button_mediator = ButtonMediator(request)
 
         telescope_handler = TelescopeHandler()
         flat_handler = FlatHandler()
         button_action_handler = ButtonActionHandler()
-
         telescope_handler.set_next(flat_handler).set_next(button_action_handler)
-        return telescope_handler.handle(request)
+        
+        return telescope_handler.handle(button_mediator)
 
     def GetStatus(self, request, context):
         tele_switch_button = self.SetAction(

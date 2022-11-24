@@ -1,27 +1,27 @@
+from datetime import datetime
 from crac_protobuf.chart_pb2 import (
     WeatherResponse, # type: ignore
     Chart, # type: ignore
     Threshold, # type: ignore
     ThresholdType, # type: ignore
     ChartStatus,  # type: ignore
-    WeatherStatus,
+    WeatherStatus,  # type: ignore
 )
-from crac_server.component.weather import WEATHER
+from crac_server.component.weather.weather import Weather
 from crac_server.config import Config
-from crac_server.handler.handler import AbstractHandler
-from typing import Any
+from typing import Any, Union
 
-class WeatherHandler(AbstractHandler):
-    def handle(self, request: Any = None) -> WeatherResponse:
+class WeatherConverter:
+    def convert(self, weather: Weather) -> WeatherResponse:
         response = WeatherResponse(
             charts=(
                 self.build_chart(
-                    value=WEATHER.wind_speed[0],
+                    value=weather.wind_speed[0],
                     title="Vento",
                     urn="weather.chart.wind",
                     min=Config.getInt("lower_bound", "wind_speed"),
                     max=Config.getInt("upper_bound", "wind_speed"),
-                    unit_of_measurement=WEATHER.wind_speed[1],
+                    unit_of_measurement=weather.wind_speed[1],
                     range_normal=(
                         Config.getInt("warning", "wind_speed"),
                         Config.getInt("lower_bound", "wind_speed"),
@@ -36,12 +36,12 @@ class WeatherHandler(AbstractHandler):
                     ),
                 ),
                 self.build_chart(
-                    value=WEATHER.wind_gust_speed[0],
+                    value=weather.wind_gust_speed[0],
                     title="Raffiche vento",
                     urn="weather.chart.wind_gust",
                     min=Config.getInt("lower_bound", "wind_gust_speed"),
                     max=Config.getInt("upper_bound", "wind_gust_speed"),
-                    unit_of_measurement=WEATHER.wind_gust_speed[1],
+                    unit_of_measurement=weather.wind_gust_speed[1],
                     range_normal=(
                         Config.getInt("lower_bound", "wind_gust_speed"),
                         Config.getInt("warning", "wind_gust_speed"),
@@ -56,12 +56,12 @@ class WeatherHandler(AbstractHandler):
                     ),
                 ),
                 self.build_chart(
-                    value=WEATHER.temperature[0],
+                    value=weather.temperature[0],
                     title="Temperatura",
                     urn="weather.chart.temperature",
                     min=Config.getInt("lower_bound", "temperature"),
                     max=Config.getInt("upper_bound", "temperature"),
-                    unit_of_measurement=WEATHER.temperature[1],
+                    unit_of_measurement=weather.temperature[1],
                     range_normal=(
                         Config.getInt("lower_bound", "temperature"),
                         Config.getInt("warning", "temperature"),
@@ -72,12 +72,12 @@ class WeatherHandler(AbstractHandler):
                     ),
                 ),
                 self.build_chart(
-                    value=WEATHER.humidity[0],
+                    value=weather.humidity[0],
                     title="Umidità",
                     urn="weather.chart.humidity",
                     min=Config.getInt("lower_bound", "humidity"),
                     max=Config.getInt("upper_bound", "humidity"),
-                    unit_of_measurement=WEATHER.humidity[1],
+                    unit_of_measurement=weather.humidity[1],
                     range_normal=(
                         Config.getInt("warning", "humidity"),
                         Config.getInt("lower_bound", "humidity"),
@@ -92,12 +92,12 @@ class WeatherHandler(AbstractHandler):
                     ),
                 ),
                 self.build_chart(
-                    value=WEATHER.rain_rate[0],
+                    value=weather.rain_rate[0],
                     title="Pioggia",
                     urn="weather.chart.rain_rate",
                     min=Config.getInt("lower_bound", "rain_rate"),
                     max=Config.getInt("upper_bound", "rain_rate"),
-                    unit_of_measurement=WEATHER.rain_rate[1],
+                    unit_of_measurement=weather.rain_rate[1],
                     range_normal=(
                         Config.getInt("lower_bound", "rain_rate"),
                         Config.getInt("warning", "rain_rate"),
@@ -112,12 +112,12 @@ class WeatherHandler(AbstractHandler):
                     ),
                 ),
                 self.build_chart(
-                    value=WEATHER.barometer[0],
+                    value=weather.barometer[0],
                     title="Barometro",
                     urn="weather.chart.barometer",
                     min=Config.getInt("lower_bound", "barometer"),
                     max=Config.getInt("upper_bound", "barometer"),
-                    unit_of_measurement=WEATHER.barometer[1],
+                    unit_of_measurement=weather.barometer[1],
                     range_normal=(
                         Config.getInt("upper_bound", "barometer"),
                         Config.getInt("warning", "barometer"),
@@ -132,12 +132,12 @@ class WeatherHandler(AbstractHandler):
                     ),
                 ),
                 self.build_chart(
-                    value=WEATHER.barometer_trend[0],
+                    value=weather.barometer_trend[0],
                     title="Tendenza Barometro",
                     urn="weather.chart.barometer_trend",
                     min=Config.getInt("lower_bound", "barometer_trend"),
                     max=Config.getInt("upper_bound", "barometer_trend"),
-                    unit_of_measurement=WEATHER.barometer_trend[1],
+                    unit_of_measurement=weather.barometer_trend[1],
                     range_normal=(
                         Config.getInt("upper_bound", "barometer_trend"),
                         Config.getInt("warning", "barometer_trend"),
@@ -152,7 +152,7 @@ class WeatherHandler(AbstractHandler):
                     ),
                 )
             ),
-            updated_at=int(WEATHER.updated_at.timestamp())
+            updated_at=self.timestamp_or_none(weather.updated_at)
         )
 
         status = WeatherStatus.WEATHER_STATUS_UNSPECIFIED
@@ -166,6 +166,13 @@ class WeatherHandler(AbstractHandler):
         response.status = status
 
         return response
+    
+    def timestamp_or_none(self, updated_at: Union[datetime, None]) -> int:
+        if updated_at != None:
+            return int(updated_at.timestamp()) 
+        else: 
+            return 0
+
     
     def build_chart(self, value: float, title: str, urn: str, min: float, max: float, unit_of_measurement: str, range_normal = None, range_warn = None, range_danger = None) -> Chart:
         chart = Chart(
