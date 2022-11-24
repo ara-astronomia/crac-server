@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class TelescopeService(TelescopeServicer):
     def SetAction(self, request, context):
-        logger.info("TelescopeRequest TelescopeService" + str(request))
+        logger.debug("TelescopeRequest TelescopeService" + str(request))
         if (
                 SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.OFF
             ):
@@ -159,7 +159,7 @@ class TelescopeService(TelescopeServicer):
                 flat_button_gui,
             ]
         )
-        logger.info("Response " + str(response))
+        logger.debug("Response " + str(response))
 
         if request.autolight:
             if speed is TelescopeSpeed.SPEED_SLEWING:

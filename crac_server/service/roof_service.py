@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class RoofService(RoofServicer):
     def SetAction(self, request, context):
-        logger.info("Request " + str(request))
+        logger.debug("Request " + str(request))
         telescope_is_secure = self.__telescope_is_secure()
         curtains_are_secure = self.__curtains_are_secure()
         if request.action is RoofAction.OPEN:
@@ -42,7 +42,7 @@ class RoofService(RoofServicer):
             ):
             ROOF.close()
         status = ROOF.get_status()
-        logger.info("Response " + str(status))
+        logger.debug("Response " + str(status))
 
         if status in [RoofStatus.ROOF_OPENED]:
             text_color, background_color = ("white", "green")

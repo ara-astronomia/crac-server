@@ -59,7 +59,7 @@ class CameraService(CameraServicer):
             yield CameraResponse(video=video, ir=False, status=camera.status, name=key)
 
     def SetAction(self, request: CameraRequest, context) -> CameraResponse:
-        logger.info("Request " + str(request))
+        logger.debug("Request " + str(request))
         key, camera = self.__get_camera(request.name)
 
         camera_display = self.__display(key)

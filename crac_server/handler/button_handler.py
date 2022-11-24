@@ -18,6 +18,7 @@ from crac_protobuf.chart_pb2 import (
     WeatherStatus,  # type: ignore
 )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,21 +32,26 @@ class AbstractButtonHandler(AbstractHandler):
 
 class WeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
-        if mediator.action in (ButtonAction.TURN_ON, ButtonAction.CHECK_ACTION):
+        logger.info("In weather handler")
+        if mediator.action in (ButtonAction.TURN_ON, ButtonAction.CHECK_BUTTON):
+            logger.info(f"In turn on or check action {mediator.action}")
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGE:
+            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
+                logger.info(f"In status danger {weather_response.status}")
                 mediator.is_disabled = True
                 self._next_handler = None
 
-            return super().handle(mediator)
+        return super().handle(mediator)
 
 class ButtonActionHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:         
         if mediator.action == ButtonAction.TURN_ON:
             mediator.button.on()
+            self._next_handler = None
         elif mediator.action == ButtonAction.TURN_OFF:
             mediator.button.off()
+            self._next_handler = None
 
         return super().handle(mediator)
 
@@ -57,8 +63,9 @@ class TelescopeHandler(AbstractButtonHandler):
             mediator.action == ButtonAction.TURN_OFF
         ):
             mediator.button.off()
-            logger.info("Turned off telescope connection when telescope is turned off")
+            logger.debug("Turned off telescope connection when telescope is turned off")
             TELESCOPE.polling_end()
+            self._next_handler = None
 
         return super().handle(mediator)
 
@@ -71,7 +78,8 @@ class FlatHandler(AbstractButtonHandler):
             TELESCOPE.status is TelescopeStatus.FLATTER
         ):
             mediator.button.on()
-            logger.info("Track telescope on when Flat Panel is switched on")
+            logger.debug("Track telescope on when Flat Panel is switched on")
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
+            self._next_handler = None
 
         return super().handle(mediator)

@@ -1,3 +1,7 @@
+import logging
+import logging.config
+logging.config.fileConfig('logging.conf')
+
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
@@ -13,12 +17,9 @@ from crac_server.service.button_service import ButtonService
 from crac_server.config import Config
 from concurrent import futures
 import grpc
-import logging
-import logging.config
 from signal import signal, SIGTERM
 
 
-logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('crac_server.app')
 
 
