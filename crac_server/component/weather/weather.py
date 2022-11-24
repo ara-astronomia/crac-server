@@ -1,5 +1,6 @@
 from datetime import datetime
 import html
+from typing import Union
 import urllib.request
 import json
 
@@ -7,8 +8,8 @@ import json
 class Weather:
     def __init__(self, url: str, time_format: str, time_expired: int):
         self._url = url
-        self._json = None
-        self._updated_at = None
+        self._json : dict
+        self._updated_at : Union[datetime, None] = None
         self._time_format = time_format
         self._time_expired = time_expired
 

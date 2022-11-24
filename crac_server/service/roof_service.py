@@ -76,6 +76,7 @@ class RoofService(RoofServicer):
         return RoofResponse(status=status, button_gui=button_gui)
 
     def __roof_label(self, status):
+        label = None
         if status is RoofStatus.ROOF_CLOSED:
             label = ButtonLabel.LABEL_CLOSE
         elif status is RoofStatus.ROOF_OPENED:
