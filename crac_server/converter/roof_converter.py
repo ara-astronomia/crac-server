@@ -78,6 +78,7 @@ class RoofConverter:
             label = ButtonLabel.LABEL_OPENING
         return label
 
+    # TODO use this after upgrading to python >= 3.10
     # def __roof_label310(self, status):
     #     match status:
     #         case RoofStatus.ROOF_CLOSED:

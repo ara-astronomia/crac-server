@@ -1,7 +1,10 @@
 import logging
 from crac_server.component.telescope import TELESCOPE
 from crac_server.component.weather import WEATHER
-from crac_server.converter.button_converter import ButtonConverter, ButtonMediator
+from crac_server.converter.button_converter import (
+    ButtonConverter, 
+    ButtonMediator,
+)
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
 from crac_protobuf.button_pb2 import (

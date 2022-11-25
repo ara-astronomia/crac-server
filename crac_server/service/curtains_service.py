@@ -52,10 +52,12 @@ class CurtainsService(CurtainServicer):
                 CURTAIN_WEST.disable()
         elif (
                 request.action is CurtainsAction.ENABLE and
+                tele_is_turned_on and
                 roof_is_opened
         ):
             CURTAIN_EAST.enable()
             CURTAIN_WEST.enable()
+        # TODO check if manual calibration is needed and in case create a story for it
         # elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
         #     CURTAIN_EAST.manual_reset()
         #     CURTAIN_WEST.manual_reset()

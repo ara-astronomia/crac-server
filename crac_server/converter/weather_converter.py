@@ -10,7 +10,7 @@ from crac_protobuf.chart_pb2 import (
 )
 from crac_server.component.weather.weather import Weather
 from crac_server.config import Config
-from typing import Any, Union
+from typing import Union
 
 
 logger = logging.getLogger(__name__)
