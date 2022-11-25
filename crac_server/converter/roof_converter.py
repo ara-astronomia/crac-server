@@ -89,3 +89,4 @@ class RoofConverter:
     #         case RoofStatus.ROOF_OPENING:
     #             label = ButtonLabel.LABEL_OPENING
     #     return label
+    
