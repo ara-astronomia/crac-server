@@ -51,17 +51,6 @@ class ButtonWeatherHandler(AbstractButtonHandler):
 
         return super().handle(mediator)
 
-class ButtonActionHandler(AbstractButtonHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:         
-        if mediator.action == ButtonAction.TURN_ON:
-            mediator.button.on()
-            self._next_handler = None
-        elif mediator.action == ButtonAction.TURN_OFF:
-            mediator.button.off()
-            self._next_handler = None
-
-        return super().handle(mediator)
-
 
 class ButtonTelescopeHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
@@ -69,10 +58,8 @@ class ButtonTelescopeHandler(AbstractButtonHandler):
             mediator.type == ButtonType.TELE_SWITCH and
             mediator.action == ButtonAction.TURN_OFF
         ):
-            mediator.button.off()
             logger.debug("Turned off telescope connection when telescope is turned off")
             TELESCOPE.polling_end()
-            self._next_handler = None
 
         return super().handle(mediator)
 
@@ -81,12 +68,22 @@ class ButtonFlatHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
             mediator.type == ButtonType.FLAT_LIGHT and
-            mediator.status is ButtonStatus.ON and
+            mediator.action is ButtonAction.TURN_ON and
             TELESCOPE.status is TelescopeStatus.FLATTER
         ):
-            mediator.button.on()
             logger.debug("Track telescope on when Flat Panel is switched on")
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
+
+        return super().handle(mediator)
+
+
+class ButtonActionHandler(AbstractButtonHandler):
+    def handle(self, mediator: ButtonMediator) -> ButtonResponse:         
+        if mediator.action == ButtonAction.TURN_ON:
+            mediator.button.on()
+            self._next_handler = None
+        elif mediator.action == ButtonAction.TURN_OFF:
+            mediator.button.off()
             self._next_handler = None
 
         return super().handle(mediator)
