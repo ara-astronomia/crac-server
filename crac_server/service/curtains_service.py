@@ -19,6 +19,11 @@ class CurtainsService(CurtainServicer):
         enable_curtains_handelr = CurtainsEnableHandler()
         calibration_curtains_handler = CurtainsCalibrationHandler()
         move_curtains_handler = CurtainsMoveHandler()
-        roof_curtains_handler.set_next(weather_curtains_handler).set_next(telescope_curtains_handler).set_next(disable_curtains_handler).set_next(enable_curtains_handelr).set_next(calibration_curtains_handler).set_next(move_curtains_handler)
+        roof_curtains_handler.set_next(weather_curtains_handler) \
+            .set_next(telescope_curtains_handler) \
+            .set_next(disable_curtains_handler) \
+            .set_next(enable_curtains_handelr) \
+            .set_next(calibration_curtains_handler) \
+            .set_next(move_curtains_handler)
 
         return roof_curtains_handler.handle(curtains_mediator)
