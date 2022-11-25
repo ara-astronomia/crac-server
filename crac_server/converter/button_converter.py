@@ -15,6 +15,7 @@ from crac_server.component.button_control import (
     ButtonControl,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
