@@ -1,11 +1,12 @@
 import logging
 from crac_server.component.button_control import SWITCHES
-from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN_WEST
+from crac_server.component.curtains.factory_curtain import (
+    CURTAIN_EAST, 
+    CURTAIN_WEST,
+)
 from crac_server.component.telescope import TELESCOPE
 from crac_server.handler.handler import AbstractHandler
-from crac_protobuf.button_pb2 import (
-    ButtonStatus,  # type: ignore
-)
+from crac_protobuf.button_pb2 import ButtonStatus  # type: ignore
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
 from crac_protobuf.roof_pb2 import (
     RoofAction,  # type: ignore
@@ -15,7 +16,10 @@ from crac_protobuf.roof_pb2 import (
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
 )
-from crac_server.handler.roof_converter import RoofConverter, RoofMediator
+from crac_server.converter.roof_converter import (
+    RoofConverter, 
+    RoofMediator,
+)
 
 logger = logging.getLogger(__name__)
 

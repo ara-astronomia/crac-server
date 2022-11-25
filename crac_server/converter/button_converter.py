@@ -10,8 +10,10 @@ from crac_protobuf.button_pb2 import (
     ButtonStatus,  # type: ignore
     ButtonType,  # type: ignore
 )
-from crac_server.component.button_control import SWITCHES, ButtonControl
-
+from crac_server.component.button_control import (
+    SWITCHES, 
+    ButtonControl,
+)
 
 logger = logging.getLogger(__name__)
 

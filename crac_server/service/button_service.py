@@ -7,7 +7,12 @@ from crac_protobuf.button_pb2 import (
 )
 from crac_protobuf.button_pb2_grpc import ButtonServicer
 from crac_server.converter.button_converter import ButtonMediator
-from crac_server.handler.button_handler import ButtonActionHandler, ButtonFlatHandler, ButtonTelescopeHandler, ButtonWeatherHandler
+from crac_server.handler.button_handler import (
+    ButtonActionHandler, 
+    ButtonFlatHandler, 
+    ButtonTelescopeHandler, 
+    ButtonWeatherHandler,
+)
 
 
 logger = logging.getLogger(__name__)

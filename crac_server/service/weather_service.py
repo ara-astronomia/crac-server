@@ -12,4 +12,3 @@ class WeatherService(WeatherServicer):
     def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         weather_handler = WeatherConverter()
         return weather_handler.convert(WEATHER)
-
