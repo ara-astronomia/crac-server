@@ -43,7 +43,7 @@ class CameraService(CameraServicer):
             success, frame = camera.read()  # read the camera frame
             if not success:
                 break
-            elif frame.size == 0:
+            elif frame == None or frame.size == 0:
                 continue
             else:
                 ret, buffer = cv2.imencode('.jpg', frame)
