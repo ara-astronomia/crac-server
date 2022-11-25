@@ -27,18 +27,18 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "wind_speed"),
                     max=Config.getInt("upper_bound", "wind_speed"),
                     unit_of_measurement=weather.wind_speed[1],
-                    range_normal=(
-                        Config.getInt("warning", "wind_speed"),
-                        Config.getInt("lower_bound", "wind_speed"),
-                    ),
-                    range_warn=(
-                        Config.getInt("error", "wind_speed" ),
-                        Config.getInt("warning", "wind_speed"),
-                    ),
-                    range_danger=(
-                        Config.getInt( "upper_bound", "wind_speed"),
-                        Config.getInt("error", "wind_speed"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getInt("warning", "wind_speed"),
+                        "lower_bound": Config.getInt("lower_bound", "wind_speed"),
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("error", "wind_speed"),
+                        "lower_bound": Config.getInt("warning", "wind_speed"),
+                    },
+                    range_danger={
+                        "upper_bound": Config.getInt("upper_bound", "wind_speed"),
+                        "lower_bound": Config.getInt("error", "wind_speed"),
+                    },
                 ),
                 self.build_chart(
                     value=weather.wind_gust_speed[0],
@@ -47,18 +47,18 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "wind_gust_speed"),
                     max=Config.getInt("upper_bound", "wind_gust_speed"),
                     unit_of_measurement=weather.wind_gust_speed[1],
-                    range_normal=(
-                        Config.getInt("lower_bound", "wind_gust_speed"),
-                        Config.getInt("warning", "wind_gust_speed"),
-                    ),
-                    range_warn=(
-                        Config.getInt("warning", "wind_gust_speed"),
-                        Config.getInt("error", "wind_gust_speed"),
-                    ),
-                    range_danger=(
-                        Config.getInt("error", "wind_gust_speed"),
-                        Config.getInt("upper_bound", "wind_gust_speed"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getInt("warning", "wind_gust_speed"),
+                        "lower_bound": Config.getInt("lower_bound", "wind_gust_speed"),
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("error", "wind_gust_speed"),
+                        "lower_bound": Config.getInt("warning", "wind_gust_speed"),
+                    },
+                    range_danger={
+                        "upper_bound": Config.getInt("upper_bound", "wind_gust_speed"),
+                        "lower_bound": Config.getInt("error", "wind_gust_speed"),
+                    },
                 ),
                 self.build_chart(
                     value=weather.temperature[0],
@@ -67,14 +67,14 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "temperature"),
                     max=Config.getInt("upper_bound", "temperature"),
                     unit_of_measurement=weather.temperature[1],
-                    range_normal=(
-                        Config.getInt("lower_bound", "temperature"),
-                        Config.getInt("warning", "temperature"),
-                    ),
-                    range_warn=(
-                        Config.getInt("warning", "temperature"),
-                        Config.getInt("upper_bound", "temperature"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getInt("warning", "temperature"),
+                        "lower_bound": Config.getInt("lower_bound", "temperature"),
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("upper_bound", "temperature"),
+                        "lower_bound": Config.getInt("warning", "temperature"),
+                    },
                 ),
                 self.build_chart(
                     value=weather.humidity[0],
@@ -83,18 +83,18 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "humidity"),
                     max=Config.getInt("upper_bound", "humidity"),
                     unit_of_measurement=weather.humidity[1],
-                    range_normal=(
-                        Config.getInt("warning", "humidity"),
-                        Config.getInt("lower_bound", "humidity"),
-                    ),
-                    range_warn=(
-                        Config.getInt("warning", "humidity"),
-                        Config.getInt("error", "humidity"),
-                    ),
-                    range_danger=(
-                        Config.getInt("error", "humidity"),
-                        Config.getInt("upper_bound", "humidity"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getInt("warning", "humidity"),
+                        "lower_bound": Config.getInt("lower_bound", "humidity"),
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("error", "humidity"),
+                        "lower_bound": Config.getInt("warning", "humidity"),
+                    },
+                    range_danger={
+                        "upper_bound": Config.getInt("upper_bound", "humidity"),
+                        "lower_bound": Config.getInt("error", "humidity"),
+                    },
                 ),
                 self.build_chart(
                     value=weather.rain_rate[0],
@@ -103,18 +103,18 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "rain_rate"),
                     max=Config.getInt("upper_bound", "rain_rate"),
                     unit_of_measurement=weather.rain_rate[1],
-                    range_normal=(
-                        Config.getInt("lower_bound", "rain_rate"),
-                        Config.getInt("warning", "rain_rate"),
-                    ),
-                    range_warn=(
-                        Config.getInt("warning", "rain_rate"),
-                        Config.getInt("error", "rain_rate"),
-                    ),
-                    range_danger=(
-                        Config.getInt("error", "rain_rate"),
-                        Config.getInt("upper_bound", "rain_rate"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getInt("warning", "rain_rate"),
+                        "lower_bound": Config.getInt("lower_bound", "rain_rate"),
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("error", "rain_rate"),
+                        "lower_bound": Config.getInt("warning", "rain_rate"),
+                    },
+                    range_danger={
+                        "upper_bound": Config.getInt("upper_bound", "rain_rate"),
+                        "lower_bound": Config.getInt("error", "rain_rate"),
+                    },
                 ),
                 self.build_chart(
                     value=weather.barometer[0],
@@ -123,18 +123,18 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "barometer"),
                     max=Config.getInt("upper_bound", "barometer"),
                     unit_of_measurement=weather.barometer[1],
-                    range_normal=(
-                        Config.getInt("upper_bound", "barometer"),
-                        Config.getInt("warning", "barometer"),
-                    ),
-                    range_warn=(
-                        Config.getInt("warning", "barometer"),
-                        Config.getInt("error", "barometer"),
-                    ),
-                    range_danger=(
-                        Config.getInt("error", "barometer"),
-                        Config.getInt("lower_bound", "barometer"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getFloat("upper_bound", "barometer"),
+                        "lower_bound": Config.getFloat("warning", "barometer")
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("warning", "barometer"),
+                        "lower_bound": Config.getInt("error", "barometer"),
+                    },
+                    range_danger={
+                        "upper_bound": Config.getInt("error", "barometer"),
+                        "lower_bound": Config.getInt("lower_bound", "barometer"),
+                    },
                 ),
                 self.build_chart(
                     value=weather.barometer_trend[0],
@@ -143,18 +143,18 @@ class WeatherConverter:
                     min=Config.getInt("lower_bound", "barometer_trend"),
                     max=Config.getInt("upper_bound", "barometer_trend"),
                     unit_of_measurement=weather.barometer_trend[1],
-                    range_normal=(
-                        Config.getInt("upper_bound", "barometer_trend"),
-                        Config.getInt("warning", "barometer_trend"),
-                    ),
-                    range_warn=(
-                        Config.getInt("warning", "barometer_trend"),
-                        Config.getInt("error", "barometer_trend"),
-                    ),
-                    range_danger=(
-                        Config.getInt("error", "barometer_trend"),
-                        Config.getInt("lower_bound", "barometer_trend"),
-                    ),
+                    range_normal={
+                        "upper_bound": Config.getFloat("upper_bound", "barometer_trend"),
+                        "lower_bound": Config.getFloat("warning", "barometer_trend")
+                    },
+                    range_warn={
+                        "upper_bound": Config.getInt("warning", "barometer_trend"),
+                        "lower_bound": Config.getInt("error", "barometer_trend"),
+                    },
+                    range_danger={
+                        "upper_bound": Config.getInt("error", "barometer_trend"),
+                        "lower_bound": Config.getInt("lower_bound", "barometer_trend"),
+                    },
                 )
             ),
             updated_at=self.timestamp_or_none(weather.updated_at)
@@ -182,7 +182,7 @@ class WeatherConverter:
             return 0
 
     
-    def build_chart(self, value: float, title: str, urn: str, min: float, max: float, unit_of_measurement: str, range_normal = None, range_warn = None, range_danger = None) -> Chart:
+    def build_chart(self, value: float, title: str, urn: str, min: float, max: float, unit_of_measurement: str, range_normal: Union[dict[str,float],None], range_warn: Union[dict[str,float],None] = None, range_danger: Union[dict[str,float],None] = None) -> Chart:
         chart = Chart(
             value=value,
             title=title,
@@ -195,24 +195,24 @@ class WeatherConverter:
             chart.thresholds.append(
                 Threshold(
                     threshold_type=ThresholdType.THRESHOLD_TYPE_NORMAL,
-                    upper_bound=range_normal[0],
-                    lower_bound=range_normal[1],
+                    upper_bound=range_normal["upper_bound"],
+                    lower_bound=range_normal["lower_bound"],
                 )
             )
         if range_warn:
             chart.thresholds.append(
                 Threshold(
                     threshold_type=ThresholdType.THRESHOLD_TYPE_WARNING,
-                    upper_bound=range_warn[0],
-                    lower_bound=range_warn[1],
+                    upper_bound=range_warn["upper_bound"],
+                    lower_bound=range_warn["lower_bound"],
                 )
             )
         if range_danger:
             chart.thresholds.append(
                 Threshold(
                     threshold_type=ThresholdType.THRESHOLD_TYPE_DANGER,
-                    upper_bound=range_danger[0],
-                    lower_bound=range_danger[1],
+                    upper_bound=range_danger["upper_bound"],
+                    lower_bound=range_danger["lower_bound"],
                 )
             )
 
