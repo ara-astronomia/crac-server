@@ -30,13 +30,17 @@ class AbstractButtonHandler(AbstractHandler):
         return ButtonConverter().convert(mediator)
 
 
-class WeatherHandler(AbstractButtonHandler):
+class ButtonWeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         logger.info("In weather handler")
-        if mediator.action in (ButtonAction.TURN_ON, ButtonAction.CHECK_BUTTON):
-            logger.info(f"In turn on or check action {mediator.action}")
+        if (
+            mediator.action in (ButtonAction.TURN_ON, ButtonAction.CHECK_BUTTON) and 
+            mediator.type == ButtonType.TELE_SWITCH
+        ):
+            logger.info(f"In turn on or check action {mediator.action} for {mediator.type}")
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
+            logger.info(f"In weather status {weather_response.status}")
             if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
                 logger.info(f"In status danger {weather_response.status}")
                 mediator.is_disabled = True
@@ -56,7 +60,7 @@ class ButtonActionHandler(AbstractButtonHandler):
         return super().handle(mediator)
 
 
-class TelescopeHandler(AbstractButtonHandler):
+class ButtonTelescopeHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
             mediator.type == ButtonType.TELE_SWITCH and
@@ -70,7 +74,7 @@ class TelescopeHandler(AbstractButtonHandler):
         return super().handle(mediator)
 
 
-class FlatHandler(AbstractButtonHandler):
+class ButtonFlatHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
             mediator.type == ButtonType.FLAT_LIGHT and

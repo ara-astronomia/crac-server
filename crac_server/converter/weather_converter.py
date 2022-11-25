@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 from crac_protobuf.chart_pb2 import (
     WeatherResponse, # type: ignore
     Chart, # type: ignore
@@ -10,6 +11,10 @@ from crac_protobuf.chart_pb2 import (
 from crac_server.component.weather.weather import Weather
 from crac_server.config import Config
 from typing import Any, Union
+
+
+logger = logging.getLogger(__name__)
+
 
 class WeatherConverter:
     def convert(self, weather: Weather) -> WeatherResponse:
@@ -157,12 +162,15 @@ class WeatherConverter:
 
         status = WeatherStatus.WEATHER_STATUS_UNSPECIFIED
         for chart in response.charts:
+            logger.info("chart is:")
+            logger.info(chart)
             if status < WeatherStatus.WEATHER_STATUS_NORMAL and chart.status == ChartStatus.CHART_STATUS_NORMAL:
                 status = WeatherStatus.WEATHER_STATUS_NORMAL
             if status < WeatherStatus.WEATHER_STATUS_WARNING and chart.status == ChartStatus.CHART_STATUS_WARNING:
                 status = WeatherStatus.WEATHER_STATUS_WARNING
             if status < WeatherStatus.WEATHER_STATUS_DANGER and chart.status == ChartStatus.CHART_STATUS_DANGER:
                 status = WeatherStatus.WEATHER_STATUS_DANGER
+            logger.info(f"and now weather status is: {status}")
         response.status = status
 
         return response

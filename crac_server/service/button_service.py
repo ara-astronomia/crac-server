@@ -7,7 +7,7 @@ from crac_protobuf.button_pb2 import (
 )
 from crac_protobuf.button_pb2_grpc import ButtonServicer
 from crac_server.converter.button_converter import ButtonMediator
-from crac_server.handler.button_handler import ButtonActionHandler, FlatHandler, TelescopeHandler, WeatherHandler
+from crac_server.handler.button_handler import ButtonActionHandler, ButtonFlatHandler, ButtonTelescopeHandler, ButtonWeatherHandler
 
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,9 @@ class ButtonService(ButtonServicer):
         logger.debug("Request " + str(request))
         button_mediator = ButtonMediator(request)
 
-        weather_handler = WeatherHandler()
-        telescope_handler = TelescopeHandler()
-        flat_handler = FlatHandler()
+        weather_handler = ButtonWeatherHandler()
+        telescope_handler = ButtonTelescopeHandler()
+        flat_handler = ButtonFlatHandler()
         button_action_handler = ButtonActionHandler()
         weather_handler.set_next(telescope_handler).set_next(flat_handler).set_next(button_action_handler)
         
