@@ -10,7 +10,6 @@ from crac_protobuf.roof_pb2 import (
     RoofResponse,  # type: ignore
     RoofStatus,  # type: ignore
 )
-
 from crac_server.component.roof import ROOF
 from crac_server.component.roof.roof_control import RoofControl
 
