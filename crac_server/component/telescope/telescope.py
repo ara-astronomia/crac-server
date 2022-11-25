@@ -1,24 +1,24 @@
-from abc import ABC, abstractmethod
-from collections import deque
+import logging
 import socket
-from threading import Thread
-from time import sleep
+from abc import ABC, abstractmethod
+from astropy import units as u
 from astropy.coordinates import (
     EarthLocation,
     AltAz,
     SkyCoord
 )
 from astropy.time import Time
-from astropy import units as u
-import logging
-from datetime import datetime
-from crac_server import config
+from collections import deque
 from crac_protobuf.telescope_pb2 import (
-    TelescopeStatus,
-    AltazimutalCoords,
-    EquatorialCoords,
-    TelescopeSpeed,
+    TelescopeStatus,  # type: ignore
+    AltazimutalCoords,  # type: ignore
+    EquatorialCoords,  # type: ignore
+    TelescopeSpeed,  # type: ignore
 )
+from crac_server import config
+from datetime import datetime
+from threading import Thread
+from time import sleep
 
 
 logger = logging.getLogger(__name__)
@@ -120,6 +120,7 @@ class Telescope(ABC):
             return False
         except:
             logger.error("Generic connection error", exc_info=1)
+            return False
 
     def __disconnect(self):
         """ Disconnect the server from the Telescope"""
