@@ -157,20 +157,24 @@ class WeatherConverter:
                     },
                 )
             ),
-            updated_at=self.timestamp_or_none(weather.updated_at)
+            updated_at=self.timestamp_or_none(weather.updated_at),
+            interval=weather.time_expired
         )
 
         status = WeatherStatus.WEATHER_STATUS_UNSPECIFIED
-        for chart in response.charts:
-            logger.info("chart is:")
-            logger.info(chart)
-            if status < WeatherStatus.WEATHER_STATUS_NORMAL and chart.status == ChartStatus.CHART_STATUS_NORMAL:
-                status = WeatherStatus.WEATHER_STATUS_NORMAL
-            if status < WeatherStatus.WEATHER_STATUS_WARNING and chart.status == ChartStatus.CHART_STATUS_WARNING:
-                status = WeatherStatus.WEATHER_STATUS_WARNING
-            if status < WeatherStatus.WEATHER_STATUS_DANGER and chart.status == ChartStatus.CHART_STATUS_DANGER:
-                status = WeatherStatus.WEATHER_STATUS_DANGER
-            logger.info(f"and now weather status is: {status}")
+        if weather.is_unavailable:
+            response.status = status
+        else:
+            for chart in response.charts:
+                logger.info("chart is:")
+                logger.info(chart)
+                if status < WeatherStatus.WEATHER_STATUS_NORMAL and chart.status == ChartStatus.CHART_STATUS_NORMAL:
+                    status = WeatherStatus.WEATHER_STATUS_NORMAL
+                if status < WeatherStatus.WEATHER_STATUS_WARNING and chart.status == ChartStatus.CHART_STATUS_WARNING:
+                    status = WeatherStatus.WEATHER_STATUS_WARNING
+                if status < WeatherStatus.WEATHER_STATUS_DANGER and chart.status == ChartStatus.CHART_STATUS_DANGER:
+                    status = WeatherStatus.WEATHER_STATUS_DANGER
+                logger.info(f"and now weather status is: {status}")
         response.status = status
 
         return response

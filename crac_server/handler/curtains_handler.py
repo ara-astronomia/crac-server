@@ -49,7 +49,10 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         logger.info("In weather handler")
 
-        if mediator.action == CurtainsAction.ENABLE:
+        if (
+            mediator.status_east is CurtainStatus.CURTAIN_DISABLED and
+            mediator.status_west is CurtainStatus.CURTAIN_DISABLED
+        ):
             logger.info(f"In turn on or check action {mediator.action}")
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)

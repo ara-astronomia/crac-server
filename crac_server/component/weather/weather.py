@@ -1,8 +1,13 @@
 from datetime import datetime
 import html
+import logging
 from typing import Union
-import urllib.request
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 import json
+
+
+logger = logging.getLogger(__name__)
 
 
 class Weather:
@@ -60,19 +65,34 @@ class Weather:
     @property
     def barometer_trend(self):
         return self.__get_sensor("barometerTrend")
+    
+    @property
+    def time_expired(self) -> int:
+        return self._time_expired
 
-    def is_expired(self):
+    def is_expired(self) -> bool:
         return not self.updated_at or (datetime.now() - self.updated_at).seconds >= self._time_expired
+    
+    @property
+    def is_unavailable(self) -> bool:
+        return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
 
     def __retrieve_data(self):
-        with urllib.request.urlopen(self.url) as url:
+        with urlopen(self.url) as url:
             json_result = json.loads(url.read().decode())
         
         return json_result["current"], json_result["time"]
 
     def __get_sensor(self, name: str) -> tuple[float, str]:
         if self.is_expired():
-            self.json, self.updated_at = self.__retrieve_data()
+            try:
+                self.json, self.updated_at = self.__retrieve_data()
+            except HTTPError as error:
+                logger.error(error.status, error.reason)
+            except URLError as error:
+                logger.error(error.reason)
+            except TimeoutError:
+                logger.error("Request to weather station timed out")
         
         sensor = self.json[name]
         return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()
