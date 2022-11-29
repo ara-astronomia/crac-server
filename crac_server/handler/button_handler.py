@@ -11,7 +11,7 @@ from crac_protobuf.button_pb2 import (
     ButtonAction,  # type: ignore
     ButtonType,  # type: ignore
     ButtonResponse,  # type: ignore
-    ButtonStatus,  # type: ignore
+    ButtonStatus,   # type: ignore
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
@@ -37,7 +37,7 @@ class ButtonWeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         logger.info("In weather handler")
         if (
-            mediator.action in (ButtonAction.TURN_ON, ButtonAction.CHECK_BUTTON) and 
+            mediator.status is ButtonStatus.OFF and 
             mediator.type == ButtonType.TELE_SWITCH
         ):
             logger.info(f"In turn on or check action {mediator.action} for {mediator.type}")
