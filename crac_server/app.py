@@ -24,7 +24,7 @@ logger = logging.getLogger('crac_server.app')
 
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
     add_ButtonServicer_to_server(
         ButtonService(), server
     )

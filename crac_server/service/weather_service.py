@@ -1,5 +1,5 @@
 import logging
-from threading import Thread
+from threading import Lock, Thread
 from time import sleep
 from crac_protobuf.button_pb2 import (
     ButtonType,  # type: ignore
@@ -33,6 +33,7 @@ class WeatherService(WeatherServicer):
     def __init__(self) -> None:
         self.t = None
         super().__init__()
+        self.lock = Lock()
 
     def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         weather_converter = WeatherConverter()
@@ -51,35 +52,36 @@ class WeatherService(WeatherServicer):
         return response
 
     def __emergency_closure(self):
-        logger.info("weather in danger status - send telescope in park")
-        TELESCOPE.park(TelescopeSpeed.SPEED_NOT_TRACKING)
+        with self.lock:
+            logger.info("weather in danger status - send telescope in park")
+            TELESCOPE.park(TelescopeSpeed.SPEED_NOT_TRACKING)
+            
+            while TELESCOPE.status > TelescopeStatus.SECURE:
+                logger.info("weather in danger status - waiting for telescope in park")
+                sleep(1)
+            logger.info(f"weather in danger status - telescope is in status {TELESCOPE.status}")
+            
+            while CURTAIN_EAST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
+                sleep(1)
+                logger.info(f"weather in danger status - curtain east is in status {CURTAIN_EAST.get_status()}")
+            logger.info("weather in danger status - disable east curt")
+            CURTAIN_EAST.disable()
         
-        while TELESCOPE.status > TelescopeStatus.SECURE:
-            logger.info("weather in danger status - waiting for telescope in park")
-            sleep(1)
-        logger.info(f"weather in danger status - telescope is in status {TELESCOPE.status}")
-        
-        while CURTAIN_EAST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
-            sleep(1)
-            logger.info(f"weather in danger status - curtain east is in status {CURTAIN_EAST.get_status()}")
-        logger.info("weather in danger status - disable east curt")
-        CURTAIN_EAST.disable()
-    
-        while CURTAIN_WEST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
-            sleep(1)
-            logger.info(f"weather in danger status - curtain west is in status {CURTAIN_WEST.get_status()}")
-        logger.info("weather in danger status - disable west curt")
-        CURTAIN_WEST.disable()
-        
-        while (
-            CURTAIN_EAST.get_status() is not CurtainStatus.CURTAIN_DISABLED and 
-            CURTAIN_WEST.get_status() is not CurtainStatus.CURTAIN_DISABLED
-        ):
-            sleep(1)
-        logger.info("weather in danger status - close the roof")
-        ROOF.close()
-        
-        logger.info("weather in danger status - switch off telescope button")
-        TELESCOPE.polling_end()
-        SWITCHES[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
-        self.t = None
+            while CURTAIN_WEST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
+                sleep(1)
+                logger.info(f"weather in danger status - curtain west is in status {CURTAIN_WEST.get_status()}")
+            logger.info("weather in danger status - disable west curt")
+            CURTAIN_WEST.disable()
+            
+            while (
+                CURTAIN_EAST.get_status() is not CurtainStatus.CURTAIN_DISABLED or 
+                CURTAIN_WEST.get_status() is not CurtainStatus.CURTAIN_DISABLED
+            ):
+                sleep(1)
+            logger.info("weather in danger status - close the roof")
+            ROOF.close()
+            
+            logger.info("weather in danger status - switch off telescope button")
+            TELESCOPE.polling_end()
+            SWITCHES[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
+            self.t = None
