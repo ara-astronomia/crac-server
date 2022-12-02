@@ -42,7 +42,7 @@ class RoofWeatherHandler(AbstractButtonHandler):
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
             logger.info(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
+            if weather_response.status >= WeatherStatus.WEATHER_STATUS_WARNING:
                 logger.info(f"In status danger {weather_response.status}")
                 mediator.is_disabled = True
                 self._next_handler = None
