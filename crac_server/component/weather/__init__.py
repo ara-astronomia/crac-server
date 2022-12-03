@@ -3,7 +3,8 @@ from crac_server.config import Config
 
 
 WEATHER = Weather(
-    Config.getValue("url", "weather"),
-    Config.getValue("time_format", "weather"),
-    Config.getInt("time_expired", "weather"),
+    url=Config.getValue("url", "weather"),
+    fallback_url=Config.getValue("fallback_url", "weather"),
+    time_format=Config.getValue("time_format", "weather"),
+    time_expired=Config.getInt("time_expired", "weather"),
 )

@@ -37,7 +37,10 @@ class WeatherService(WeatherServicer):
 
     def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         weather_converter = WeatherConverter()
-        response = weather_converter.convert(WEATHER)
+        try:
+            response = weather_converter.convert(WEATHER)
+        except:
+            response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)
         logger.info("weather response")
         logger.info(response)
 
