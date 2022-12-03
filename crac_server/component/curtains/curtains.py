@@ -1,7 +1,7 @@
 import logging
 import threading
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
-from config import Config
+from crac_server.config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
 
 

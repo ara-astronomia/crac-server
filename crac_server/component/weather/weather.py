@@ -82,13 +82,13 @@ class Weather:
     def is_unavailable(self) -> bool:
         return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
 
-    def __retrieve_data(self):
+    def _retrieve_data(self):
         with urlopen(self.url) as url:
             json_result = json.loads(url.read().decode())
         
         return json_result["current"], json_result["time"]
 
-    def __retrieve_fallback_data(self):
+    def _retrieve_fallback_data(self):
         try:
             with urlopen(self.fallback_url) as url:
                 json_result = json.loads(url.read().decode())
@@ -102,10 +102,10 @@ class Weather:
     def __get_sensor(self, name: str) -> tuple[float, str]:
         if self.is_expired():
             try:
-                self.json, self.updated_at = self.__retrieve_data()
+                self.json, self.updated_at = self._retrieve_data()
             except (HTTPError, URLError, TimeoutError) as error:
                 logger.error("url in error", error)
-                self.json, self.updated_at = self.__retrieve_fallback_data()
+                self.json, self.updated_at = self._retrieve_fallback_data()
         
         sensor = self.json[name]
         return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()
