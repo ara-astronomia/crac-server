@@ -3,7 +3,7 @@ import html
 import logging
 from typing import Union
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+import urllib.request
 import json
 
 
@@ -45,31 +45,31 @@ class Weather:
 
     @property
     def temperature(self):
-        return self.__get_sensor("outTemp")
+        return self._get_sensor("outTemp")
 
     @property
     def humidity(self):
-        return self.__get_sensor("humidity")
+        return self._get_sensor("humidity")
 
     @property
     def wind_speed(self):
-        return self.__get_sensor("windSpeed")
+        return self._get_sensor("windSpeed")
 
     @property
     def wind_gust_speed(self):
-        return self.__get_sensor("windGust")
+        return self._get_sensor("windGust")
 
     @property
     def rain_rate(self):
-        return self.__get_sensor("rainRate")
+        return self._get_sensor("rainRate")
 
     @property
     def barometer(self):
-        return self.__get_sensor("barometer")
+        return self._get_sensor("barometer")
     
     @property
     def barometer_trend(self):
-        return self.__get_sensor("barometerTrend")
+        return self._get_sensor("barometerTrend")
     
     @property
     def time_expired(self) -> int:
@@ -83,28 +83,28 @@ class Weather:
         return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
 
     def _retrieve_data(self):
-        with urlopen(self.url) as url:
+        with urllib.request.urlopen(self.url) as url:
             json_result = json.loads(url.read().decode())
         
         return json_result["current"], json_result["time"]
 
     def _retrieve_fallback_data(self):
         try:
-            with urlopen(self.fallback_url) as url:
+            with urllib.request.urlopen(self.fallback_url) as url:
                 json_result = json.loads(url.read().decode())
             
             return json_result["current"], json_result["time"]
         except (HTTPError, URLError, TimeoutError) as error:
-            logger.error("Fallback url in error", error)
+            logger.error("Fallback url in error")
             raise error
 
 
-    def __get_sensor(self, name: str) -> tuple[float, str]:
+    def _get_sensor(self, name: str) -> tuple[float, str]:
         if self.is_expired():
             try:
                 self.json, self.updated_at = self._retrieve_data()
             except (HTTPError, URLError, TimeoutError) as error:
-                logger.error("url in error", error)
+                logger.error("url in error")
                 self.json, self.updated_at = self._retrieve_fallback_data()
         
         sensor = self.json[name]
