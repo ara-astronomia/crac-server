@@ -34,11 +34,11 @@ class WeatherService(WeatherServicer):
         self.t = None
         super().__init__()
         self.lock = Lock()
+        self.weather_converter = WeatherConverter()
 
     def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
-        weather_converter = WeatherConverter()
         try:
-            response = weather_converter.convert(WEATHER)
+            response = self.weather_converter.convert(WEATHER)
         except:
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)
         logger.info("weather response")
@@ -50,11 +50,11 @@ class WeatherService(WeatherServicer):
             self.t == None
         ):
             logger.info("weather in danger status - block crac")
-            self.t = Thread(target=self.__emergency_closure)
+            self.t = Thread(target=self._emergency_closure)
             self.t.start()
         return response
 
-    def __emergency_closure(self):
+    def _emergency_closure(self):
         with self.lock:
             logger.info("weather in danger status - send telescope in park")
             TELESCOPE.park(TelescopeSpeed.SPEED_NOT_TRACKING)
