@@ -1,75 +1,35 @@
 import logging
 from crac_protobuf.button_pb2 import (
-    ButtonRequest,
-    ButtonAction,
-    ButtonType,
-    ButtonResponse,
-    ButtonsResponse,
-    ButtonStatus,
-    ButtonGui,
-    ButtonColor,
-    ButtonLabel,
-    ButtonKey,
+    ButtonRequest,  # type: ignore
+    ButtonAction,  # type: ignore
+    ButtonType,  # type: ignore
+    ButtonsResponse,  # type: ignore
 )
 from crac_protobuf.button_pb2_grpc import ButtonServicer
-from crac_protobuf.telescope_pb2 import (
-    TelescopeSpeed,
-    TelescopeStatus,
+from crac_server.converter.button_converter import ButtonMediator
+from crac_server.handler.button_handler import (
+    ButtonActionHandler, 
+    ButtonFlatHandler, 
+    ButtonTelescopeHandler, 
+    ButtonWeatherHandler,
 )
-from crac_server.component.button_control import SWITCHES
-from crac_server.component.telescope import TELESCOPE
 
 
 logger = logging.getLogger(__name__)
 
 
-
 class ButtonService(ButtonServicer):
     def SetAction(self, request: ButtonRequest, context):
-        logger.info("Request " + str(request))
-        button_control = SWITCHES[ButtonType.Name(request.type)]
+        logger.debug("Request " + str(request))
+        button_mediator = ButtonMediator(request)
 
-        if request.action == ButtonAction.TURN_ON:
-            button_control.on()
-        elif request.action == ButtonAction.TURN_OFF:
-            button_control.off()
-
-        status = button_control.get_status()
-        logger.info("Response " + str(status))
-
-        if (
-            request.type == ButtonType.TELE_SWITCH and
-            request.action == ButtonAction.TURN_OFF
-        ):
-            logger.info("Turned off telescope connection when telescope is turned off")
-            TELESCOPE.polling_end()
-
-        if (
-            request.type == ButtonType.FLAT_LIGHT and
-            status is ButtonStatus.ON and
-            TELESCOPE.status is TelescopeStatus.FLATTER
-        ):
-            logger.info("Track telescope on when Flat Panel is switched on")
-            TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
-
-        if status is ButtonStatus.ON:
-            text_color, background_color = ("white", "green")
-        else:
-            text_color, background_color = ("white", "red")
-
-        button_gui = ButtonGui(
-            key=ButtonKey.Value(f"KEY_{ButtonType.Name(request.type)}"),
-            label=(ButtonLabel.LABEL_ON if status is ButtonStatus.ON else ButtonLabel.LABEL_OFF),
-            metadata=(ButtonAction.TURN_OFF if status is ButtonStatus.ON else ButtonAction.TURN_ON),
-            is_disabled=False,
-            button_color=ButtonColor(text_color=text_color, background_color=background_color),
-        )
-
-        return ButtonResponse(
-            status=status, 
-            type=request.type, 
-            button_gui=button_gui
-        )
+        weather_handler = ButtonWeatherHandler()
+        telescope_handler = ButtonTelescopeHandler()
+        flat_handler = ButtonFlatHandler()
+        button_action_handler = ButtonActionHandler()
+        weather_handler.set_next(telescope_handler).set_next(flat_handler).set_next(button_action_handler)
+        
+        return weather_handler.handle(button_mediator)
 
     def GetStatus(self, request, context):
         tele_switch_button = self.SetAction(

@@ -7,7 +7,6 @@ from crac_protobuf.roof_pb2 import RoofStatus
 
 
 logger = logging.getLogger(__name__)
-lock = threading.Lock()
 
 class RoofControl():
 
@@ -15,14 +14,15 @@ class RoofControl():
         self.motor = OutputDevice(Config.getInt("switch_roof", "roof_board"))
         self.roof_closed_switch = DigitalInputDevice(Config.getInt("roof_verify_closed", "roof_board"), pull_up=True)
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
+        self.lock = threading.Lock()
 
     def open(self):
-        with lock:
+        with self.lock:
             self.motor.on()
             self.roof_open_switch.wait_for_active()
 
     def close(self):
-        with lock:
+        with self.lock:
             self.motor.off()
             self.roof_closed_switch.wait_for_active()
 

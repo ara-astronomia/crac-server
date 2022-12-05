@@ -1,7 +1,9 @@
 from datetime import datetime
 import json
+from typing import Any
 import unittest
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 from crac_server.component.weather.weather import Weather
 
 
@@ -10,39 +12,101 @@ class TestWeather(unittest.TestCase):
     def retrieve(self):
         json = {
             "outTemp": {
-                "value": self.input_temperature[0],
-                "unit_of_measurement": self.input_temperature[1]
+                "value": "21,5",
+                "unit_of_measurement": "°C"
             },
             "humidity": {
-                "value": self.input_humidity[0],
-                "unit_of_measurement": self.input_humidity[1]
+                "value": "55,5",
+                "unit_of_measurement": "%"
             },
             "windSpeed": {
-                "value": self.input_wind_speed[0],
-                "unit_of_measurement": self.input_wind_speed[1]
+                "value": "2,6",
+                "unit_of_measurement": "m/s"
             },
             "windGust": {
-                "value": self.input_wind_gust_speed[0],
-                "unit_of_measurement": self.input_wind_gust_speed[1]
+                "value": "4,2",
+                "unit_of_measurement": "m/s"
             },
             "rainRate": {
-                "value": self.input_rain_rate[0],
-                "unit_of_measurement": self.input_rain_rate[1]
+                "value": "0",
+                "unit_of_measurement": "mm/h"
             },
             "barometer": {
-                "value": self.input_barometer[0],
-                "unit_of_measurement": self.input_barometer[1]
+                "value": "1002",
+                "unit_of_measurement": "mbar"
             },
             "barometerTrend": {
-                "value": self.input_barometer_trend[0],
-                "unit_of_measurement": self.input_barometer_trend[1]
-            },
+                "value": "-3",
+                "unit_of_measurement": "mbar"
+            }
         }
         updated_at = datetime.now().strftime(self.format)
 
         return json, updated_at
+    
+    def __to_expected(self, value: dict[str, Any]):
+        return float(value["value"].replace(',','.')), value["unit_of_measurement"]
 
-    def mocked_urloped(self):
+    def setUp(self) -> None:
+        self.format = "%Y-%m-%d %H:%M:%S"
+        self.url = "http://ara.test"
+        self.fallback_url = "http://fallback.ara.test"
+        self.weather = Weather(self.url, self.fallback_url, self.format, 600)
+
+    def tearDown(self) -> None:
+        del(self.weather, self.format, self.url, self.fallback_url)
+
+    def test_is_expired(self):
+        self.weather._retrieve_data = MagicMock(return_value=self.retrieve())    
+        self.assertTrue(self.weather.is_expired(), "Is not Expired")
+        self.weather.temperature
+        self.assertFalse(self.weather.is_expired(), "Is Expired")
+
+    def test_get_sensor(self):
+        json = self.retrieve()[0]
+        self.weather._retrieve_data = MagicMock(return_value=self.retrieve())
+        self.assertEqual(self.__to_expected(json["outTemp"]), self.weather.temperature)
+        self.assertEqual(self.__to_expected(json["humidity"]), self.weather.humidity)
+        self.assertEqual(self.__to_expected(json["windSpeed"]), self.weather.wind_speed)
+        self.assertEqual(self.__to_expected(json["windGust"]), self.weather.wind_gust_speed)
+        self.assertEqual(self.__to_expected(json["rainRate"]), self.weather.rain_rate)
+        self.assertEqual(self.__to_expected(json["barometer"]), self.weather.barometer)
+        self.assertEqual(self.__to_expected(json["barometerTrend"]), self.weather.barometer_trend)
+    
+    def test_url_raise_error(self):
+        json = self.retrieve()[0]
+        self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
+        self.weather._retrieve_fallback_data = MagicMock(return_value=self.retrieve())
+        self.assertEqual(self.__to_expected(json["outTemp"]), self.weather.temperature)
+        self.assertEqual(self.__to_expected(json["humidity"]), self.weather.humidity)
+        self.assertEqual(self.__to_expected(json["windSpeed"]), self.weather.wind_speed)
+        self.assertEqual(self.__to_expected(json["windGust"]), self.weather.wind_gust_speed)
+        self.assertEqual(self.__to_expected(json["rainRate"]), self.weather.rain_rate)
+        self.assertEqual(self.__to_expected(json["barometer"]), self.weather.barometer)
+        self.assertEqual(self.__to_expected(json["barometerTrend"]), self.weather.barometer_trend)
+    
+    @patch("urllib.request.urlopen")
+    def test_urlopen(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen()
+        json = self.retrieve()[0]
+        self.weather.temperature
+        self.assertEqual(self.__to_expected(json["outTemp"]), self.weather.temperature)
+
+    @patch("urllib.request.urlopen")
+    def test_fallback_urlopen(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen()
+        self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
+        json = self.retrieve()[0]
+        self.weather.temperature
+        self.assertEqual(self.__to_expected(json["outTemp"]), self.weather.temperature)
+
+    @patch("urllib.request.urlopen")
+    def test_fallback_urlopen_in_error(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen_in_error()
+        self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
+        self.assertRaises(URLError, self.weather._get_sensor, "outTemp")        
+
+    def mocked_urlopen(self):
         current, time = self.retrieve()
         
         weather_station = {
@@ -56,61 +120,22 @@ class TestWeather(unittest.TestCase):
         urlopen_read.__enter__.return_value = urlopen_read
 
         return urlopen_read
-    
-    def __to_expected(self, value: list):
-        return float(value[0].replace(',','.')), value[1]
 
-    def setUp(self) -> None:
-        self.format = "%Y-%m-%d %H:%M:%S"
-        self.url = "http://ara.test"
-        self.input_temperature = ("21,5", "°C")
-        self.expected_temperature = self.__to_expected(self.input_temperature)
-
-        self.input_humidity = ("55,5", "%")
-        self.expected_humidity = self.__to_expected(self.input_humidity)
-
-        self.input_wind_speed = ("8,6", "km/h")
-        self.expected_wind_speed = self.__to_expected(self.input_wind_speed)
-
-        self.input_wind_gust_speed = ("18,2", "km/h")
-        self.expected_wind_gust_speed = self.__to_expected(self.input_wind_gust_speed)
-
-        self.input_rain_rate = ("5,2", "mm/h")
-        self.expected_rain_rate = self.__to_expected(self.input_rain_rate)
-
-        self.input_barometer = ("1002", "mbar")
-        self.expected_barometer = self.__to_expected(self.input_barometer)
-
-        self.input_barometer_trend = ("-3", "mbar")
-        self.expected_barometer_trend = self.__to_expected(self.input_barometer_trend)
-    
-    def tearDown(self) -> None:
-        self.weather = None
-
-    @patch('urllib.request.urlopen')
-    def test_is_expired(self, mock_urlopen):
-        mock_urlopen.return_value = self.mocked_urloped()
+    def mocked_urlopen_in_error(self):
+        current, time = self.retrieve()
         
-        weather = Weather(self.url, self.format, 600)
-        self.assertTrue(weather.is_expired(), "Is not Expired")
-        weather.temperature
-        self.assertFalse(weather.is_expired(), "Is Expired")
-        mock_urlopen.assert_called()
+        weather_station = {
+            "current": current,
+            "time": time
+        }
 
-    @patch('urllib.request.urlopen')
-    def test_get_sensor(self, mock_urlopen):
-        mock_urlopen.return_value = self.mocked_urloped()
+        urlopen_read = MagicMock()
+        urlopen_read.getcode.return_value = 400
+        urlopen_read.read.side_effect = MagicMock(side_effect=URLError(reason="url not found"))
+        urlopen_read.__enter__.return_value = urlopen_read
 
-        weather = Weather(self.url, self.format, 600)
-        self.assertEqual(self.expected_temperature, weather.temperature)
-        self.assertEqual(self.expected_humidity, weather.humidity)
-        self.assertEqual(self.expected_wind_speed, weather.wind_speed)
-        self.assertEqual(self.expected_wind_gust_speed, weather.wind_gust_speed)
-        self.assertEqual(self.expected_rain_rate, weather.rain_rate)
-        self.assertEqual(self.expected_barometer, weather.barometer)
-        self.assertEqual(self.expected_barometer_trend, weather.barometer_trend)
-        mock_urlopen.assert_called()
+        return urlopen_read
 
     def test_url(self):
-        weather = Weather(self.url, self.format, 600)
-        self.assertEqual(weather.url, self.url)
+        self.assertEqual(self.weather.url, self.url)
+        self.assertEqual(self.weather.fallback_url, self.fallback_url)

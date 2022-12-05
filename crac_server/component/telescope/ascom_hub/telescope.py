@@ -1,6 +1,5 @@
 from datetime import datetime
 import logging
-from threading import Thread
 from typing import Any
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server import config
@@ -76,8 +75,8 @@ class Telescope(TelescopeBase):
     def _retrieve_speed(self):
         is_tracking = bool(self._get_response("tracking").json()["Value"])
         is_slewing = bool(self._get_response("slewing").json()["Value"])
-        logger.info(f"tracking value: {is_tracking}")
-        logger.info(f"slewing value: {is_slewing}")
+        logger.debug(f"tracking value: {is_tracking}")
+        logger.debug(f"slewing value: {is_slewing}")
         if is_tracking and is_slewing:
             return TelescopeSpeed.SPEED_ERROR  # type: ignore
         elif is_tracking:
