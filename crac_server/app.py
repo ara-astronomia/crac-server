@@ -1,3 +1,7 @@
+import logging
+import logging.config
+logging.config.fileConfig('logging.conf')
+
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
@@ -10,21 +14,17 @@ from crac_server.service.roof_service import RoofService
 from crac_server.service.curtains_service import CurtainsService
 from crac_server.service.camera_service import CameraService
 from crac_server.service.button_service import ButtonService
-from crac_server.component.weather.weather import Weather
 from crac_server.config import Config
 from concurrent import futures
 import grpc
-import logging
-import logging.config
 from signal import signal, SIGTERM
 
 
-logging.config.fileConfig('logging.conf')
 logger = logging.getLogger('crac_server.app')
 
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
     add_ButtonServicer_to_server(
         ButtonService(), server
     )
@@ -41,13 +41,7 @@ def serve():
         TelescopeService(), server
     )
     add_WeatherServicer_to_server(
-        WeatherService(
-            Weather(
-                Config.getValue("url", "weather"),
-                Config.getValue("time_format", "weather"),
-                Config.getInt("time_expired", "weather"),
-            )
-        ), server
+        WeatherService(), server
     )
     server.add_insecure_port(
         f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')

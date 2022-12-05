@@ -1,3 +1,7 @@
+# Pre-requisite
+
+sudo apt install libopencv-dev python3-opencv
+
 # Install Dependencies and Configure environment
 
 We are using Poetry as a dependency management and packaging
