@@ -41,8 +41,8 @@ class WeatherService(WeatherServicer):
             response = self.weather_converter.convert(WEATHER)
         except:
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)
-        logger.info("weather response")
-        logger.info(response)
+        logger.debug("weather response")
+        logger.debug(response)
 
         if (
             response.status == WeatherStatus.WEATHER_STATUS_DANGER and
@@ -57,7 +57,7 @@ class WeatherService(WeatherServicer):
     def _emergency_closure(self):
         with self.lock:
             logger.info("weather in danger status - send telescope in park")
-            TELESCOPE.park(TelescopeSpeed.SPEED_NOT_TRACKING)
+            TELESCOPE.queue_park()
             
             while TELESCOPE.status > TelescopeStatus.SECURE:
                 logger.info("weather in danger status - waiting for telescope in park")

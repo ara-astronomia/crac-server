@@ -59,7 +59,7 @@ class ButtonMediator:
 
 class ButtonConverter:
     def convert(self, button_mediator: ButtonMediator) -> ButtonResponse:
-        logger.info(button_mediator)
+        logger.debug(button_mediator)
         if button_mediator.status is ButtonStatus.ON:
             text_color, background_color = ("white", "green")
         else:
@@ -78,6 +78,6 @@ class ButtonConverter:
             type=button_mediator.type, 
             button_gui=button_gui
         )
-        logger.info(response)
+        logger.debug(response)
 
         return response
