@@ -201,13 +201,16 @@ class Telescope(TelescopeBase):
         #         return TelescopeSpeed.SPEED_ERROR
 
     def __retrieve_eq_coords(self, root):
+        ra, dec = None, None
         for coords in root.findall("defNumber"):
             if coords.attrib["name"] == "RA":
                 ra = round(float(coords.text), 2)
             elif coords.attrib["name"] == "DEC":
                 dec = round(float(coords.text), 2)
-
-        return EquatorialCoords(ra=ra, dec=dec)
+        if ra and dec:
+            return EquatorialCoords(ra=ra, dec=dec)
+        else:
+            raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script: str):
         self.s.sendall(script.encode('utf-8'))
