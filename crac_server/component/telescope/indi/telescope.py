@@ -200,17 +200,23 @@ class Telescope(TelescopeBase):
         #     case _:
         #         return TelescopeSpeed.SPEED_ERROR
 
-    def __retrieve_eq_coords(self, root):
-        ra, dec = None, None
-        for coords in root.findall("defNumber"):
-            if coords.attrib["name"] == "RA":
-                ra = round(float(coords.text), 2)
-            elif coords.attrib["name"] == "DEC":
-                dec = round(float(coords.text), 2)
+    def __retrieve_eq_coords(self, root: ET.Element):
+        ra, dec = self.__parse_coords_from_tree(root, "defNumber", "name")
+        if ra == None and dec == None:
+            ra, dec = self.__parse_coords_from_tree(root, "oneNumber", "name")
         if ra and dec:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
             raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
+    
+    def __parse_coords_from_tree(self, root: ET.Element, path: str, attr: str):
+        ra, dec = None, None
+        for coords in root.findall(path):
+            if coords.text and coords.attrib[attr] == "RA":
+                ra = round(float(coords.text), 2)
+            elif coords.text and coords.attrib[attr] == "DEC":
+                dec = round(float(coords.text), 2)
+        return ra, dec
 
     def __call(self, script: str):
         self.s.sendall(script.encode('utf-8'))

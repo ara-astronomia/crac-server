@@ -137,7 +137,7 @@ class Telescope(ABC):
             then they will be dequeued and worked here
         """
 
-        while self._polling:
+        while self.polling:
             if not self.__open_connection():
                 self.status = TelescopeStatus.LOST
                 continue
@@ -173,7 +173,7 @@ class Telescope(ABC):
             return aa_coords
 
     def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
-        if not self._polling:
+        if not self.polling:
             return TelescopeStatus.DISCONNECTED
         elif self.__within_park_alt_range(aa_coords.alt) and self.__within_park_az_range(aa_coords.az):
             return TelescopeStatus.PARKED
