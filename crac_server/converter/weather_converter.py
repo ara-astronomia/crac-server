@@ -166,15 +166,15 @@ class WeatherConverter:
             response.status = status
         else:
             for chart in response.charts:
-                logger.info("chart is:")
-                logger.info(chart)
+                logger.debug("chart is:")
+                logger.debug(chart)
                 if status < WeatherStatus.WEATHER_STATUS_NORMAL and chart.status == ChartStatus.CHART_STATUS_NORMAL:
                     status = WeatherStatus.WEATHER_STATUS_NORMAL
                 if status < WeatherStatus.WEATHER_STATUS_WARNING and chart.status == ChartStatus.CHART_STATUS_WARNING:
                     status = WeatherStatus.WEATHER_STATUS_WARNING
                 if status < WeatherStatus.WEATHER_STATUS_DANGER and chart.status == ChartStatus.CHART_STATUS_DANGER:
                     status = WeatherStatus.WEATHER_STATUS_DANGER
-                logger.info(f"and now weather status is: {status}")
+                logger.info(f"now weather status is: {status}")
         response.status = status
 
         return response
