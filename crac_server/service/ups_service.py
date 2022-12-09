@@ -19,7 +19,7 @@ class WeatherService(UpsServicer):
     def __init__(self) -> None:
         super().__init__()
         
-    def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
+    async def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         for device in Config.getValue("ups", "ups_list").split(","):
             ups = UPS.status_for(device)
 

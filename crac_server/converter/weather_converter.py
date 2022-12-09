@@ -1,5 +1,6 @@
 from datetime import datetime
 import logging
+import threading
 from crac_protobuf.chart_pb2 import (
     WeatherResponse, # type: ignore
     Chart, # type: ignore
@@ -14,10 +15,12 @@ from typing import Union
 
 
 logger = logging.getLogger(__name__)
+#lock = threading.Lock()
 
 
 class WeatherConverter:
     def convert(self, weather: Weather) -> WeatherResponse:
+        #with lock:
         response = WeatherResponse(
             charts=(
                 self.build_chart(

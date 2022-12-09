@@ -36,7 +36,7 @@ class WeatherService(WeatherServicer):
         self.lock = Lock()
         self.weather_converter = WeatherConverter()
 
-    def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
+    async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         try:
             response = self.weather_converter.convert(WEATHER)
         except:
@@ -44,17 +44,17 @@ class WeatherService(WeatherServicer):
         logger.debug("weather response")
         logger.debug(response)
 
-        if (
-            response.status == WeatherStatus.WEATHER_STATUS_DANGER and
-            TELESCOPE.polling and 
-            self.t == None
-        ):
-            logger.info("weather in danger status - block crac")
-            self.t = Thread(target=self._emergency_closure)
-            self.t.start()
+        # if (
+        #     response.status == WeatherStatus.WEATHER_STATUS_DANGER and
+        #     TELESCOPE.polling and 
+        #     self.t == None
+        # ):
+        #     logger.info("weather in danger status - block crac")
+        #     self.t = Thread(target=self._emergency_closure)
+        #     self.t.start()
         return response
 
-    def _emergency_closure(self):
+    async def _emergency_closure(self):
         with self.lock:
             logger.info("weather in danger status - send telescope in park")
             TELESCOPE.queue_park()
@@ -68,13 +68,13 @@ class WeatherService(WeatherServicer):
                 sleep(1)
                 logger.info(f"weather in danger status - curtain east is in status {CURTAIN_EAST.get_status()}")
             logger.info("weather in danger status - disable east curt")
-            CURTAIN_EAST.disable()
+            await CURTAIN_EAST.disable()
         
             while CURTAIN_WEST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
                 sleep(1)
                 logger.info(f"weather in danger status - curtain west is in status {CURTAIN_WEST.get_status()}")
             logger.info("weather in danger status - disable west curt")
-            CURTAIN_WEST.disable()
+            await CURTAIN_WEST.disable()
             
             while (
                 CURTAIN_EAST.get_status() is not CurtainStatus.CURTAIN_DISABLED or 
@@ -82,9 +82,9 @@ class WeatherService(WeatherServicer):
             ):
                 sleep(1)
             logger.info("weather in danger status - close the roof")
-            ROOF.close()
+            await ROOF.close()
             
             logger.info("weather in danger status - switch off telescope button")
             TELESCOPE.polling_end()
-            SWITCHES[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
+            await SWITCHES[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
             self.t = None

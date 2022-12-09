@@ -26,15 +26,15 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractButtonHandler(AbstractHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
+    async def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if self._next_handler:
-            return self._next_handler.handle(mediator)
+            return await self._next_handler.handle(mediator)
         
         return ButtonConverter().convert(mediator)
 
 
 class ButtonWeatherHandler(AbstractButtonHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
+    async def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         logger.debug("In weather handler")
         if (
             mediator.status is ButtonStatus.OFF and 
@@ -49,11 +49,11 @@ class ButtonWeatherHandler(AbstractButtonHandler):
                 mediator.is_disabled = True
                 self._next_handler = None
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 
 class ButtonTelescopeHandler(AbstractButtonHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
+    async def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
             mediator.type == ButtonType.TELE_SWITCH and
             mediator.action == ButtonAction.TURN_OFF
@@ -61,11 +61,11 @@ class ButtonTelescopeHandler(AbstractButtonHandler):
             logger.debug("Turned off telescope connection when telescope is turned off")
             TELESCOPE.polling_end()
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 
 class ButtonFlatHandler(AbstractButtonHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
+    async def handle(self, mediator: ButtonMediator) -> ButtonResponse:
         if (
             mediator.type == ButtonType.FLAT_LIGHT and
             mediator.action is ButtonAction.TURN_ON and
@@ -74,16 +74,16 @@ class ButtonFlatHandler(AbstractButtonHandler):
             logger.debug("Track telescope on when Flat Panel is switched on")
             TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 
 class ButtonActionHandler(AbstractButtonHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:         
+    async def handle(self, mediator: ButtonMediator) -> ButtonResponse:         
         if mediator.action == ButtonAction.TURN_ON:
-            mediator.button.on()
+            await mediator.button.on()
             self._next_handler = None
         elif mediator.action == ButtonAction.TURN_OFF:
-            mediator.button.off()
+            await mediator.button.off()
             self._next_handler = None
 
-        return super().handle(mediator)
+        return await super().handle(mediator)

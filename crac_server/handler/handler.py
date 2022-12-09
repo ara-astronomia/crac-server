@@ -34,7 +34,7 @@ class AbstractHandler(Handler):
         return handler
 
     @abstractmethod
-    def handle(self, request: Any) -> Any:
+    async def handle(self, request: Any) -> Any:
         if self._next_handler:
             return self._next_handler.handle(request)
 
