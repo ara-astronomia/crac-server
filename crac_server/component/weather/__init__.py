@@ -8,3 +8,5 @@ WEATHER = Weather(
     time_format=Config.getValue("time_format", "weather"),
     time_expired=Config.getInt("time_expired", "weather"),
 )
+
+WEATHER.temperature # for warm up at start
