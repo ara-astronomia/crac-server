@@ -1,6 +1,7 @@
 from datetime import datetime
 import html
 import logging
+import threading
 from typing import Union
 from urllib.error import HTTPError, URLError
 import urllib.request
@@ -18,6 +19,7 @@ class Weather:
         self._updated_at : Union[datetime, None] = None
         self._time_format = time_format
         self._time_expired = time_expired
+        self.lock = threading.Lock()
 
     @property
     def url(self):
@@ -100,12 +102,13 @@ class Weather:
 
 
     def _get_sensor(self, name: str) -> tuple[float, str]:
-        if self.is_expired():
-            try:
-                self.json, self.updated_at = self._retrieve_data()
-            except (HTTPError, URLError, TimeoutError) as error:
-                logger.error("url in error")
-                self.json, self.updated_at = self._retrieve_fallback_data()
-        
+        with self.lock:
+            if self.is_expired():
+                try:
+                    self.json, self.updated_at = self._retrieve_data()
+                except (HTTPError, URLError, TimeoutError) as error:
+                    logger.error("url in error")
+                    self.json, self.updated_at = self._retrieve_fallback_data()
+            
         sensor = self.json[name]
         return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()
