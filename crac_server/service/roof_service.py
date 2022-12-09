@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class RoofService(RoofServicer):
-    def SetAction(self, request, context):
+    async def SetAction(self, request, context):
         logger.debug("Request " + str(request))
         roof_mediator = RoofMediator(request)
 
@@ -25,4 +25,4 @@ class RoofService(RoofServicer):
             .set_next(roof_curtins_handler) \
             .set_next(roof_handler)
 
-        return roof_weather_handler.handle(roof_mediator)
+        return await roof_weather_handler.handle(roof_mediator)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
@@ -17,7 +18,7 @@ class Curtain:
         self.motor = Motor(**motor)
         self.motor.enable_device.off()
         self.__event_detect__()
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
         self.to_disable = False
 
     def __base__(self):
@@ -28,28 +29,44 @@ class Curtain:
         self.target = None
 
     def __event_detect__(self):
-        self.curtain_closed.when_activated = self.__reset_steps__
-        self.curtain_open.when_activated = self.__reset_steps__
-        self.rotary_encoder.when_rotated = self.__check_and_stop__
+        self.curtain_closed.when_activated = self.__reset_steps
+        self.curtain_open.when_activated = self.__reset_steps
+        self.rotary_encoder.when_rotated = self.__check_and_stop
+    
+    def __reset_steps(self, open_or_closed):
+        # Create new asyncio loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        future = asyncio.ensure_future(self.__reset_steps__(open_or_closed)) # Execute async method
+        loop.run_until_complete(future)
+        loop.close()
+
+    def __check_and_stop(self):
+        # Create new asyncio loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        future = asyncio.ensure_future(self.__check_and_stop__()) # Execute async method
+        loop.run_until_complete(future)
+        loop.close()
 
     def __remove_event_detect__(self):
         self.rotary_encoder.when_rotated = None
         self.curtain_closed.when_activated = None
         self.curtain_open.when_activated = None
 
-    def __open__(self):
-        with self.lock:
+    async def __open__(self):
+        async with self.lock:
             self.motor.forward()
 
-    def __close__(self):
-        with self.lock:
+    async def __close__(self):
+        async with self.lock:
             self.motor.backward()
 
-    def __stop__(self):
-        with self.lock:
+    async def __stop__(self):
+        async with self.lock:
             self.motor.stop()
 
-    def __check_and_stop__(self):
+    async def __check_and_stop__(self):
         logger.debug("Number of steps: %s", self.steps())
         logger.debug("target: %s", self.target)
         if (
@@ -59,14 +76,14 @@ class Curtain:
             self.steps() <= self.__sub_min_step__ or
             not self.motor.enable_device.value
         ):
-            self.__stop__()
+            await self.__stop__()
             self.target = None
             if self.to_disable:
-                self.disable_motor()
+                await self.disable_motor()
                 
 
-    def __reset_steps__(self, open_or_closed):
-        self.__stop__()
+    async def __reset_steps__(self, open_or_closed):
+        await self.__stop__()
 
         if open_or_closed == self.curtain_open:
             self.rotary_encoder.steps = self.__max_step__
@@ -98,7 +115,7 @@ class Curtain:
     def __is_stopped__(self) -> bool:
         return not self.curtain_closed.is_active and not self.curtain_open.is_active and not self.motor.value
 
-    def manual_reset(self):
+    async def manual_reset(self):
 
         """ Reset the steps counter with the help of the edge switchers """
 
@@ -115,19 +132,19 @@ class Curtain:
 
         if distance_to_min_step <= distance_to_max_step:
             if self.steps() > self.__min_step__:
-                self.__close__()
+                await self.__close__()
             else:
-                self.__open__()
+                await self.__open__()
             self.curtain_closed.wait_for_active()
-            self.__stop__()
+            await self.__stop__()
             self.rotary_encoder.steps = self.__min_step__
         else:
             if self.steps() > self.__max_step__:
-                self.__close__()
+                await self.__close__()
             else:
-                self.__open__()
+                await self.__open__()
             self.curtain_open.wait_for_active()
-            self.__stop__()
+            await self.__stop__()
             self.rotary_encoder.steps = self.__max_step__
 
         self.__event_detect__()
@@ -158,7 +175,7 @@ class Curtain:
 
         return status
 
-    def move(self, step):
+    async def move(self, step):
 
         """ Move the motor in a direction based on the starting and target steps """
 
@@ -177,35 +194,35 @@ class Curtain:
 
         # deciding the movement direction
         if self.steps() < self.target:
-            self.__open__()
+            await self.__open__()
         elif self.steps() > self.target:
-            self.__close__()
+            await self.__close__()
 
-    def open_up(self):
+    async def open_up(self):
 
         """
             Open up the curtain completely
             It's a shortcut to move()
         """
 
-        self.move(self.__max_step__)
+        await self.move(self.__max_step__)
 
-    def bring_down(self):
+    async def bring_down(self):
 
         """
             Bring down the curtain completely
             It's a shortcut to move()
         """
 
-        self.move(self.__min_step__)
+        await self.move(self.__min_step__)
         if self.steps() == self.__min_step__:
-            self.disable_motor()
+            await self.disable_motor()
 
-    def disable(self):
+    async def disable(self):
         logger.debug(f"self.to_disable is {self.to_disable}")
         if not self.__is_opening__() and not self.__is_closing__():
             self.to_disable = True
-            self.bring_down()
+            await self.bring_down()
             logger.debug(f"self.to_disable after bring down is {self.to_disable}")
 
     def enable(self):
@@ -213,12 +230,12 @@ class Curtain:
         self.motor.enable_device.on()
         logger.debug(f"motor after enabling is {self.motor.enable_device.value}")
 
-    def disable_motor(self):
+    async def disable_motor(self):
 
         """
             disable motor
         """
         
-        with self.lock:
+        async with self.lock:
             self.motor.enable_device.off()
             self.to_disable = False

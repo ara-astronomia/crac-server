@@ -10,7 +10,7 @@ class MockRoofControl(RoofControl):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_low()
 
-    def open(self):
+    async def open(self):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_high()
         t = Thread(
@@ -18,10 +18,10 @@ class MockRoofControl(RoofControl):
             args=(self.roof_open_switch.pin,)
         )
         t.start()
-        super().open()
+        await super().open()
         t.join()
 
-    def close(self):
+    async def close(self):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_high()
         t = Thread(
@@ -29,7 +29,7 @@ class MockRoofControl(RoofControl):
             args=(self.roof_closed_switch.pin,)
         )
         t.start()
-        super().close()
+        await super().close()
         t.join()
 
     def __wait_for_open__(self, pin):

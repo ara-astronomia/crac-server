@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import logging.config
 logging.config.fileConfig('logging.conf')
@@ -21,10 +22,12 @@ from signal import signal, SIGTERM
 
 
 logger = logging.getLogger('crac_server.app')
+# Coroutines to be invoked when the event loop is shutting down.
+_cleanup_coroutines = []
 
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+async def serve():
+    server = grpc.aio.server()
     add_ButtonServicer_to_server(
         ButtonService(), server
     )
@@ -43,20 +46,26 @@ def serve():
     add_WeatherServicer_to_server(
         WeatherService(), server
     )
-    server.add_insecure_port(
-        f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')
-    server.start()
+    server.add_insecure_port(f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')
+    await server.start()
     logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
 
-    def handle_sigterm(*_):
-        logger.info("Received shutdown signal")
-        all_rpcs_done_event = server.stop(30)
-        all_rpcs_done_event.wait(30)
-        logger.info("Shut down gracefully")
+    async def server_graceful_shutdown():
+        logging.info("Starting graceful shutdown...")
+        # Shuts down the server with 5 seconds of grace period. During the
+        # grace period, the server won't accept new connections and allow
+        # existing RPCs to continue within the grace period.
+        await server.stop(5)
+    
+    _cleanup_coroutines.append(server_graceful_shutdown())
+    await server.wait_for_termination()
 
-    signal(SIGTERM, handle_sigterm)
-    server.wait_for_termination()
 
-
-if __name__ == "__main__":
-    serve()
+if __name__ == '__main__':
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(serve())
+    finally:
+        loop.run_until_complete(*_cleanup_coroutines)
+        loop.close()

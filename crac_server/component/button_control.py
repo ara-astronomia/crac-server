@@ -1,27 +1,24 @@
+import asyncio
 from datetime import datetime
-import threading
 from crac_protobuf.button_pb2 import ButtonStatus
 from crac_server.config import Config
 from gpiozero import OutputDevice
 
 
-lock = threading.Lock()
-
-
 class ButtonControl():
     def __init__(self, pin: int):
         self.output = OutputDevice(pin)
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
         self.turned_on_at: datetime
         self.turned_off_at: datetime
 
-    def on(self):
-        with self.lock:
+    async def on(self):
+        async with self.lock:
             self.output.on()
             self.turned_on_at = datetime.utcnow()
 
-    def off(self):
-        with self.lock:
+    async def off(self):
+        async with self.lock:
             self.output.off()
             self.turned_off_at = datetime.utcnow()
 

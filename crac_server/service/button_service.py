@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class ButtonService(ButtonServicer):
-    def SetAction(self, request: ButtonRequest, context):
+    async def SetAction(self, request: ButtonRequest, context):
         logger.debug("Request " + str(request))
         button_mediator = ButtonMediator(request)
 
@@ -29,31 +29,31 @@ class ButtonService(ButtonServicer):
         button_action_handler = ButtonActionHandler()
         weather_handler.set_next(telescope_handler).set_next(flat_handler).set_next(button_action_handler)
         
-        return weather_handler.handle(button_mediator)
+        return await weather_handler.handle(button_mediator)
 
-    def GetStatus(self, request, context):
-        tele_switch_button = self.SetAction(
+    async def GetStatus(self, request, context):
+        tele_switch_button = await self.SetAction(
             request = ButtonRequest(
                 action=ButtonAction.CHECK_BUTTON,
                 type=ButtonType.TELE_SWITCH,
             ),
             context=context,
         )
-        ccd_switch_button = self.SetAction(
+        ccd_switch_button = await self.SetAction(
             request = ButtonRequest(
                 action=ButtonAction.CHECK_BUTTON,
                 type=ButtonType.CCD_SWITCH,
             ),
             context=context,
         )
-        flat_ligth_button = self.SetAction(
+        flat_ligth_button = await self.SetAction(
             request = ButtonRequest(
                 action=ButtonAction.CHECK_BUTTON,
                 type=ButtonType.FLAT_LIGHT,
             ),
             context=context,
         )
-        dome_light_button = self.SetAction(
+        dome_light_button = await self.SetAction(
             request = ButtonRequest(
                 action=ButtonAction.CHECK_BUTTON,
                 type=ButtonType.DOME_LIGHT,

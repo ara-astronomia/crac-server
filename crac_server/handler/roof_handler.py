@@ -29,15 +29,15 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractButtonHandler(AbstractHandler):
-    def handle(self, mediator: RoofMediator) -> RoofResponse:
+    async def handle(self, mediator: RoofMediator) -> RoofResponse:
         if self._next_handler:
-            return self._next_handler.handle(mediator)
+            return await self._next_handler.handle(mediator)
         
         return RoofConverter().convert(mediator)
 
 
 class RoofWeatherHandler(AbstractButtonHandler):
-    def handle(self, mediator: RoofMediator) -> RoofResponse:
+    async def handle(self, mediator: RoofMediator) -> RoofResponse:
         if mediator.status is RoofStatus.ROOF_CLOSED:
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
@@ -46,10 +46,10 @@ class RoofWeatherHandler(AbstractButtonHandler):
                 logger.info(f"In status danger {weather_response.status}")
                 mediator.is_disabled = True
                 self._next_handler = None
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 class RoofTelescopeHandler(AbstractButtonHandler):
-    def handle(self, mediator: RoofMediator) -> RoofResponse:
+    async def handle(self, mediator: RoofMediator) -> RoofResponse:
         if (
             mediator.status is RoofStatus.ROOF_OPENED and
             not self.__telescope_is_secure()
@@ -57,7 +57,7 @@ class RoofTelescopeHandler(AbstractButtonHandler):
             self._next_handler = None
             mediator.is_disabled = True
             
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
     def __telescope_is_secure(self):
         return (
@@ -66,7 +66,7 @@ class RoofTelescopeHandler(AbstractButtonHandler):
         )
 
 class RoofCurtainsHandler(AbstractButtonHandler):
-    def handle(self, mediator: RoofMediator) -> RoofResponse:
+    async def handle(self, mediator: RoofMediator) -> RoofResponse:
         if (
             mediator.status is RoofStatus.ROOF_OPENED and
             not self.__curtains_are_secure()
@@ -74,7 +74,7 @@ class RoofCurtainsHandler(AbstractButtonHandler):
             self._next_handler = None
             mediator.is_disabled = True
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
     def __curtains_are_secure(self):
         return (
@@ -83,13 +83,13 @@ class RoofCurtainsHandler(AbstractButtonHandler):
         )
 
 class RoofHandler(AbstractButtonHandler):
-    def handle(self, mediator: RoofMediator) -> RoofResponse:
+    async def handle(self, mediator: RoofMediator) -> RoofResponse:
         if mediator.status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING]:
             self._next_handler = None
             mediator.is_disabled = True
         elif mediator.action is RoofAction.OPEN:
-            mediator.button.open()
+            await mediator.button.open()
         elif mediator.action is RoofAction.CLOSE:
-            mediator.button.close()
+            await mediator.button.close()
 
-        return super().handle(mediator)
+        return await super().handle(mediator)

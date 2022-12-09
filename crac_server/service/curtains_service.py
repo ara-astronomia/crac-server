@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class CurtainsService(CurtainServicer):
-    def SetAction(self, request, context):
+    async def SetAction(self, request, context):
         logger.debug("Request " + str(request))
         curtains_mediator = CurtainsMediator(request)
 
@@ -26,4 +26,4 @@ class CurtainsService(CurtainServicer):
             .set_next(calibration_curtains_handler) \
             .set_next(move_curtains_handler)
 
-        return roof_curtains_handler.handle(curtains_mediator)
+        return await roof_curtains_handler.handle(curtains_mediator)

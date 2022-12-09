@@ -27,26 +27,26 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractCurtainsHandler(AbstractHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         if self._next_handler:
-            return self._next_handler.handle(mediator)
+            return await self._next_handler.handle(mediator)
         
         return CurtainsConverter().convert(mediator)
 
 class CurtainsRoofHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         roof_is_opened = ROOF.get_status() is RoofStatus.ROOF_OPENED
 
         if not roof_is_opened:
-            mediator.button_east.disable()
-            mediator.button_west.disable()
+            await mediator.button_east.disable()
+            await mediator.button_west.disable()
             mediator.is_disabled = True
             self._next_handler = None
         
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 class CurtainsWeatherHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         logger.debug("In weather handler")
 
         if (
@@ -62,32 +62,32 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
                 mediator.is_disabled = True
                 self._next_handler = None
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 class CurtainsTelescopeHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:    
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:    
         if not TELESCOPE.polling:
-            mediator.button_east.disable()
-            mediator.button_west.disable()
+            await mediator.button_east.disable()
+            await mediator.button_west.disable()
             mediator.is_disabled = True
             self._next_handler = None
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 class CurtainsDisableHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         if mediator.action is CurtainsAction.DISABLE:
             if (
                 mediator.status_east <= CurtainStatus.CURTAIN_OPENED and
                 mediator.status_west <= CurtainStatus.CURTAIN_OPENED
             ):
-                mediator.button_east.disable()
-                mediator.button_west.disable()
+                await mediator.button_east.disable()
+                await mediator.button_west.disable()
         
-        return super().handle(mediator)
+        return await super().handle(mediator)
     
 class CurtainsEnableHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
 
         if (
                 mediator.action is CurtainsAction.ENABLE
@@ -95,27 +95,27 @@ class CurtainsEnableHandler(AbstractCurtainsHandler):
             mediator.button_east.enable()
             mediator.button_west.enable()
         
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 class CurtainsCalibrationHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         
         # TODO check if manual calibration is needed and in case create a story for it
         # elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
         #     CURTAIN_EAST.manual_reset()
         #     CURTAIN_WEST.manual_reset()
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
 
 class CurtainsMoveHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+    async def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
 
         if TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
             steps = self.__calculate_curtains_steps()
-            mediator.button_east.move(steps["east"])
-            mediator.button_west.move(steps["west"])
+            await mediator.button_east.move(steps["east"])
+            await mediator.button_west.move(steps["west"])
 
-        return super().handle(mediator)
+        return await super().handle(mediator)
     
     def __calculate_curtains_steps(self):
 

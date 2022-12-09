@@ -28,13 +28,13 @@ class MockCurtain(Curtain):
         else:
             self.curtain_open.pin.drive_high()
 
-    def __open__(self):
-        super().__open__()
+    async def __open__(self):
+        await super().__open__()
         self.t = Thread(target=self.__fake_move_forward__, args=(self,))
         self.t.start()
 
-    def __close__(self):
-        super().__close__()
+    async def __close__(self):
+        await super().__close__()
         self.t = Thread(target=self.__fake_move_backward__, args=(self,))
         self.t.start()
 

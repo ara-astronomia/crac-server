@@ -36,7 +36,7 @@ class CameraService(CameraServicer):
     def __init__(self) -> None:
         super().__init__()
 
-    def Video(self, request: CameraRequest, context) -> CameraResponse:
+    async def Video(self, request: CameraRequest, context) -> CameraResponse:
         logger.debug(f"Process id is {os.getpid()}")
         key, camera = self.__get_camera(request.name)
         while True:
@@ -58,7 +58,7 @@ class CameraService(CameraServicer):
                 )
             yield CameraResponse(video=video, ir=False, status=camera.status, name=key)
 
-    def SetAction(self, request: CameraRequest, context) -> CameraResponse:
+    async def SetAction(self, request: CameraRequest, context) -> CameraResponse:
         logger.debug("Request " + str(request))
         key, camera = self.__get_camera(request.name)
 
@@ -179,7 +179,7 @@ class CameraService(CameraServicer):
             f"buttons are {(connection_button, display_button, ir_button)}")
         return CameraResponse(ir=camera.ir != 0, status=camera.status, buttons_gui=buttons, name=key)
 
-    def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
+    async def ListCameras(self, request: CameraRequest, context) -> CamerasResponse:
         key1 = "camera1"
         key2 = "camera2"
         logger.debug(f"camera1 is {CAMERA[key1].supported_features(key1)}")
