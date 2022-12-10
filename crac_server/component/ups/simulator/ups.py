@@ -4,10 +4,15 @@ from crac_server.component.ups.ups import Ups as UpsBase
 
 
 class Ups(UpsBase):
-    def status_for(self, device: str):
+    def status_for(self, device: str) -> dict[str,str]:
         ups_path = os.path.join(os.path.dirname(__file__), "ups.ini")
         ups_config = ConfigParser()
         ups_config.read(ups_path)
+        voltage = ups_config.get(device, "output.voltage", fallback='220')
+        battery = ups_config.get(device, "battery.charge", fallback='100')
+        ups_config[device] = {"output.voltage": voltage, "battery.charge": battery}
+        with open(ups_path, 'w') as ups_file:
+            ups_config.write(ups_file)
         return {
             'driver.parameter.synchronous': 'no', 
             'battery.runtime.low': '120', 
@@ -28,14 +33,14 @@ class Ups(UpsBase):
             'driver.version.data': 'APC HID 0.96', 
             'ups.delay.shutdown': '20', 
             'output.frequency': '50.0', 
-            'output.voltage.nominal': ups_config.get(device, "output.voltage.nominal", fallback='0'),
+            'output.voltage.nominal': "230",
             'battery.runtime': '13980', 
             'device.model': 'Smart-UPS 3000 RM', 
             'input.transfer.low': '208', 
             'ups.beeper.status': 'enabled', 
             'driver.parameter.pollinterval': '2', 
             'driver.parameter.port': 'auto', 
-            'battery.charge.warning': ups_config.get(device, "battery.charge.warning", fallback='0'),
+            'battery.charge.warning': "50",
             'input.transfer.high': '253', 
             'ups.model': 'Smart-UPS 3000 RM', 
             'device.mfr': 'American Power Conversion', 
@@ -54,7 +59,7 @@ class Ups(UpsBase):
             'battery.temperature': '13.0', 
             'ups.load': '0.0', 
             'battery.voltage.nominal': '48.0', 
-            'battery.charge.low': ups_config.get(device, "battery.charge.low", fallback='0'), 
+            'battery.charge.low': "10", 
             'ups.mfr.date': '2009/09/16', 
             'ups.serial': 'JS0938004696', 
             'ups.status': 'OL'

@@ -133,6 +133,7 @@ dmypy.json
 
 # crac configuration
 telescope.ini
+ups.ini
 de421.bsp
 *.code-workspace
 .vscode/settings.json
