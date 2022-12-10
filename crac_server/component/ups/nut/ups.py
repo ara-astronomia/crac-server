@@ -5,7 +5,7 @@ class Ups(UpsBase):
     def __init__(self, host: str) -> None:
         self.client = PyNUTClient(host)
 
-    def status_for(self, device: str):
+    def status_for(self, device: str) -> dict[str,str]:
         return self.client.list_vars(device)
 
     def list_ups(self):
