@@ -25,7 +25,7 @@ class UpsService(UpsServicer):
         
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         response = UpsResponse(
-            updated_at=int(datetime.now().timestamp()),
+            updated_at=self.timestamp_or_none(datetime.now()),
             interval=UPS.time_expired
         )
         for device in Config.getValue("ups_list", "ups").split(","):
