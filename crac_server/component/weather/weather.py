@@ -1,7 +1,8 @@
 from datetime import datetime
 import html
 import logging
-import threading
+from threading import (Thread, Lock)
+from time import sleep
 from typing import Union
 from urllib.error import HTTPError, URLError
 import urllib.request
@@ -15,11 +16,13 @@ class Weather:
     def __init__(self, url: str, fallback_url: str, time_format: str, time_expired: int):
         self._url = url
         self._fallback_url = fallback_url
-        self._json : dict
+        self._json = {}
         self._updated_at : Union[datetime, None] = None
         self._time_format = time_format
         self._time_expired = time_expired
-        self.lock = threading.Lock()
+        self.lock = Lock()
+        self.t = Thread(target=self._retrieve_async)
+        self.t.start()
 
     @property
     def url(self):
@@ -83,6 +86,16 @@ class Weather:
     @property
     def is_unavailable(self) -> bool:
         return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
+    
+    def _retrieve_async(self):
+        while True:
+            if self.is_expired():
+                try:
+                    self.json, self.updated_at = self._retrieve_data()
+                except:
+                    logger.error("url not reachable, switching to fallback url")
+                    self.json, self.updated_at = self._retrieve_fallback_data()
+            sleep(0)
 
     def _retrieve_data(self):
         with urllib.request.urlopen(self.url) as url:
@@ -102,13 +115,13 @@ class Weather:
 
 
     def _get_sensor(self, name: str) -> tuple[float, str]:
-        with self.lock:
-            if self.is_expired():
-                try:
-                    self.json, self.updated_at = self._retrieve_data()
-                except (HTTPError, URLError, TimeoutError) as error:
-                    logger.error("url in error")
-                    self.json, self.updated_at = self._retrieve_fallback_data()
-            
+        # with self.lock:
+        #     if self.is_expired():
+        #         try:
+        #             self.json, self.updated_at = self._retrieve_data()
+        #         except (HTTPError, URLError, TimeoutError) as error:
+        #             logger.error("url in error")
+        #             self.json, self.updated_at = self._retrieve_fallback_data()
+
         sensor = self.json[name]
         return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()

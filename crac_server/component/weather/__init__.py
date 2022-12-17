@@ -9,4 +9,4 @@ WEATHER = Weather(
     time_expired=Config.getInt("time_expired", "weather"),
 )
 
-WEATHER.temperature # for warm up at start
+#WEATHER.temperature # for warm up at start
