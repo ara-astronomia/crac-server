@@ -37,7 +37,7 @@ class Camera(ABC):
     @abstractmethod
     def ir(self, mode: int):
         """ 
-            Let the cam to turn of ir if needed 
+            Let the cam to turn off ir if needed 
             0 - off
             1 - on
             2 - auto
