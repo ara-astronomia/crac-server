@@ -1,10 +1,19 @@
 # Pre-requisite
 
+```
 sudo apt install libopencv-dev python3-opencv
+```
 
 # Install Dependencies and Configure environment
 
 We are using Poetry as a dependency management and packaging
+Requisite for poetry:
+
+```
+sudo apt-get install python3-distutils
+sudo apt-get install python3-dev
+```
+
 Go to https://python-poetry.org/ and install it
 
 Before using this project, you should clone the crac-protobuf project 
