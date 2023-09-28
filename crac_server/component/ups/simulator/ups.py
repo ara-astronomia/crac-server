@@ -62,5 +62,5 @@ class Ups(UpsBase):
             'battery.charge.low': "10", 
             'ups.mfr.date': '2009/09/16', 
             'ups.serial': 'JS0938004696', 
-            'ups.status': 'OL'
+            'ups.status': ups_config.get(device, "ups.status", fallback='OL')
         }

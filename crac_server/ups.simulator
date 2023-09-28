@@ -1,0 +1,21 @@
+{'output.current': '0.00', 'ups.delay.shutdown': '20', 'ups.load': '0.0', 'ups.firmware.aux': '7.4', 'ups.delay.start': '30', 'device.mfr': 'American Power Conversion', 
+'driver.parameter.vendorId': '051d', 'ups.status': 'OL CHRG LB', 'battery.voltage.nominal': '48.0', 'driver.parameter.productId': '0002', 'device.model': 'Smart-UPS 3000 
+RM', 'ups.productid': '0002', 'driver.version.data': 'APC HID 0.96', 'battery.charge.warning': '50', 'battery.mfr.date': '2009/09/16', 'ups.test.result': 'No test 
+initiated', 'device.type': 'ups', 'battery.charge': '24', 'input.transfer.high': '253', 'ups.vendorid': '051d', 'driver.parameter.pollfreq': '30', 'driver.flag.ignorelb': 
+'enabled', 'battery.runtime': '2040', 'input.voltage': '217.4', 'device.serial': 'JS0938004696', 'output.voltage.nominal': '230.0', 'battery.charge.low': '30', 
+'input.sensitivity': 'low', 'ups.firmware': '666.6.I', 'ups.model': 'Smart-UPS 3000 RM', 'battery.type': 'PbAc', 'ups.timer.shutdown': '-1', 'output.voltage': '217.4', 
+'driver.parameter.synchronous': 'no', 'battery.voltage': '55.4', 'driver.version': '2.7.4', 'driver.parameter.port': 'auto', 'driver.name': 'usbhid-ups', 
+'input.transfer.low': '208', 'ups.mfr': 'American Power Conversion', 'driver.parameter.pollinterval': '2', 'ups.mfr.date': '2009/09/16', 'ups.timer.start': '-1', 
+'ups.serial': 'JS0938004696', 'driver.version.internal': '0.41', 'battery.runtime.low': '120', 'battery.temperature': '9.9', 'ups.beeper.status': 'enabled', 
+'output.frequency': '50.0', 'ups.timer.reboot': '-1'}
+
+{'ups.timer.shutdown': '-1', 'input.transfer.high': '253', 'output.current': '0.00', 'battery.mfr.date': '2009/09/16', 'driver.parameter.pollfreq': '30', 
+'driver.parameter.port': 'auto', 'device.model': 'Smart-UPS 3000 RM', 'driver.flag.ignorelb': 'enabled', 'ups.load': '0.0', 'battery.charge.warning': '50', 
+'driver.version.internal': '0.41', 'ups.beeper.status': 'enabled', 'output.frequency': '50.0', 'battery.charge.low': '30', 'battery.charge': '30', 'ups.productid': '0002', 
+'driver.parameter.pollinterval': '2', 'output.voltage.nominal': '230.0', 'device.serial': 'JS0938004696', 'driver.name': 'usbhid-ups', 'battery.runtime': '3960', 
+'ups.delay.start': '30', 'ups.firmware.aux': '7.4', 'ups.serial': 'JS0938004696', 'battery.temperature': '10.8', 'ups.timer.start': '-1', 'ups.timer.reboot': '-1', 
+'input.transfer.low': '208', 'driver.parameter.vendorId': '051d', 'ups.test.result': 'No test initiated', 'ups.status': 'OL CHRG', 'driver.version.data': 'APC HID 0.96', 
+'driver.version': '2.7.4', 'output.voltage': '217.4', 'driver.parameter.synchronous': 'no', 'device.mfr': 'American Power Conversion', 'battery.type': 'PbAc', 
+'battery.runtime.low': '120', 'driver.parameter.productId': '0002', 'ups.vendorid': '051d', 'ups.firmware': '666.6.I', 'battery.voltage': '55.4', 'ups.delay.shutdown': '20', 
+'ups.mfr': 'American Power Conversion', 'device.type': 'ups', 'input.sensitivity': 'low', 'ups.mfr.date': '2009/09/16', 'battery.voltage.nominal': '48.0', 'input.voltage': 
+'217.4', 'ups.model': 'Smart-UPS 3000 RM'}
