@@ -12,7 +12,7 @@ alongside this one so that the dependency expressed on pyprject.toml
 can find the package to install.
 
 ```
-sudo apt install libatlas3-base libgfortran5 libopenjp2-7 libavcodec-dev libavformat-dev libswscale-dev libgtk-3-dev python3.9-dev (if some dependencies need to be compiled)
+sudo apt install libatlas3-base libgfortran5 libopenjp2-7 libavcodec-dev libavformat-dev libswscale-dev libgtk-3-dev python3.9-dev
 poetry shell
 poetry install
 ```
