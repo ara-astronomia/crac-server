@@ -1,5 +1,6 @@
 import logging
 import threading
+from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
@@ -25,7 +26,8 @@ class Curtain:
         self.__min_step__ = 0
         self.__max_step__ = Config.getInt("n_step_corsa", "encoder_step")
         self.__security_step__ = Config.getInt("n_step_sicurezza", "encoder_step")
-        self.target = None
+        self.__tolerance_steps__ = Config.getInt("tolerance_steps", "encoder_step")
+        self.target : Union[None, int] = None
 
     def __event_detect__(self):
         self.curtain_closed.when_activated = self.__reset_steps__
@@ -48,13 +50,18 @@ class Curtain:
     def __stop__(self):
         with self.lock:
             self.motor.stop()
+    
+    def __steps_inside_tolerance_area__(self):
+        if self.target is not None:
+            return  self.steps() - self.__tolerance_steps__  <= self.target <= self.steps() + self.__tolerance_steps__
+        return True
 
     def __check_and_stop__(self):
         logger.debug("Number of steps: %s", self.steps())
         logger.debug("target: %s", self.target)
         if (
             self.target is None or
-            self.steps() == self.target or
+            self.__steps_inside_tolerance_area__() or
             self.steps() >= self.__security_step__ or
             self.steps() <= self.__sub_min_step__ or
             not self.motor.enable_device.value
