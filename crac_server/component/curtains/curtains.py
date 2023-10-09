@@ -22,7 +22,7 @@ class Curtain:
         self.to_disable = False
 
     def __base__(self):
-        self.__sub_min_step__ = -5
+        self.__sub_min_step__ = Config.getInt("n_step_sub_min", "encoder_step")
         self.__min_step__ = 0
         self.__max_step__ = Config.getInt("n_step_corsa", "encoder_step")
         self.__security_step__ = Config.getInt("n_step_sicurezza", "encoder_step")
@@ -82,9 +82,9 @@ class Curtain:
 
     def __is_danger__(self):
         return (
-            self.steps() > self.__max_step__ or self.steps() < self.__min_step__ or
-            (self.steps() == self.__max_step__ and not self.curtain_open.is_active and self.motor.value == 1) or
-            (self.steps() == self.__min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
+            self.steps() > self.__security_step__ or self.steps() < self.__sub_min_step__ or
+            (self.steps() == self.__security_step__ and not self.curtain_open.is_active and self.motor.value == 1) or
+            (self.steps() == self.__sub_min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
         )
 
     def __is_disabled__(self) -> bool:
