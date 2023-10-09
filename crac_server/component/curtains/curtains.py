@@ -53,7 +53,7 @@ class Curtain:
     
     def __steps_inside_tolerance_area__(self):
         if self.target is not None:
-            return  self.steps() - self.__tolerance_steps__  <= self.target <= self.steps() + self.__tolerance_steps__
+            return  self.target - self.__tolerance_steps__  <= self.steps() <= self.target + self.__tolerance_steps__
         return True
 
     def __check_and_stop__(self):
