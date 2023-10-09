@@ -183,9 +183,9 @@ class Curtain:
         self.target = step
 
         # deciding the movement direction
-        if self.steps() < self.target:
+        if self.steps() < self.target - self.__tolerance_steps__:
             self.__open__()
-        elif self.steps() > self.target:
+        elif self.steps() > self.target + self.__tolerance_steps__:
             self.__close__()
 
     def open_up(self):

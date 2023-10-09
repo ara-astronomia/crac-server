@@ -21,13 +21,15 @@ class RoofControl():
     def open(self):
         with self.lock:
             self.motor.on()
-            self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
+            self.roof_open_switch.wait_for_active()
+            #self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
 
     def close(self):
         with self.lock:
             self.motor.off()
             self.roof_closed_switch.wait_for_active()
-            self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
+            self.roof_open_switch.wait_for_active()
+            #self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
 
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active
