@@ -19,11 +19,11 @@ class MockCurtain(Curtain):
         [input.pin.drive_high() for input in reversed(inputs) if self.target is not None]
 
     def __check_curtains_limit__(self):
-        if self.steps() <= self.__min_step__:
+        if self.steps() <= self.__min_step__ + self.__tolerance_steps__:
             self.curtain_closed.pin.drive_low()
         else:
             self.curtain_closed.pin.drive_high()
-        if self.steps() >= self.__max_step__:
+        if self.steps() >= self.__max_step__ - self.__tolerance_steps__:
             self.curtain_open.pin.drive_low()
         else:
             self.curtain_open.pin.drive_high()

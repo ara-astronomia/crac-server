@@ -168,12 +168,16 @@ class WeatherConverter:
             for chart in response.charts:
                 logger.debug("chart is:")
                 logger.debug(chart)
+                if chart.status == ChartStatus.CHART_STATUS_UNSPECIFIED:
+                    status = WeatherStatus.WEATHER_STATUS_UNSPECIFIED
+                    break
                 if status < WeatherStatus.WEATHER_STATUS_NORMAL and chart.status == ChartStatus.CHART_STATUS_NORMAL:
                     status = WeatherStatus.WEATHER_STATUS_NORMAL
                 if status < WeatherStatus.WEATHER_STATUS_WARNING and chart.status == ChartStatus.CHART_STATUS_WARNING:
                     status = WeatherStatus.WEATHER_STATUS_WARNING
                 if status < WeatherStatus.WEATHER_STATUS_DANGER and chart.status == ChartStatus.CHART_STATUS_DANGER:
                     status = WeatherStatus.WEATHER_STATUS_DANGER
+                    break
                 logger.info(f"now weather status is: {status}")
         response.status = status
 
@@ -185,10 +189,14 @@ class WeatherConverter:
         else: 
             return 0
 
+    def __value_or_zero(self, value):
+        if value == 'N/A':
+            return 0
+        return value
     
-    def build_chart(self, value: float, title: str, urn: str, min: float, max: float, unit_of_measurement: str, range_normal: Union[dict[str,float],None], range_warn: Union[dict[str,float],None] = None, range_danger: Union[dict[str,float],None] = None) -> Chart:
+    def build_chart(self, value: Union[float,str], title: str, urn: str, min: float, max: float, unit_of_measurement: str, range_normal: Union[dict[str,float],None], range_warn: Union[dict[str,float],None] = None, range_danger: Union[dict[str,float],None] = None) -> Chart:
         chart = Chart(
-            value=value,
+            value=self.__value_or_zero(value),
             title=title,
             urn=urn,
             min=min,
@@ -221,14 +229,15 @@ class WeatherConverter:
             )
 
         chart.status = ChartStatus.CHART_STATUS_UNSPECIFIED
-        for threashold in chart.thresholds:
-            if threashold.lower_bound <= chart.value <= threashold.upper_bound:
-                if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
-                    chart.status = ChartStatus.CHART_STATUS_NORMAL
-                elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_WARNING:
-                    chart.status = ChartStatus.CHART_STATUS_WARNING
-                elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_DANGER:
-                    chart.status = ChartStatus.CHART_STATUS_DANGER
-                break
+        if value != 'N/A':
+            for threashold in chart.thresholds:
+                if threashold.lower_bound <= chart.value <= threashold.upper_bound:
+                    if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
+                        chart.status = ChartStatus.CHART_STATUS_NORMAL
+                    elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_WARNING:
+                        chart.status = ChartStatus.CHART_STATUS_WARNING
+                    elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_DANGER:
+                        chart.status = ChartStatus.CHART_STATUS_DANGER
+                    break
         
         return chart

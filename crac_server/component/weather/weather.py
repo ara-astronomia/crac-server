@@ -99,7 +99,7 @@ class Weather:
             raise error
 
 
-    def _get_sensor(self, name: str) -> tuple[float, str]:
+    def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
         if self.is_expired():
             try:
                 self.json, self.updated_at = self._retrieve_data()
@@ -108,4 +108,13 @@ class Weather:
                 self.json, self.updated_at = self._retrieve_fallback_data()
         
         sensor = self.json[name]
-        return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()
+        return self.__convert_to_float(sensor["value"]), html.unescape(sensor["unit_of_measurement"]).strip()
+
+    def __convert_to_float(self, value: str):
+        value = value.strip().replace(',', '.')
+        if value == 'N/A':
+            return value
+        else:
+            return float(value)
+        
+        
