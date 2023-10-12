@@ -13,16 +13,15 @@ from crac_server.service.roof_service import RoofService
 from crac_server.service.curtains_service import CurtainsService
 from crac_server.service.button_service import ButtonService
 from crac_server.config import Config
-from concurrent import futures
+import asyncio
 import grpc
-from signal import signal, SIGTERM
 
 
 logger = logging.getLogger('crac_server.app')
 
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+async def serve():
+    server = grpc.aio.server()
     add_ButtonServicer_to_server(
         ButtonService(), server
     )
@@ -40,18 +39,10 @@ def serve():
     )
     server.add_insecure_port(
         f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')
-    server.start()
     logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
-
-    def handle_sigterm(*_):
-        logger.info("Received shutdown signal")
-        all_rpcs_done_event = server.stop(30)
-        all_rpcs_done_event.wait(30)
-        logger.info("Shut down gracefully")
-
-    signal(SIGTERM, handle_sigterm)
-    server.wait_for_termination()
+    await server.start()
+    await server.wait_for_termination()
 
 
 if __name__ == "__main__":
-    serve()
+    asyncio.run(serve())
