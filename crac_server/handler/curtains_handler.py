@@ -112,8 +112,10 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
 
         if TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
             steps = self.__calculate_curtains_steps()
-            mediator.button_east.move(steps["east"])
-            mediator.button_west.move(steps["west"])
+            if steps["east"] >= mediator.steps_east + 10 or steps["east"] <= mediator.steps_east - 10:
+                mediator.button_east.move(steps["east"])
+            if steps["west"] >= mediator.steps_west + 10 or steps["west"] <= mediator.steps_west - 10:
+                mediator.button_west.move(steps["west"])
 
         return super().handle(mediator)
     
