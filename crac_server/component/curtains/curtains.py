@@ -3,14 +3,14 @@ import threading
 from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
-from crac_protobuf.curtains_pb2 import CurtainStatus
+from crac_protobuf.curtains_pb2 import (CurtainStatus, CurtainOrientation)
 
 
 logger = logging.getLogger(__name__)
 
 
 class Curtain:
-    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int]):
+    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int], orientation: str):
         self.__base__()
         self.rotary_encoder = RotaryEncoder(**rotary_encoder)
         self.curtain_closed = DigitalInputDevice(**curtain_closed)
@@ -20,6 +20,7 @@ class Curtain:
         self.__event_detect__()
         self.lock = threading.Lock()
         self.to_disable = False
+        self._orientation = orientation
 
     def __base__(self):
         self.__sub_min_step__ = Config.getInt("n_step_sub_min", "encoder_step")
@@ -57,8 +58,8 @@ class Curtain:
         return True
 
     def __check_and_stop__(self):
-        logger.debug("Number of steps: %s", self.steps())
-        logger.debug("target: %s", self.target)
+        logger.debug("Curtain %s: Number of steps: %s", self._orientation, self.steps())
+        logger.debug("Curtain: %s: target: %s", self._orientation, self.target)
         if (
             self.target is None or
             self.__steps_inside_tolerance_area__() or
@@ -67,6 +68,7 @@ class Curtain:
             not self.motor.enable_device.value
         ):
             self.__stop__()
+            logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
             self.target = None
             if self.to_disable:
                 self.disable_motor()
@@ -174,7 +176,7 @@ class Curtain:
             return
 
         status = self.get_status()
-        logger.debug("Status in move method: %s", status)
+        logger.debug("Curtain: %s, Status in move method: %s", self._orientation, CurtainStatus.Name(status))
         
         # while the motors are moving we don't want to start another movement
         if status > CurtainStatus.CURTAIN_OPENED or self.motor.value:
@@ -209,16 +211,16 @@ class Curtain:
             self.disable_motor()
 
     def disable(self):
-        logger.debug(f"self.to_disable is {self.to_disable}")
+        logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         if not self.__is_opening__() and not self.__is_closing__():
             self.to_disable = True
             self.bring_down()
-            logger.debug(f"self.to_disable after bring down is {self.to_disable}")
+            logger.debug("Curtain: %s, self.to_disable after bring down is %s", self._orientation, self.to_disable)
 
     def enable(self):
-        logger.debug(f"motor is {self.motor.enable_device.value}")
+        logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
         self.motor.enable_device.on()
-        logger.debug(f"motor after enabling is {self.motor.enable_device.value}")
+        logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
 
     def disable_motor(self):
 

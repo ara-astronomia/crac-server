@@ -1,12 +1,13 @@
 from crac_server.component.curtains.curtains import Curtain
 from threading import Thread
 from time import sleep
+from crac_protobuf.curtains_pb2 import CurtainOrientation
 
 
 class MockCurtain(Curtain):
 
-    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int]):
-        super().__init__(rotary_encoder, curtain_closed, curtain_open, motor)
+    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int], orientation: CurtainOrientation):
+        super().__init__(rotary_encoder, curtain_closed, curtain_open, motor, orientation)
         self.curtain_closed.pin.drive_low()
         self.curtain_open.pin.drive_high()
 

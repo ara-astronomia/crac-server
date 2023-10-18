@@ -178,7 +178,7 @@ class WeatherConverter:
                 if status < WeatherStatus.WEATHER_STATUS_DANGER and chart.status == ChartStatus.CHART_STATUS_DANGER:
                     status = WeatherStatus.WEATHER_STATUS_DANGER
                     break
-                logger.info(f"now weather status is: {status}")
+                logger.debug(f"now weather status is: {status}")
         response.status = status
 
         return response
