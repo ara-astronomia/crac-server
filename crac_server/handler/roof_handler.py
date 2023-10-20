@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
 from crac_protobuf.roof_pb2 import (
@@ -88,8 +89,10 @@ class RoofHandler(AbstractButtonHandler):
             self._next_handler = None
             mediator.is_disabled = True
         elif mediator.action is RoofAction.OPEN:
-            mediator.button.open()
+            loop = asyncio.get_event_loop()
+            loop.create_task(mediator.button.open())
         elif mediator.action is RoofAction.CLOSE:
-            mediator.button.close()
+            loop = asyncio.get_event_loop()
+            loop.create_task(mediator.button.close())
 
         return super().handle(mediator)

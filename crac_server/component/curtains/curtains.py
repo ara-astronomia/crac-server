@@ -3,7 +3,7 @@ import threading
 from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
-from crac_protobuf.curtains_pb2 import (CurtainStatus, CurtainOrientation)
+from crac_protobuf.curtains_pb2 import CurtainStatus
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ class Curtain:
         self.motor.enable_device.off()
         self.__event_detect__()
         self.lock = threading.Lock()
+        self.lock_rotation = threading.Lock()
         self.to_disable = False
         self._orientation = orientation
 
@@ -54,24 +55,25 @@ class Curtain:
     
     def __steps_inside_tolerance_area__(self):
         if self.target is not None:
-            return  self.target - self.__tolerance_steps__  <= self.steps() <= self.target + self.__tolerance_steps__
+            return  self.target - self.__tolerance_steps__  <= self.steps() <= self.target
         return True
 
     def __check_and_stop__(self):
-        logger.debug("Curtain %s: Number of steps: %s", self._orientation, self.steps())
-        logger.debug("Curtain: %s: target: %s", self._orientation, self.target)
-        if (
-            self.target is None or
-            self.__steps_inside_tolerance_area__() or
-            self.steps() >= self.__security_step__ or
-            self.steps() <= self.__sub_min_step__ or
-            not self.motor.enable_device.value
-        ):
-            self.__stop__()
-            logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
-            self.target = None
-            if self.to_disable:
-                self.disable_motor()
+        with self.lock_rotation:
+            logger.debug("Curtain %s: Number of steps: %s", self._orientation, self.steps())
+            logger.debug("Curtain: %s: target: %s", self._orientation, self.target)
+            if (
+                self.target is None or
+                self.__steps_inside_tolerance_area__() or
+                self.steps() >= self.__security_step__ or
+                self.steps() <= self.__sub_min_step__ or
+                not self.motor.enable_device.value
+            ):
+                self.__stop__()
+                logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
+                self.target = None
+                if self.to_disable:
+                    self.disable_motor()
                 
 
     def __reset_steps__(self, open_or_closed):

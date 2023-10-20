@@ -1,3 +1,4 @@
+import asyncio
 from crac_server.component.roof.roof_control import RoofControl
 from threading import Thread
 from time import sleep
@@ -10,27 +11,19 @@ class MockRoofControl(RoofControl):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_low()
 
-    def open(self):
+    async def open(self):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_high()
-        t = Thread(
-            target=self.__wait_for_open__,
-            args=(self.roof_open_switch.pin,)
-        )
-        t.start()
-        super().open()
-        t.join()
+        tstart = asyncio.to_thread(self.__wait_for_open__, self.roof_open_switch.pin)
+        await tstart
+        await super().open()
 
-    def close(self):
+    async def close(self):
         self.roof_open_switch.pin.drive_high()
         self.roof_closed_switch.pin.drive_high()
-        t = Thread(
-            target=self.__wait_for_open__,
-            args=(self.roof_closed_switch.pin,)
-        )
-        t.start()
-        super().close()
-        t.join()
+        tstart = asyncio.to_thread(self.__wait_for_open__, self.roof_closed_switch.pin)
+        await tstart
+        await super().close()
 
     def __wait_for_open__(self, pin):
         sleep(10)
