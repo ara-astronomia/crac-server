@@ -18,17 +18,19 @@ class RoofControl():
         self.lock = threading.Lock()
         self.is_blocked = False
 
-    def open(self):
+    async def open(self):
         with self.lock:
             self.motor.on()
             self.roof_open_switch.wait_for_active()
-            #self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
+            self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
+            if self.is_blocked:
+                await self.close()
 
-    def close(self):
+    async def close(self):
         with self.lock:
             self.motor.off()
             self.roof_closed_switch.wait_for_active()
-            #self.is_blocked = not self.roof_closed_switch.wait_for_active(self.timeout)
+            self.is_blocked = not self.roof_closed_switch.wait_for_active(self.timeout)
 
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active

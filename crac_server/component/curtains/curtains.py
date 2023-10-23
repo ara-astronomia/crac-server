@@ -77,12 +77,14 @@ class Curtain:
                 
 
     def __reset_steps__(self, open_or_closed):
-        self.__stop__()
+        with self.lock_rotation:
+            self.target = None
+            self.__stop__()
 
-        if open_or_closed == self.curtain_open:
-            self.rotary_encoder.steps = self.__max_step__
-        elif open_or_closed == self.curtain_closed:
-            self.rotary_encoder.steps = self.__min_step__
+            if open_or_closed == self.curtain_open:
+                self.rotary_encoder.steps = self.__max_step__
+            elif open_or_closed == self.curtain_closed:
+                self.rotary_encoder.steps = self.__min_step__
 
     def __is_danger__(self):
         return (
@@ -173,24 +175,26 @@ class Curtain:
 
         """ Move the motor in a direction based on the starting and target steps """
 
-        # if curtains are disabled, we don't want to move them
-        if not self.motor.enable_device.value:
-            return
+        with self.lock_rotation:
 
-        status = self.get_status()
-        logger.debug("Curtain: %s, Status in move method: %s", self._orientation, CurtainStatus.Name(status))
-        
-        # while the motors are moving we don't want to start another movement
-        if status > CurtainStatus.CURTAIN_OPENED or self.motor.value:
-            return
+            # if curtains are disabled, we don't want to move them
+            if not self.motor.enable_device.value:
+                return
 
-        self.target = step
+            status = self.get_status()
+            logger.debug("Curtain: %s, Status in move method: %s", self._orientation, CurtainStatus.Name(status))
+            
+            # while the motors are moving we don't want to start another movement
+            if status > CurtainStatus.CURTAIN_OPENED or self.motor.value:
+                return
 
-        # deciding the movement direction
-        if self.steps() < self.target - self.__tolerance_steps__:
-            self.__open__()
-        elif self.steps() > self.target + self.__tolerance_steps__:
-            self.__close__()
+            self.target = step
+
+            # deciding the movement direction
+            if self.steps() < self.target - self.__tolerance_steps__:
+                self.__open__()
+            elif self.steps() > self.target + self.__tolerance_steps__:
+                self.__close__()
 
     def open_up(self):
 
