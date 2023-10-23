@@ -196,15 +196,6 @@ class Curtain:
             elif self.steps() > self.target + self.__tolerance_steps__:
                 self.__close__()
 
-    def open_up(self):
-
-        """
-            Open up the curtain completely
-            It's a shortcut to move()
-        """
-
-        self.move(self.__max_step__)
-
     def bring_down(self):
 
         """
