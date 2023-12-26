@@ -51,7 +51,7 @@ class TestWeather(unittest.TestCase):
         self.format = "%Y-%m-%d %H:%M:%S"
         self.url = "http://ara.test"
         self.fallback_url = "http://fallback.ara.test"
-        self.weather = Weather(self.url, self.fallback_url, self.format, 600)
+        self.weather = Weather(self.url, self.fallback_url, self.format, 600, 1200)
 
     def tearDown(self) -> None:
         del(self.weather, self.format, self.url, self.fallback_url)
