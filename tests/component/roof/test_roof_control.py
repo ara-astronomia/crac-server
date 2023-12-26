@@ -1,5 +1,6 @@
 # test open roof
 import unittest
+from unittest.mock import patch
 from crac_server.component.roof.roof_control import RoofControl
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.roof.simulator.roof_control import MockRoofControl
@@ -46,7 +47,6 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         roof_control = MockRoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
-        roof_control.motor.value = False
         await roof_control.open()
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_OPENED)
     
@@ -54,6 +54,16 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         roof_control = MockRoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
-        roof_control.motor.value = True
         await roof_control.close()
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_CLOSED)
+
+    async def test_when_roof_is_blocked_while_opening_then_it_will_close(self):
+        roof_control = RoofControl()
+        roof_control.roof_open_switch.pin.drive_high()
+        roof_control.roof_closed_switch.pin.drive_high()
+        with patch.object(roof_control.roof_open_switch, 'wait_for_active', return_value=False) as mockedroofopen:
+            with patch.object(roof_control.roof_closed_switch, 'wait_for_active', return_value=True) as mockedroofclosed:
+                is_open = await roof_control.open()
+                mockedroofopen.assert_called_once()
+                mockedroofclosed.assert_called_once()
+                self.assertEqual(is_open, True)

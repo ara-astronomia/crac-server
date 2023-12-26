@@ -1,7 +1,5 @@
 import asyncio
 from crac_server.component.roof.roof_control import RoofControl
-from threading import Thread
-from time import sleep
 
 
 class MockRoofControl(RoofControl):

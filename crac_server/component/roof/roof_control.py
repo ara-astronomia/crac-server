@@ -1,7 +1,6 @@
+import asyncio
 import logging
-import threading
 from gpiozero import OutputDevice, DigitalInputDevice
-
 from crac_server.config import Config
 from crac_protobuf.roof_pb2 import RoofStatus
 
@@ -15,22 +14,25 @@ class RoofControl():
         self.roof_closed_switch = DigitalInputDevice(Config.getInt("roof_verify_closed", "roof_board"), pull_up=True)
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
         self.timeout = Config.getInt("roof_timeout", "roof_board")
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
         self.is_blocked = False
 
     async def open(self):
-        with self.lock:
+        async with self.lock:
             self.motor.on()
-            self.roof_open_switch.wait_for_active()
             self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
-            if self.is_blocked:
-                await self.close()
+        if self.is_blocked:
+            await self.close()
+            print(self.motor.value)
+            print(self.roof_open_switch.is_active)
+            print(self.roof_closed_switch.is_active)
+        return not self.is_blocked
 
     async def close(self):
-        with self.lock:
+        async with self.lock:
             self.motor.off()
-            self.roof_closed_switch.wait_for_active()
             self.is_blocked = not self.roof_closed_switch.wait_for_active(self.timeout)
+            return not self.is_blocked
 
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active
