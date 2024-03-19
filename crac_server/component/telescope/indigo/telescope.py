@@ -19,6 +19,7 @@ class Telescope(TelescopeBase):
     def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
         super().__init__(hostname=hostname, port=port)
         self._name = config.Config.getValue("name", "indigo")
+        logger.debug(f"Mount type: {self._name}")
 
     def sync(self, started_at: datetime):
         self.__call(
@@ -150,8 +151,7 @@ class Telescope(TelescopeBase):
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
         status = self._retrieve_status(aa_coords)
-        print (eq_coords, speed, aa_coords, status)
-
+        logger.debug(f"xml data received from Mount: {eq_coords,speed,aa_coords,status}")
         return (eq_coords, aa_coords, speed, status)
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
