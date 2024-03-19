@@ -26,13 +26,13 @@ class Telescope(TelescopeBase):
             f"""
                 <newSwitchVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
                     <oneSwitch name="SLEW">
-                        Off
+                        OFF
                     </oneSwitch>
                     <oneSwitch name="TRACK">
-                        Off
+                        OFF
                     </oneSwitch>
                     <oneSwitch name="SYNC">
-                        On
+                        ON
                     </oneSwitch>
                 </newSwitchVector>
             """
@@ -54,13 +54,13 @@ class Telescope(TelescopeBase):
             f"""
                 <newSwitchVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
                     <oneSwitch name="SLEW">
-                        Off
+                        OFF
                     </oneSwitch>
                     <oneSwitch name="TRACK">
-                        On
+                        ON
                     </oneSwitch>
                     <oneSwitch name="SYNC">
-                        Off
+                        OFF
                     </oneSwitch>
                 </newSwitchVector>
             """
@@ -72,7 +72,7 @@ class Telescope(TelescopeBase):
                 f"""
                     <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
                         <oneSwitch name="OFF">
-                            On
+                            ON
                         </oneSwitch>
                     </newSwitchVector>
                 """
@@ -82,7 +82,7 @@ class Telescope(TelescopeBase):
                 f"""
                     <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
                         <oneSwitch name="ON">
-                            On
+                            ON
                         </oneSwitch>
                     </newSwitchVector>
                 """
@@ -91,13 +91,13 @@ class Telescope(TelescopeBase):
                 f"""
                     <newSwitchVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
                         <oneSwitch name="SLEW">
-                            {"On" if speed == TelescopeSpeed.SPEED_SLEWING else "Off"}
+                            {"ON" if speed == TelescopeSpeed.SPEED_SLEWING else "OFF"}
                         </oneSwitch>
                         <oneSwitch name="TRACK">
-                            {"On" if speed == TelescopeSpeed.SPEED_TRACKING else "Off"}
+                            {"ON" if speed == TelescopeSpeed.SPEED_TRACKING else "OFF"}
                         </oneSwitch>
                         <oneSwitch name="SYNC">
-                            Off
+                            OFF
                         </oneSwitch>
                     </newSwitchVector>
                 """
@@ -116,7 +116,7 @@ class Telescope(TelescopeBase):
                 f"""
                 <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
                     <oneSwitch name="OFF">
-                        On
+                        ON
                     </oneSwitch>
                 </newSwitchVector>
                 """
@@ -135,7 +135,7 @@ class Telescope(TelescopeBase):
                 f"""
                 <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
                     <oneSwitch name="OFF">
-                        On
+                        ON
                     </oneSwitch>
                 </newSwitchVector>
                 """
@@ -158,7 +158,7 @@ class Telescope(TelescopeBase):
             f"""
                 <newSwitchVector device="{self._name}" name="MOUNT_PARK">
                     <oneSwitch name="UNPARKED">
-                        On
+                        ON
                     </oneSwitch>
                 </newSwitchVector>
             """
@@ -182,24 +182,15 @@ class Telescope(TelescopeBase):
 
     def __retrieve_speed(self, root):
         state = root.attrib["state"].strip() if root else None
-        if state == "Ok":
+        if state == "OK":
             return TelescopeSpeed.SPEED_TRACKING
-        elif state == "Idle":
+        elif state == "IDLE":
             return TelescopeSpeed.SPEED_NOT_TRACKING
-        elif state == "Busy":
+        elif state == "BUSY":
             return TelescopeSpeed.SPEED_SLEWING
         else:
             return TelescopeSpeed.SPEED_ERROR
-        # match state:
-        #     case "Ok":
-        #         return TelescopeSpeed.SPEED_TRACKING
-        #     case "Idle":
-        #         return TelescopeSpeed.SPEED_NOT_TRACKING
-        #     case "Busy":
-        #         return TelescopeSpeed.SPEED_SLEWING
-        #     case _:
-        #         return TelescopeSpeed.SPEED_ERROR
-
+   
     def __retrieve_eq_coords(self, root):
         ra, dec = None, None
         for coords in root.findall("defNumber"):
@@ -210,7 +201,7 @@ class Telescope(TelescopeBase):
         if ra and dec:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
-            raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
+            raise Exception(f"RA or DEC not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script: str):
         self.s.sendall(script.encode("utf-8"))
