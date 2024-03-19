@@ -144,7 +144,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(
             f"""
-            <getProperties client="{self._name}" version='2.0'/>
+            <getProperties version='2.0' device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES" />
             """
         )
         logger.debug(f"xml data Mount received from Indigo Server: {root}")
