@@ -207,9 +207,6 @@ class Telescope(TelescopeBase):
         self.s.sendall(script.encode("utf-8"))
         data = self.s.recv(30000).decode("utf-8")
         logger.debug(f"data received from xml: {data}")
-        tree=ET.ElementTree(root)
-        ET.indent(tree, space="\t", level=0)
-        tree.write(test), encoding="utf-8")
         try:
             return ET.fromstring(data)
         except ET.ParseError as err:
