@@ -143,7 +143,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(
             f"""
-            <getProperties device="{self._name}" version="1.7" name="EQUATORIAL_EOD_COORD"/>
+            <getProperties device="{self._name}" version="2.0" name="MOUNT_EQUATORIAL_COORDINATES"/>
             """
         )
         eq_coords = self.__retrieve_eq_coords(root)
