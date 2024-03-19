@@ -215,6 +215,7 @@ class Telescope(TelescopeBase):
     def __call(self, script: str):
         self.s.sendall(script.encode("utf-8"))
         data = self.s.recv(30000).decode("utf-8")
+        logger.debug(f"data received from xml: {data}")
         try:
             return ET.fromstring(data)
         except ET.ParseError as err:
