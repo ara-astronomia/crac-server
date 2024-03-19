@@ -215,12 +215,8 @@ class Telescope(TelescopeBase):
             raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script: str):
-        logger.debug(f"data fromm server indigo: {script}")
         self.s.sendall(script.encode("utf-8"))
-        c=self.s.sendall(script.encode("utf-8"))
-        logger.debug(f"encode data fromm server indigo: {c}")
         data = self.s.recv(30000).decode("utf-8")
-        logger.debug(f"data received from xml: {data}")
         try:
             return ET.fromstring(data)
         except ET.ParseError as err:
