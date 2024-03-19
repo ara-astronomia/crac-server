@@ -147,12 +147,10 @@ class Telescope(TelescopeBase):
             <getProperties device="{self._name}" version='2.0' name="MOUNT_EQUATORIAL_COORDINATES"/>
             """
         )
-        logger.debug(f"xml data Mount received from Indigo Server: {root}")
         eq_coords = self.__retrieve_eq_coords(root)
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
         status = self._retrieve_status(aa_coords)
-        logger.debug(f"xml data received from Mount: {eq_coords,speed,aa_coords,status}")
         return (eq_coords, aa_coords, speed, status)
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
