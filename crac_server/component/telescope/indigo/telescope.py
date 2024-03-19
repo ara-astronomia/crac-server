@@ -24,7 +24,7 @@ class Telescope(TelescopeBase):
     def sync(self, started_at: datetime):
         self.__call(
             f"""
-                <newSwitchVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
+                <newSwitchVector client="{self._name}" name="MOUNT_ON_COORDINATES_SET">
                     <oneSwitch name="SLEW">
                         OFF
                     </oneSwitch>
@@ -40,7 +40,7 @@ class Telescope(TelescopeBase):
         eq_coords = self._calculate_eq_coords_of_park_position(started_at)
         self.__call(
             f"""
-                <newNumberVector device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES">
+                <newNumberVector client="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES">
                     <oneNumber name="DEC">
                       {eq_coords.dec}
                     </oneNumber>
@@ -52,7 +52,7 @@ class Telescope(TelescopeBase):
         )
         self.__call(
             f"""
-                <newSwitchVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
+                <newSwitchVector client="{self._name}" name="MOUNT_ON_COORDINATES_SET">
                     <oneSwitch name="SLEW">
                         OFF
                     </oneSwitch>
@@ -70,7 +70,7 @@ class Telescope(TelescopeBase):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
-                    <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
+                    <newSwitchVector client="{self._name}" name="MOUNT_TRACKING">
                         <oneSwitch name="OFF">
                             ON
                         </oneSwitch>
@@ -80,7 +80,7 @@ class Telescope(TelescopeBase):
         else:
             self.__call(
                 f"""
-                    <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
+                    <newSwitchVector client="{self._name}" name="MOUNT_TRACKING">
                         <oneSwitch name="ON">
                             ON
                         </oneSwitch>
@@ -89,7 +89,7 @@ class Telescope(TelescopeBase):
             )
             self.__call(
                 f"""
-                    <newSwitchVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
+                    <newSwitchVector client="{self._name}" name="MOUNT_ON_COORDINATES_SET">
                         <oneSwitch name="SLEW">
                             {"ON" if speed == TelescopeSpeed.SPEED_SLEWING else "OFF"}
                         </oneSwitch>
@@ -114,7 +114,7 @@ class Telescope(TelescopeBase):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
-                <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
+                <newSwitchVector client="{self._name}" name="MOUNT_TRACKING">
                     <oneSwitch name="OFF">
                         ON
                     </oneSwitch>
@@ -133,7 +133,7 @@ class Telescope(TelescopeBase):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
-                <newSwitchVector device="{self._name}" name="MOUNT_TRACKING">
+                <newSwitchVector client="{self._name}" name="MOUNT_TRACKING">
                     <oneSwitch name="OFF">
                         ON
                     </oneSwitch>
@@ -144,7 +144,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(
             f"""
-            <getProperties device="{self._name}" version='2.0'/>
+            <getProperties client="{self._name}" version='2.0'/>
             """
         )
         eq_coords = self.__retrieve_eq_coords(root)
@@ -156,7 +156,7 @@ class Telescope(TelescopeBase):
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call(
             f"""
-                <newSwitchVector device="{self._name}" name="MOUNT_PARK">
+                <newSwitchVector client="{self._name}" name="MOUNT_PARK">
                     <oneSwitch name="UNPARKED">
                         ON
                     </oneSwitch>
@@ -169,7 +169,7 @@ class Telescope(TelescopeBase):
         self.queue_set_speed(speed)
         self.__call(
             f"""
-                <newNumberVector device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES">
+                <newNumberVector client="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES">
                     <oneNumber name="DEC">
                       {eq_coords.dec}
                     </oneNumber>
@@ -206,9 +206,6 @@ class Telescope(TelescopeBase):
     def __call(self, script: str):
         self.s.sendall(script.encode("utf-8"))
         data = self.s.recv(1024).decode("utf-8")
-        for x in data:
-            print(data)
-
         logger.debug(f"data received from xml: {data}")
         try:
             return ET.fromstring(data)
