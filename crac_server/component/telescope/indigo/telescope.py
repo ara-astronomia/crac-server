@@ -147,6 +147,7 @@ class Telescope(TelescopeBase):
             <getProperties device="{self._name}" version="2.0" name="MOUNT_EQUATORIAL_COORDINATES"/>
             """
         )
+        logger.debug(f"xml data Mount received from Indigo Server: {root}")
         eq_coords = self.__retrieve_eq_coords(root)
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
