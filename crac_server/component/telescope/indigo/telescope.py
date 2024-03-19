@@ -206,7 +206,7 @@ class Telescope(TelescopeBase):
     def __call(self, script: str):
         self.s.sendall(script.encode("utf-8"))
         data = self.s.recv(1024).decode("utf-8")
-            print(x)
+        print(x)
 
         logger.debug(f"data received from xml: {data}")
         try:
