@@ -215,8 +215,8 @@ class Telescope(TelescopeBase):
             raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script: str):
-        self.s.sendall(script.encode('utf-8'))
-        data = self.s.recv(30000).decode("utf-8")
+        self.s.sendall(script.encode('us-ascii'))
+        data = self.s.recv(30000).decode("us-ascii")
         logger.debug(f"data received from xml: {data}")
         try:
             return ET.fromstring(data)
