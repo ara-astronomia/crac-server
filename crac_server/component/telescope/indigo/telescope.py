@@ -84,7 +84,15 @@ class Telescope(TelescopeBase):
             if r2:
                 error_code = int(r2.group(0))
         return error_code
-
+    
+    def sync():
+        pass
+    def flat():
+        pass
+    def set_speed():
+        pass
+    def sync_():
+        pass
 
 '''
     def sync(self, started_at: datetime):
