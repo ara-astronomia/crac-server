@@ -28,7 +28,7 @@ class Telescope(TelescopeBase):
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
         status = self._retrieve_status(aa_coords)
-        print(eq_coords)
+        print(eq_coords, aa_coords, spedd, status)
         return (eq_coords, aa_coords, speed, status)
 
 
