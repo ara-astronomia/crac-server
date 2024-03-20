@@ -22,13 +22,14 @@ class Telescope(TelescopeBase):
         self.script = {"getProperties": { "version": 512, "client": "{self._name}", "name": "MOUNT_EQUATORIAL_COORDINATES"} }
 
     def retrieve(self) -> tuple:
+        logger.debug(f"Mount typesssssss: {self._name}")
         root = self.__call(script=self.script)
         logger.debug(f"map indigo: {root}")
         eq_coords = self.__retrieve_eq_coords(root)
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
         status = self._retrieve_status(aa_coords)
-        print(eq_coords, aa_coords, spedd, status)
+        print(eq_coords, aa_coords, speed, status)
         return (eq_coords, aa_coords, speed, status)
 
 
