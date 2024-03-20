@@ -23,7 +23,7 @@ class Telescope(TelescopeBase):
 
     def retrieve(self) -> tuple:
         root = self.__call(script=self.script)
-
+        logger.debug(f"map indigo: {root}")
         eq_coords = self.__retrieve_eq_coords(root)
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
