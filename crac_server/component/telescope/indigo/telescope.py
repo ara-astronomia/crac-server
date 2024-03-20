@@ -91,7 +91,7 @@ class Telescope(TelescopeBase):
         pass
     def set_speed():
         pass
-    def sync_():
+    def park():
         pass
 
 '''
