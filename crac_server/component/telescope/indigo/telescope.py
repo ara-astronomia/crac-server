@@ -19,7 +19,74 @@ class Telescope(TelescopeBase):
         super().__init__(hostname=hostname, port=port)
         self._name = config.Config.getValue("name", "indigo")
         logger.debug(f"Mount type: {self._name}")
+        self.script = {"getProperties": { "version": 512, "client": "{self._name}", "name": "MOUNT_EQUATORIAL_COORDINATES"} }
 
+    def retrieve(self) -> tuple:
+        root = self.__call(script=self.script)
+
+        eq_coords = self.__retrieve_eq_coords(root)
+        speed = self.__retrieve_speed(root)
+        aa_coords = self._retrieve_aa_coords(eq_coords)
+        status = self._retrieve_status(aa_coords)
+        print(eq_coords)
+        return (eq_coords, aa_coords, speed, status)
+
+
+    def __call(self, script: str, **kwargs) -> dict:
+        with open(script, 'r') as p:
+            file = p.read()
+            if kwargs:
+                if kwargs.get("az") is None:
+                    kwargs["az"] = ""
+                if kwargs.get("alt") is None:
+                    kwargs["alt"] = ""
+                file = file.format(**kwargs)
+            command = file.encode('utf-8')
+            logger.debug(f"Command sent su INDIGO: {command}")
+            self.s.sendall(command)
+
+        data = self.s.recv(1024).decode("utf-8")
+        error = self.__is_error__(data)
+        if error:
+            msg = f"Error code: {error}"
+            logger.error(msg)
+            raise ValueError(msg)
+        logger.debug(f"Data received from js: {data}")
+        jsonStringEnd = data.find("|")
+        jsonString = data[:jsonStringEnd]
+        try:
+            return json.loads(jsonString)
+        except json.decoder.JSONDecodeError as err:
+            logger.error(f"Json Malformed {err}")
+            raise err
+
+    def __parse_result(self, jsonLoad: dict) -> tuple:
+        #coords["error"] = self.__is_error__(jsonLoad)
+        logger.debug(f"json result is: {jsonLoad}")
+        #if not self.coords["error"]:
+        aa_coords = AltazimutalCoords(alt=round(jsonLoad["alt"], 2), az=round(jsonLoad["az"], 2))
+        if jsonLoad["tr"] == 1 and jsonLoad["sl"] == 1:
+            speed = TelescopeSpeed.SPEED_NOT_TRACKING 
+        elif jsonLoad["sl"] == 0:
+            speed = TelescopeSpeed.SPEED_SLEWING
+        elif jsonLoad["tr"] == 0:
+            speed = TelescopeSpeed.SPEED_TRACKING
+        else:
+            speed = TelescopeSpeed.SPEED_ERROR
+        
+        return (aa_coords, speed)
+        
+    def __is_error__(self, input_str, search_reg="Error = ([1-9][^\\d]|\\d{2,})") -> int:
+        r = re.search(search_reg, input_str)
+        error_code = 0
+        if r:
+            r2 = re.search('\\d+', r.group(1))
+            if r2:
+                error_code = int(r2.group(0))
+        return error_code
+
+
+'''
     def sync(self, started_at: datetime):
         self.__call(
             f"""
@@ -208,3 +275,13 @@ class Telescope(TelescopeBase):
             return properties
         except :
             logger.error(f"properties not found")
+
+'''
+
+        
+        #os.path.join(os.path.dirname(__file__), 'get_alt_az.js')
+        #self.script_move_track = os.path.join(os.path.dirname(__file__), 'set_move_track.js')
+        #self.script_sync_tele = os.path.join(os.path.dirname(__file__), 'sync_tele.js')
+        #self.script_disconnect_tele = os.path.join(os.path.dirname(__file__), 'disconnect_tele.js')
+
+    
