@@ -142,8 +142,9 @@ class Telescope(TelescopeBase):
 
     def retrieve(self) -> str:
         root = self.__call(
-            
+            f'''
              {"getProperties": { "version": 512, "client": "{self._name}", "name": "MOUNT_EQUATORIAL_COORDINATES"} }
+            '''
 
         )
         eq_coords = self.__retrieve_eq_coords(root)
