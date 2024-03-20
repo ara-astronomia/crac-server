@@ -140,7 +140,7 @@ class Telescope(TelescopeBase):
                 """
             )
 
-    def retrieve(self) -> tuple:
+    def retrieve(self) -> str:
         root = self.__call(
             
              {"getProperties": { "version": 512, "client": "{self._name}"} }
@@ -202,7 +202,7 @@ class Telescope(TelescopeBase):
         else:
             raise Exception(f"RA or DEC not present. RA: {ra}, DEC: {dec}")
 
-    def __call(self, script: str):
+    def __call(self, script):
         data = script
         properties=json.loads(data)
         logger.debug(properties)
