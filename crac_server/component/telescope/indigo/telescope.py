@@ -7,8 +7,7 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 import logging
-import xml.etree.ElementTree as ET
-
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +143,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(
             f"""
-                → <getProperties client="{self._name}" version='2.0' name="MOUNT_EQUATORIAL_COORDINATES"/>
+            { "getProperties": { "version": 512, "client": "{self._name}", name="MOUNT_EQUATORIAL_COORDINATES" } }
             """
         )
         eq_coords = self.__retrieve_eq_coords(root)
@@ -204,11 +203,10 @@ class Telescope(TelescopeBase):
             raise Exception(f"RA or DEC not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script: str):
-        self.s.sendall(script.encode("utf-8"))
-        data = self.s.recv(1024).decode("utf-8")
-        logger.debug(f"data received from xml: {data}")
+        data = script
+        properties=json.loads(data)
+        logger.debug(properties)
         try:
-            return ET.fromstring(data)
-        except ET.ParseError as err:
-            logger.error(f"Xml Malformed {err}")
-            raise err
+            return properties
+        except :
+            logger.error(f"properties not found")
