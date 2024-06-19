@@ -144,7 +144,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(
             f"""
-            <getProperties device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES"/>
+            <getProperties device="{self._name}"  version='2.0' name="MOUNT_EQUATORIAL_COORDINATES"/>  
             """
         )
         print(root)
@@ -217,6 +217,7 @@ class Telescope(TelescopeBase):
     def __call(self, script: str):
         self.s.sendall(script.encode('utf-8'))
         data = self.s.recv(30000).decode("utf-8")
+        print((f"data received from xml: {data}"))
         logger.debug(f"data received from xml: {data}")
         try:
             return ET.fromstring(data)
