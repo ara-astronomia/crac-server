@@ -147,7 +147,8 @@ class Telescope(TelescopeBase):
             <getProperties device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES"/>
             """
         )
-        eq_coords = self.__retrieve_eq_coords(root)
+        print(root)
+        eq_coords = self.__retrieve_eq_coords(root)        
         speed = self.__retrieve_speed(root)
         aa_coords = self._retrieve_aa_coords(eq_coords)
         status = self._retrieve_status(aa_coords)
