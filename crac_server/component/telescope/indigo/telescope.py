@@ -148,10 +148,14 @@ class Telescope(TelescopeBase):
             """
         )
         print(root)
-        eq_coords = self.__retrieve_eq_coords(root)        
+        eq_coords = self.__retrieve_eq_coords(root)   
+        logger.debug(f"data received from xml: {eq_coords}")     
         speed = self.__retrieve_speed(root)
+        logger.debug(f"data received from xml: {speed}")
         aa_coords = self._retrieve_aa_coords(eq_coords)
+        logger.debug(f"data received from xml: {aa_coords}")
         status = self._retrieve_status(aa_coords)
+        logger.debug(f"data received from xml: {status}")
 
         return (eq_coords, aa_coords, speed, status)
 
