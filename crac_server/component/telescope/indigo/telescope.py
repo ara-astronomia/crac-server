@@ -238,6 +238,7 @@ class Telescope(TelescopeBase):
     
         # Create a socket object
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print(self.s)
         self.s.settimeout(5.0)  # Set a timeout for the socket
 
         try:
