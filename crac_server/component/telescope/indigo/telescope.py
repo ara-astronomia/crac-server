@@ -12,6 +12,7 @@ import re
 import os
 import time
 import socket
+import sys, errno
 import xml.etree.ElementTree as ET
 logger = logging.getLogger(__name__)
 
@@ -270,8 +271,10 @@ class Telescope(TelescopeBase):
                 return response_objects
 
         except Exception as e:
-            print(f"Si è verificato un errore: {e}")
-            return None
+            if e.errno == errno.EPIPE:  
+                # Handling of the error
+                print(f"Si è verificato un errore: {e}")
+                return None
                           
 request_data = {
     "action": {
