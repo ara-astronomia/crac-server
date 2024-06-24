@@ -248,10 +248,10 @@ class Telescope(TelescopeBase):
             logger.debug(response)
             while True:
                 try:
-                    part = self.s.recv(30000)
+                    part = self.conn.recv(30000)
                     if not part:
                         break
-                    response += part<
+                    response += part
                 except socket.timeout:
                     print("Socket timeout, stopping reception.")
                     break
