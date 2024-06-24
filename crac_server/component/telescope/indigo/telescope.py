@@ -231,7 +231,7 @@ class Telescope(TelescopeBase):
                         raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script):
-        logger.debug(script)
+        print(f"QUESTO DOVREBBE ESSERE IL VALORE DI SCRIPT {script}")
         try:
             self.s.sendall(script.encode('utf-8'))
             time.sleep(1)
