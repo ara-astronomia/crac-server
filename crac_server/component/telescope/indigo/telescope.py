@@ -236,8 +236,8 @@ class Telescope(TelescopeBase):
         print(f"Request JSON: {request_json}")
     
         # Create a socket object
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(5.0)  # Set a timeout for the socket
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.s.settimeout(5.0)  # Set a timeout for the socket
 
         try:
             self.s.sendall(request_json.encode('utf-8'))
