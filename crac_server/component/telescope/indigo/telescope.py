@@ -10,6 +10,8 @@ import logging
 import json
 import re
 import os
+import time
+import socket
 import xml.etree.ElementTree as ET
 logger = logging.getLogger(__name__)
 
@@ -142,20 +144,17 @@ class Telescope(TelescopeBase):
             )
 
     def retrieve(self) -> tuple:
-        root = self.__call(
-            f"""
-            <getProperties device="{self._name}"  version='2.0' name="MOUNT_EQUATORIAL_COORDINATES"/>  
-            """
-        )
+        root = self.__call(request_data)
+           
         print(root)
         eq_coords = self.__retrieve_eq_coords(root)   
-        logger.debug(f"data received from xml: {eq_coords}")     
+        logger.debug(f"data received from json: {eq_coords}")     
         speed = self.__retrieve_speed(root)
-        logger.debug(f"data received from xml: {speed}")
+        logger.debug(f"data received from json: {speed}")
         aa_coords = self._retrieve_aa_coords(eq_coords)
-        logger.debug(f"data received from xml: {aa_coords}")
+        logger.debug(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords)
-        logger.debug(f"data received from xml: {status}")
+        logger.debug(f"data received from json: {status}")
 
         return (eq_coords, aa_coords, speed, status)
 
@@ -208,23 +207,69 @@ class Telescope(TelescopeBase):
 
     def __retrieve_eq_coords(self, root):
         ra, dec = None, None
-        for coords in root.findall("defNumber"):
-            if coords.attrib["name"] == "RA":
-                ra = round(float(coords.text), 2)
-            elif coords.attrib["name"] == "DEC":
-                dec = round(float(coords.text), 2)
-        if ra and dec:
-            return EquatorialCoords(ra=ra, dec=dec)
-        else:
-            raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
+        seen = set()
+
+        for item in root:
+            if "setNumberVector" in item:
+                vector = item["setNumberVector"]
+                if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
+                    #print(f"Processing vector: {vector['name']}")  # Debug
+                    for coord in vector["items"]:
+                        key = (vector["name"], coord["name"], coord["value"])
+                        logger.debug(f" questa è la key richiesta {key}") 
+                        if key not in seen:
+                            seen.add(key)
+                            if coord["name"] == "RA":
+                                logger.info(f"RA: {coord['value']}")
+                                ra = {coord['value']}
+                            elif coord["name"] == "DEC":
+                                logger.info(f"DEC: {coord['value']}")
+                                dec = {coord['value']}
+                    if ra and dec:
+                        return EquatorialCoords(ra=ra, dec=dec)
+                    else:
+                        raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script: str):
-        self.s.sendall(script.encode('utf-8'))
-        data = self.s.recv(30000).decode("utf-8")
-        logger.debug(f"data received from xml: {data}")
         try:
-            return ET.fromstring(data)
-        except ET.ParseError as err:
-            logger.error(f"Xml Malformed {err}")
-            raise err
+            self.s.sendall(script.encode('utf-8'))
+            time.sleep(1)
+            response=b""
+            buffer=""
+            while True:
+                try:
+                    part = self.s.recv(30000)
+                    if not part:
+                        break
+                    response += part
+                except socket.timeout:
+                    print("Socket timeout, stopping reception.")
+                    break
+                
+                # Decode the received data
+            response_json = response.decode('utf-8')
+            #print(f"Response JSON: {response_json}")  # Debugging output
 
+            # Use a regex to find and separate all complete JSON objects in the buffer
+            buffer += response_json
+            json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', buffer)
+            #print(f"Extracted JSON strings: {json_strings}")  # Debugging output
+            
+            # Convert each JSON string to a Python object
+            response_objects = [json.loads(json_str) for json_str in json_strings]
+            print(f"Response objects: {response_objects}")  # Debugging output
+
+            return response_objects
+
+        except Exception as e:
+            print(f"Si è verificato un errore: {e}")
+            return None
+                          
+request_data = {
+    "action": {
+        "getProperties": {
+            "version": 512,
+            "device": "Mount Simulator"            
+             }
+    }
+}
