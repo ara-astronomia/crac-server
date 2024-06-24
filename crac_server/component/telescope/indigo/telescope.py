@@ -245,6 +245,7 @@ class Telescope(TelescopeBase):
             time.sleep(1)
             response=b""
             buffer=""
+            logger.debug(response)
             while True:
                 try:
                     part = self.s.recv(30000)
