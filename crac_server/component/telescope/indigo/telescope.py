@@ -146,7 +146,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(request_data)
            
-        print(root)
+        print(f"questo è il valore di root {root}")
         eq_coords = self.__retrieve_eq_coords(root)   
         logger.debug(f"data received from json: {eq_coords}")     
         speed = self.__retrieve_speed(root)
@@ -257,7 +257,7 @@ class Telescope(TelescopeBase):
             
             # Convert each JSON string to a Python object
             response_objects = [json.loads(json_str) for json_str in json_strings]
-            print(f"Response objects: {response_objects}")  # Debugging output
+            logger.info(f"Response objects: {response_objects}")  # Debugging output
 
             return response_objects
 
