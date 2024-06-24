@@ -230,7 +230,7 @@ class Telescope(TelescopeBase):
                     else:
                         raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
-    def __call(self, script: str):
+    def __call(self, script):
         try:
             self.s.sendall(script.encode('utf-8'))
             time.sleep(1)
