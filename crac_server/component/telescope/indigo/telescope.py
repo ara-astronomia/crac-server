@@ -232,8 +232,15 @@ class Telescope(TelescopeBase):
 
     def __call(self, script):
         print(f"QUESTO DOVREBBE ESSERE IL VALORE DI SCRIPT {script}")
+        request_json = json.dumps(script)
+        print(f"Request JSON: {request_json}")
+    
+        # Create a socket object
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5.0)  # Set a timeout for the socket
+
         try:
-            self.s.sendall(script.encode('utf-8'))
+            self.s.sendall(request_json.encode('utf-8'))
             time.sleep(1)
             response=b""
             buffer=""
@@ -258,7 +265,7 @@ class Telescope(TelescopeBase):
             
             # Convert each JSON string to a Python object
             response_objects = [json.loads(json_str) for json_str in json_strings]
-            logger.info(f"Response objects: {response_objects}")  # Debugging output
+            print(f"Response objects: {response_objects}")  # Debugging output
 
             return response_objects
 
