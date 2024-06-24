@@ -220,10 +220,10 @@ class Telescope(TelescopeBase):
                         if key not in seen:
                             seen.add(key)
                             if coord["name"] == "RA":
-                                logger.info(f"RA: {coord['value']}")
+                                logger.debug(f"RA: {coord['value']}")
                                 ra = {coord['value']}
                             elif coord["name"] == "DEC":
-                                logger.info(f"DEC: {coord['value']}")
+                                logger.debug(f"DEC: {coord['value']}")
                                 dec = {coord['value']}
                     if ra and dec:
                         return EquatorialCoords(ra=ra, dec=dec)
@@ -255,19 +255,19 @@ class Telescope(TelescopeBase):
                     break
                 
                 # Decode the received data
-            response_json = response.decode('utf-8')
-            #print(f"Response JSON: {response_json}")  # Debugging output
+                response_json = response.decode('utf-8')
+                #print(f"Response JSON: {response_json}")  # Debugging output
 
-            # Use a regex to find and separate all complete JSON objects in the buffer
-            buffer += response_json
-            json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', buffer)
-            #print(f"Extracted JSON strings: {json_strings}")  # Debugging output
-            
-            # Convert each JSON string to a Python object
-            response_objects = [json.loads(json_str) for json_str in json_strings]
-            print(f"Response objects: {response_objects}")  # Debugging output
+                # Use a regex to find and separate all complete JSON objects in the buffer
+                buffer += response_json
+                json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', buffer)
+                #print(f"Extracted JSON strings: {json_strings}")  # Debugging output
+                
+                # Convert each JSON string to a Python object
+                response_objects = [json.loads(json_str) for json_str in json_strings]
+                print(f"Response objects: {response_objects}")  # Debugging output
 
-            return response_objects
+                return response_objects
 
         except Exception as e:
             print(f"Si è verificato un errore: {e}")
