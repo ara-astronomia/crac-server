@@ -237,12 +237,11 @@ class Telescope(TelescopeBase):
         print(f"Request JSON: {request_json}")
     
         # Create a socket object
-        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(self.s)
-        self.s.settimeout(5.0)  # Set a timeout for the socket
+        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.conn.settimeout(5.0)  # Set a timeout for the socket
 
         try:
-            self.s.sendall(request_json.encode('utf-8'))
+            self.conn.sendall(request_json.encode('utf-8'))
             time.sleep(1)
             response=b""
             buffer=""
@@ -252,7 +251,7 @@ class Telescope(TelescopeBase):
                     part = self.s.recv(30000)
                     if not part:
                         break
-                    response += part
+                    response += part<
                 except socket.timeout:
                     print("Socket timeout, stopping reception.")
                     break
