@@ -147,7 +147,7 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         root = self.__call(request_data)
            
-        print(f"questo è il valore di root {root}")
+        #print(f"questo è il valore di root {root}") #debug
         eq_coords = self.__retrieve_eq_coords(root)   
         logger.debug(f"data received from json: {eq_coords}")     
         speed = self.__retrieve_speed(root)
@@ -207,48 +207,51 @@ class Telescope(TelescopeBase):
         #         return TelescopeSpeed.SPEED_ERROR
 
     def __retrieve_eq_coords(self, root):
+        #print(f"questo è il valore di root nel metodo __retrive_eq_coords {root}")
         ra, dec = None, None
         seen = set()
 
         for item in root:
+            print (item)
             if "setNumberVector" in item:
                 vector = item["setNumberVector"]
                 if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
-                    #print(f"Processing vector: {vector['name']}")  # Debug
+                    print(f"Processing vector: {vector['name']}")  # Debug
                     for coord in vector["items"]:
                         key = (vector["name"], coord["name"], coord["value"])
-                        logger.debug(f" questa è la key richiesta {key}") 
+                        #logger.info(f" questa è la key richiesta {key}") 
                         if key not in seen:
                             seen.add(key)
                             if coord["name"] == "RA":
-                                logger.debug(f"RA: {coord['value']}")
-                                ra = {coord['value']}
+                                logger.info(f"RA: {coord['value']}")
+                                ra = round(float(coord['value']),2)
                             elif coord["name"] == "DEC":
-                                logger.debug(f"DEC: {coord['value']}")
-                                dec = {coord['value']}
+                                logger.info(f"DEC: {coord['value']}")
+                                dec = round(float(coord['value']),2)
                     if ra and dec:
                         return EquatorialCoords(ra=ra, dec=dec)
                     else:
                         raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __call(self, script):
-        print(f"QUESTO DOVREBBE ESSERE IL VALORE DI SCRIPT {script}")
+        #print(f"QUESTO DOVREBBE ESSERE IL VALORE DI SCRIPT {script}")
         request_json = json.dumps(script)
-        print(f"Request JSON: {request_json}")
-    
+        #print(f"Request JSON: {request_json}")
+
         # Create a socket object
-        self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.conn.settimeout(5.0)  # Set a timeout for the socket
+        #self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.s.settimeout(5.0)  # Set a timeout for the socket  
+
 
         try:
-            self.conn.sendall(request_json.encode('utf-8'))
+            self.s.sendall(request_json.encode('utf-8'))
             time.sleep(1)
             response=b""
             buffer=""
-            logger.debug(response)
             while True:
                 try:
-                    part = self.conn.recv(30000)
+                    part = self.s.recv(30000)
                     if not part:
                         break
                     response += part
@@ -267,7 +270,7 @@ class Telescope(TelescopeBase):
                 
                 # Convert each JSON string to a Python object
                 response_objects = [json.loads(json_str) for json_str in json_strings]
-                print(f"Response objects: {response_objects}")  # Debugging output
+                #print(f"Response objects: {response_objects}")  # Debugging output
 
                 return response_objects
 
@@ -280,7 +283,7 @@ class Telescope(TelescopeBase):
 request_data = {
     "action": {
         "getProperties": {
-            "version": 512,
+            "version": 2.0,
             "device": "Mount Simulator"            
              }
     }
