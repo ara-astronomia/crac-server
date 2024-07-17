@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,
     AltazimutalCoords,
@@ -140,7 +141,6 @@ class Telescope(TelescopeBase):
                         }
                     )
                     
-
     def __retrieve_status_park(self, root):
         seen = set()
         
@@ -154,13 +154,9 @@ class Telescope(TelescopeBase):
                         if key not in seen:
                             seen.add(key)
                             if park['name'] == "PARKED":
-                                if  park["value"] == True:
-                                    print (f"QUESTO È IL VALORE DI PARK, SE TRUE, RICAVATO DAL NUOVO METODO  {park['value']}")
-                                    return TelescopeStatus.PARKED
-                                else:
-                                    print (f"QUESTO È IL VALORE DI PARK, SE FALSE, RICAVATO DAL NUOVO METODO {park['value']}")
-                                    return TelescopeStatus.SECURE
-
+                                return True
+                            else:
+                                return False
 
 
 
@@ -208,12 +204,33 @@ class Telescope(TelescopeBase):
         logger.debug(f"data received from json: {speed}")
         aa_coords = self._retrieve_aa_coords(eq_coords)
         logger.debug(f"data received from json: {aa_coords}")
-        status = self._retrieve_status(aa_coords)
+        status = self._retrieve_status(aa_coords, root)
         logger.debug(f"data received from json: {status}")
-        park=self.__retrieve_status_park(root)
-        logger.info(f"data received from json: {park}")
 
         return (eq_coords, aa_coords, speed, status)
+    
+    def _retrieve_status(self, aa_coords: AltazimutalCoords, root: Any) -> TelescopeStatus:
+        if not self._polling:
+            return TelescopeStatus.DISCONNECTED
+        elif self.__retrieve_status_park(root):
+            return TelescopeStatus.PARKED
+        elif self.__within_flat_alt_range(aa_coords.alt) and self.__within_flat_az_range(aa_coords.az):
+            return TelescopeStatus.FLATTER
+        elif aa_coords.alt <= config.Config.getFloat("max_secure_alt", "telescope"):
+            return TelescopeStatus.SECURE
+        else:
+            if config.Config.getInt("azNE", "azimut") > aa_coords.az:
+                return TelescopeStatus.NORTHEAST
+            elif aa_coords.az > config.Config.getInt("azNW", "azimut"):
+                return TelescopeStatus.NORTHWEST
+            elif config.Config.getInt("azSW", "azimut") > aa_coords.az > 180:
+                return TelescopeStatus.SOUTHWEST
+            elif 180 >= aa_coords.az > config.Config.getInt("azSE", "azimut"):
+                return TelescopeStatus.SOUTHEAST
+            elif config.Config.getInt("azSW", "azimut") < aa_coords.az <= config.Config.getInt("azNW", "azimut"):
+                return TelescopeStatus.WEST
+            elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
+                return TelescopeStatus.EAST
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call(
