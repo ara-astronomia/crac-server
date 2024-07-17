@@ -3,6 +3,7 @@ from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,
     AltazimutalCoords,
     TelescopeSpeed,
+    TelescopeStatus,  # type: ignore
 )
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
@@ -70,84 +71,137 @@ class Telescope(TelescopeBase):
         )
 
     def set_speed(self, speed: TelescopeSpeed):
+        print(f"QUESTO È IL VALORE DI SPEED RILEVATO IN set_speed: {speed}")
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            print(f"QUESTO È IL VALORE DI SPEED RILEVATO IN set_speed per SPEED_TRACKING: {speed}")
             self.__call(
-                f"""
-                    <oneNumberVector device="{self._name}" name="MOUNT_TRACKING">
-                        <oneNumber name="OFF">
-                            On
-                        </oneNumber>
-                    </oneNumberVector>
-                """
-            )
+                        {"newSwitchVector": 
+                                { 
+                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items": 
+                                    [
+                                        { "name": "ON", "value": False}, 
+                                        { "name": "OFF", "value": True} 
+                                    ] 
+                                } 
+                            }
+                        )
         else:
+            print(f"QUESTO È IL VALORE DI SPEED RILEVATO IN set_speed per SPEED_NOT_TRACKING: {speed}")
             self.__call(
-                f"""
-                    <oneNumberVector device="{self._name}" name="MOUNT_TRAKING">
-                        <oneNumber name="ON">
-                            On
-                        </oneNumber>
-                    </oneNumberVector>
-                """
-            )
-            self.__call(
-                f"""
-                    <oneNumberVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
-                        <oneNumber name="SLEW">
-                            {"On" if speed == TelescopeSpeed.SPEED_SLEWING else "Off"}
-                        </oneNumber>
-                        <oneNumber name="TRACK">
-                            {"On" if speed == TelescopeSpeed.SPEED_TRACKING else "Off"}
-                        </oneNumber>
-                        <oneNumber name="SYNC">
-                            Off
-                        </oneNumber>
-                    </oneNumberVector>
-                """
-            )
+                        {"newSwitchVector": 
+                                { 
+                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items": 
+                                    [
+                                        { "name": "ON", "value": True}, 
+                                        { "name": "OFF", "value": False} 
+                                    ] 
+                                } 
+                            }
+                        )
+            
+            if speed == TelescopeSpeed.SPEED_TRACKING:
+                self.__call(
+                            {"newNumberVector": 
+                                { 
+                                    "device": self._name, "name": "MOUNT_ON_COORDINATES_SET", "state": "Ok", "items": 
+                                    [
+                                        { "name": "SLEW", "value": True},
+                                        { "name": "TRACK", "value": True}
+                                    ] 
+                                } 
+                            }
+                        )
+            else:
+                self.__call(
+                            {"newNumberVector": 
+                                { 
+                                    "device": self._name, "name": "MOUNT_ON_COORDINATES_SET", "state": "Ok", "items": 
+                                    [
+                                        { "name": "SLEW", "value": False},
+                                        { "name": "TRACK", "value": False},
+                                        { "name": "SYNC", "value": False}
+
+                                    ] 
+                                } 
+                            }
+                        )
+
 
     def park(self, speed: TelescopeSpeed):
-        self.__move(
-            aa_coords=AltazimutalCoords(
-                alt=config.Config.getFloat("park_alt", "telescope"),
-                az=config.Config.getFloat("park_az", "telescope")
-            ),
-            speed=speed
-        )
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            self.__call(
-                f"""
-                <oneNumberVector device="{self._name}" name="MOUNT_TRACKING">
-                    <oneNumber name="OFF">
-                        On
-                    </oneNumber>
-                </oneNumberVector>
-                """
-            )
+        self.__call(
+                        {"newSwitchVector": 
+                            { 
+                                "device": self._name, "name": "MOUNT_PARK", "state": "Ok", "items": 
+                                    [
+                                        { "name": "PARKED", "value": True},
+                                        { "name": "UNPARKED", "value": False}
+                                    ] 
+                            } 
+                        }
+                    )
+                    
 
+    def __retrieve_status_park(self, root):
+        seen = set()
+        
+        for item in root:
+            if "defSwitchVector" in item:
+                vector = item["defSwitchVector"]
+                if vector["name"] == "MOUNT_PARK":
+                    for park in vector["items"]:
+                        key = (vector["name"], vector['state'], park["name"], park["value"])
+                        logger.info(f"valore della key richiesta PER MOUNT PARK {key}")
+                        if key not in seen:
+                            seen.add(key)
+                            if park['name'] == "PARKED":
+                                if  park["value"] == True:
+                                    print (f"QUESTO È IL VALORE DI PARK, SE TRUE, RICAVATO DAL NUOVO METODO  {park['value']}")
+                                    return TelescopeStatus.PARKED
+                                else:
+                                    print (f"QUESTO È IL VALORE DI PARK, SE FALSE, RICAVATO DAL NUOVO METODO {park['value']}")
+                                    return TelescopeStatus.SECURE
+
+
+
+
+                           
     def flat(self, speed: TelescopeSpeed):
+        logger.info(f"QUESTO È IL VALORE DI SPEED PRIMA DEL MOVE IN FLAT:")
+        print(speed)
+        speed=speed        
         self.__move(
             aa_coords=AltazimutalCoords(
                 alt=config.Config.getFloat("flat_alt", "telescope"),
                 az=config.Config.getFloat("flat_az", "telescope")
             ),
             speed=speed
-        )
+        )        
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            logger.info(f"QUESTO È IL VALORE DI SPEED, SE SPEED_NOT_TRACKING, AL TERMINE DEL MOVE IN FLAT:")
+            print(speed)
             self.__call(
-                f"""
-                <oneNumberVector device="{self._name}" name="MOUNT_TRACKING">
-                    <oneNumber name="OFF">
-                        On
-                    </oneNumber>
-                </oneNumberVector>
-                """
-            )
+                            {"newSwitchVector": 
+                                { 
+                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items": 
+                                    [
+                                        { "name": "ON", "value": False},
+                                        { "name": "OFF", "value": True}
+                                    ] 
+                                } 
+                            }
+                        )
 
     def retrieve(self) -> tuple:
-        root = self.__call(request_data)
+        root = self.__call(
+                            {"getProperties": 
+                                {
+                                    "version": 512,
+                                    "device": "Mount Simulator"
+                                }
+                            }
+                        )
            
-        #print(f"questo è il valore di root {root}") #debug
+        
         eq_coords = self.__retrieve_eq_coords(root)   
         logger.debug(f"data received from json: {eq_coords}")     
         speed = self.__retrieve_speed(root)
@@ -156,135 +210,153 @@ class Telescope(TelescopeBase):
         logger.debug(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords)
         logger.debug(f"data received from json: {status}")
+        park=self.__retrieve_status_park(root)
+        logger.info(f"data received from json: {park}")
 
         return (eq_coords, aa_coords, speed, status)
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call(
-            f"""
-                <oneNumberVector device="{self._name}" name="MOUNT_PARK">
-                    <oneNumber name="UNPARKED">
-                        On
-                    </oneNumber>
-                </oneNumberVector>
-            """
-        )
+                        {"newSwitchVector": 
+                            { 
+                                "device": self._name, "name": "MOUNT_PARK", "state": "Ok", "items": 
+                                    [
+                                        { "name": "PARKED", "value": False},
+                                        { "name": "UNPARKED", "value": True}
+                                    ] 
+                            } 
+                        }
+                    )
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug(aa_coords)
         logger.debug(eq_coords)
         self.queue_set_speed(speed)
         self.__call(
-            f"""
-                <defNumberVector device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES">
-                    <defNumber name="DEC">
-                      {eq_coords.dec}
-                    </defNumber>
-                    <defNumber name="RA">
-                      {eq_coords.ra}
-                    </defNumber>
-                </defNumberVector>
-            """
-        )
-
+                    {"newNumberVector": 
+                        { 
+                            "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items": 
+                            [
+                                { "name": "DEC", "value": eq_coords.dec}, 
+                                { "name": "RA", "value": eq_coords.ra} 
+                            ] 
+                        } 
+                    }
+                    )  
     def __retrieve_speed(self, root):
-        state = root.attrib["state"].strip() if root else None
-        if state == "Ok":
-            return TelescopeSpeed.SPEED_TRACKING
-        elif state == "Idle":
-            return TelescopeSpeed.SPEED_NOT_TRACKING
-        elif state == "Busy":
-            return TelescopeSpeed.SPEED_SLEWING
-        else:
-            return TelescopeSpeed.SPEED_ERROR
-        # match state:
-        #     case "Ok":
-        #         return TelescopeSpeed.SPEED_TRACKING
-        #     case "Idle":
-        #         return TelescopeSpeed.SPEED_NOT_TRACKING
-        #     case "Busy":
-        #         return TelescopeSpeed.SPEED_SLEWING
-        #     case _:
-        #         return TelescopeSpeed.SPEED_ERROR
+        seen = set()
+        
+        for item in root:
+            if "defSwitchVector" in item:
+                vector = item["defSwitchVector"]
+                if vector["name"] == "MOUNT_TRACKING":
+                    for track in vector["items"]:
+                        key = (vector["name"], vector['state'], track["name"], track["value"])
+                        #logger.info(f"valore della key richiesta PER MOUNT TRACKING {key}")
+                        if key not in seen:
+                            seen.add(key)
+                            if track['name'] == "ON":
+                                if track["value"] == True:
+                                    status_mount_track = 'ON'
+                                else:
+                                    status_mount_track = 'OFF'    
+                                logger.info(f"VALORE DI STATUS MOUNT TRACK: {status_mount_track}")
 
+            if "defNumberVector" in item:
+                vector = item["defNumberVector"]
+                if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
+                    for coord in vector["items"]:
+                        key = (vector["name"], vector['state'], coord["name"], coord["value"])
+                        #logger.info(f"valore della key richiesta{key}")
+                        if key not in seen:
+                            seen.add(key)
+                            status_mount_speed= vector['state']
+                            logger.info(f"VALORE DI STATUS MOUNT SPEED(vector=MOUNT_EQUATORIAL_COORDINATES): {status_mount_speed}")           
+
+                            
+                            if status_mount_speed == "Ok" and status_mount_track == 'ON':
+                                return TelescopeSpeed.SPEED_TRACKING
+                            if status_mount_speed == "Idle" and status_mount_track == 'OFF':
+                                return TelescopeSpeed.SPEED_NOT_TRACKING
+                            if status_mount_speed == "Busy":
+                                return TelescopeSpeed.SPEED_SLEWING
+                            else:
+                                return TelescopeSpeed.SPEED_ERROR
+
+                           
     def __retrieve_eq_coords(self, root):
-        #print(f"questo è il valore di root nel metodo __retrive_eq_coords {root}")
         ra, dec = None, None
         seen = set()
-
-        for item in root:
-            print (item)
-            if "setNumberVector" in item:
-                vector = item["setNumberVector"]
+        for item in root:            
+            if "defNumberVector" in item:
+                vector = item["defNumberVector"]
                 if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
-                    print(f"Processing vector: {vector['name']}")  # Debug
                     for coord in vector["items"]:
-                        key = (vector["name"], coord["name"], coord["value"])
-                        #logger.info(f" questa è la key richiesta {key}") 
+                        key = (vector["name"], vector['state'], coord["name"], coord["value"])
+                        #logger.info(f"valore della key richiesta{key}")
                         if key not in seen:
                             seen.add(key)
                             if coord["name"] == "RA":
-                                logger.info(f"RA: {coord['value']}")
-                                ra = round(float(coord['value']),2)
+                                #logger.info(f"RA: {coord['value']}")
+                                ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
-                                logger.info(f"DEC: {coord['value']}")
-                                dec = round(float(coord['value']),2)
+                                #logger.info(f"DEC: {coord['value']}")
+                                dec = round(float(coord['value']),5)
                     if ra and dec:
                         return EquatorialCoords(ra=ra, dec=dec)
                     else:
                         raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
-
+ 
+       
     def __call(self, script):
-        #print(f"QUESTO DOVREBBE ESSERE IL VALORE DI SCRIPT {script}")
+        logger.info(f"QUESTO LO SCRIPT PASSATO DAL METODO __CALL: {script}")
         request_json = json.dumps(script)
-        #print(f"Request JSON: {request_json}")
+        self.s.settimeout(2)  # Set a timeout for the socket  
+        responses=[]
 
-        # Create a socket object
-        #self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        self.s.settimeout(5.0)  # Set a timeout for the socket  
-
-
-        try:
-            self.s.sendall(request_json.encode('utf-8'))
-            time.sleep(1)
+        def send_and_receive(request):
             response=b""
-            buffer=""
-            while True:
-                try:
-                    part = self.s.recv(30000)
-                    if not part:
+            try:
+                self.s.sendall(request)
+                time.sleep(2)
+                while True:
+                    try:
+                        part = self.s.recv(100000)
+                        if not part:
+                            break
+                        response +=part
+
+                    except socket.timeout:
+                        print("Socket timeout, stopping reception.")
                         break
-                    response += part
-                except socket.timeout:
-                    print("Socket timeout, stopping reception.")
-                    break
-                
-                # Decode the received data
-                response_json = response.decode('utf-8')
-                #print(f"Response JSON: {response_json}")  # Debugging output
 
-                # Use a regex to find and separate all complete JSON objects in the buffer
-                buffer += response_json
-                json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', buffer)
-                #print(f"Extracted JSON strings: {json_strings}")  # Debugging output
-                
-                # Convert each JSON string to a Python object
-                response_objects = [json.loads(json_str) for json_str in json_strings]
-                #print(f"Response objects: {response_objects}")  # Debugging output
+                    return response        
+            except Exception as e:
+                if isinstance(e, socket.error) and e.errno == errno.EPIPE:
+                    print(f"Si è verificato un errore: {e}")
+            
+        response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
+        if response_with_newline:
+            responses.append(response_with_newline.decode('utf-8'))
 
-                return response_objects
 
-        except Exception as e:
-            if e.errno == errno.EPIPE:  
-                # Handling of the error
-                print(f"Si è verificato un errore: {e}")
-                return None
-                          
-request_data = {
-    "action": {
-        "getProperties": {
-            "version": 2.0,
-            "device": "Mount Simulator"            
-             }
-    }
-}
+        # Send request without newline
+        response_without_newline = send_and_receive(request_json.encode('utf-8'))
+        if response_without_newline:
+            responses.append(response_without_newline.decode('utf-8'))
+
+        # Combine responses and process them
+        combined_response = "\n".join(responses)  
+
+        # Use a regex to find and separate all complete JSON objects in the combined response
+        json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', combined_response)
+
+        # Convert each JSON string to a Python object
+        response_objects = []
+        for json_str in json_strings:
+            try:
+                json_obj = json.loads(json_str)
+                response_objects.append(json_obj)
+            except json.JSONDecodeError as e:
+                print(f"Errore nella decodifica del JSON: {e}")
+       
+        return response_objects
