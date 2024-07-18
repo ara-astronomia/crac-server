@@ -72,9 +72,7 @@ class Telescope(TelescopeBase):
         )
 
     def set_speed(self, speed: TelescopeSpeed):
-        print(f"QUESTO È IL VALORE DI SPEED RILEVATO IN set_speed: {speed}")
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            print(f"QUESTO È IL VALORE DI SPEED RILEVATO IN set_speed per SPEED_TRACKING: {speed}")
             self.__call(
                         {"newSwitchVector": 
                                 { 
@@ -87,7 +85,6 @@ class Telescope(TelescopeBase):
                             }
                         )
         else:
-            print(f"QUESTO È IL VALORE DI SPEED RILEVATO IN set_speed per SPEED_NOT_TRACKING: {speed}")
             self.__call(
                         {"newSwitchVector": 
                                 { 
@@ -150,31 +147,23 @@ class Telescope(TelescopeBase):
                 if vector["name"] == "MOUNT_PARK":
                     for park in vector["items"]:
                         key = (vector["name"], vector['state'], park["name"], park["value"])
-                        logger.info(f"valore della key richiesta PER MOUNT PARK {key}")
                         if key not in seen:
                             seen.add(key)
                             if park['name'] == "PARKED":
-                                return True
-                            else:
-                                return False
+                                return park["value"] 
 
-
-
+        return False
                            
     def flat(self, speed: TelescopeSpeed):
-        logger.info(f"QUESTO È IL VALORE DI SPEED PRIMA DEL MOVE IN FLAT:")
-        print(speed)
         speed=speed        
         self.__move(
-            aa_coords=AltazimutalCoords(
-                alt=config.Config.getFloat("flat_alt", "telescope"),
-                az=config.Config.getFloat("flat_az", "telescope")
-            ),
-            speed=speed
-        )        
+                        aa_coords=AltazimutalCoords(
+                            alt=config.Config.getFloat("flat_alt", "telescope"),
+                            az=config.Config.getFloat("flat_az", "telescope")
+                        ),
+                        speed=speed
+                    )        
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            logger.info(f"QUESTO È IL VALORE DI SPEED, SE SPEED_NOT_TRACKING, AL TERMINE DEL MOVE IN FLAT:")
-            print(speed)
             self.__call(
                             {"newSwitchVector": 
                                 { 
@@ -260,15 +249,13 @@ class Telescope(TelescopeBase):
                     }
                     )  
     def __retrieve_speed(self, root):
-        seen = set()
-        
+        seen = set()        
         for item in root:
             if "defSwitchVector" in item:
                 vector = item["defSwitchVector"]
                 if vector["name"] == "MOUNT_TRACKING":
                     for track in vector["items"]:
                         key = (vector["name"], vector['state'], track["name"], track["value"])
-                        #logger.info(f"valore della key richiesta PER MOUNT TRACKING {key}")
                         if key not in seen:
                             seen.add(key)
                             if track['name'] == "ON":
@@ -276,20 +263,16 @@ class Telescope(TelescopeBase):
                                     status_mount_track = 'ON'
                                 else:
                                     status_mount_track = 'OFF'    
-                                logger.info(f"VALORE DI STATUS MOUNT TRACK: {status_mount_track}")
-
+                                
             if "defNumberVector" in item:
                 vector = item["defNumberVector"]
                 if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
                     for coord in vector["items"]:
                         key = (vector["name"], vector['state'], coord["name"], coord["value"])
-                        #logger.info(f"valore della key richiesta{key}")
                         if key not in seen:
                             seen.add(key)
                             status_mount_speed= vector['state']
-                            logger.info(f"VALORE DI STATUS MOUNT SPEED(vector=MOUNT_EQUATORIAL_COORDINATES): {status_mount_speed}")           
-
-                            
+                                                        
                             if status_mount_speed == "Ok" and status_mount_track == 'ON':
                                 return TelescopeSpeed.SPEED_TRACKING
                             if status_mount_speed == "Idle" and status_mount_track == 'OFF':
@@ -309,14 +292,11 @@ class Telescope(TelescopeBase):
                 if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
                     for coord in vector["items"]:
                         key = (vector["name"], vector['state'], coord["name"], coord["value"])
-                        #logger.info(f"valore della key richiesta{key}")
                         if key not in seen:
                             seen.add(key)
                             if coord["name"] == "RA":
-                                #logger.info(f"RA: {coord['value']}")
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
-                                #logger.info(f"DEC: {coord['value']}")
                                 dec = round(float(coord['value']),5)
                     if ra and dec:
                         return EquatorialCoords(ra=ra, dec=dec)
@@ -325,7 +305,6 @@ class Telescope(TelescopeBase):
  
        
     def __call(self, script):
-        logger.info(f"QUESTO LO SCRIPT PASSATO DAL METODO __CALL: {script}")
         request_json = json.dumps(script)
         self.s.settimeout(2)  # Set a timeout for the socket  
         responses=[]
