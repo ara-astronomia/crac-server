@@ -157,12 +157,13 @@ class Telescope(TelescopeBase):
     def flat(self, speed: TelescopeSpeed):
         speed=speed        
         self.__move(
-                        aa_coords=AltazimutalCoords(
-                            alt=config.Config.getFloat("flat_alt", "telescope"),
-                            az=config.Config.getFloat("flat_az", "telescope")
-                        ),
-                        speed=speed
-                    )        
+                    aa_coords=AltazimutalCoords(
+                        alt=config.Config.getFloat("flat_alt", "telescope"),
+                        az=config.Config.getFloat("flat_az", "telescope")
+                    ),
+                speed=speed
+                )
+                
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                             {"newSwitchVector": 
@@ -298,25 +299,24 @@ class Telescope(TelescopeBase):
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
-                    if ra and dec:
-                        return EquatorialCoords(ra=ra, dec=dec)
-                    else:
-                        raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
- 
+        if ra and dec:
+            return EquatorialCoords(ra=ra, dec=dec)
+        else:
+            raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
        
     def __call(self, script):
         request_json = json.dumps(script)
-        self.s.settimeout(2)  # Set a timeout for the socket  
+        self.s.settimeout(1)  # Set a timeout for the socket  
         responses=[]
 
         def send_and_receive(request):
             response=b""
             try:
                 self.s.sendall(request)
-                time.sleep(2)
+                time.sleep(5)
                 while True:
                     try:
-                        part = self.s.recv(100000)
+                        part = self.s.recv(2500000)
                         if not part:
                             break
                         response +=part
