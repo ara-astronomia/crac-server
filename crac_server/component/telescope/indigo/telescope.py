@@ -163,7 +163,7 @@ class Telescope(TelescopeBase):
                     ),
                 speed=speed
                 )
-                
+           
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                             {"newSwitchVector": 
@@ -182,17 +182,18 @@ class Telescope(TelescopeBase):
                             {"getProperties": 
                                 {
                                     "version": 512,
-                                    "device": "Mount Simulator"
+                                    "device": self._name
                                 }
                             }
                         )
            
-        
+        #print(root)
         eq_coords = self.__retrieve_eq_coords(root)   
         logger.debug(f"data received from json: {eq_coords}")     
         speed = self.__retrieve_speed(root)
         logger.debug(f"data received from json: {speed}")
-        aa_coords = self._retrieve_aa_coords(eq_coords)
+        #aa_coords = self._retrieve_aa_coords(eq_coords)
+        aa_coords = self.__retrieve_aa_coords(root)
         logger.debug(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords, root)
         logger.debug(f"data received from json: {status}")
@@ -223,17 +224,7 @@ class Telescope(TelescopeBase):
                 return TelescopeStatus.EAST
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
-        self.__call(
-                        {"newSwitchVector": 
-                            { 
-                                "device": self._name, "name": "MOUNT_PARK", "state": "Ok", "items": 
-                                    [
-                                        { "name": "PARKED", "value": False},
-                                        { "name": "UNPARKED", "value": True}
-                                    ] 
-                            } 
-                        }
-                    )
+
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug(aa_coords)
         logger.debug(eq_coords)
@@ -303,7 +294,27 @@ class Telescope(TelescopeBase):
             return EquatorialCoords(ra=ra, dec=dec)
         else:
             raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
-       
+
+    def __retrieve_aa_coords(self, root):
+        ra, dec = None, None
+        seen = set()
+        for item in root:            
+            if "defNumberVector" in item:
+                vector = item["defNumberVector"]
+                if vector["name"] == "MOUNT_HORIZONTAL_COORDINATES":
+                    for coord in vector["items"]:
+                        key = (vector["name"], vector['state'], coord["name"], coord["value"])
+                        if key not in seen:
+                            seen.add(key)
+                            if coord["name"] == "ALT":
+                                alt = round(float(coord['value']),5)
+                            elif coord["name"] == "AZ":
+                                az = round(float(coord['value']),5)
+        if alt and az:
+            return AltazimutalCoords(alt=alt, az=az)
+        else:
+            raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
+ 
     def __call(self, script):
         request_json = json.dumps(script)
         self.s.settimeout(1)  # Set a timeout for the socket  
