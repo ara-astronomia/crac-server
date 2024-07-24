@@ -241,7 +241,9 @@ class Telescope(TelescopeBase):
                     }
                     )  
     def __retrieve_speed(self, root):
-        seen = set()        
+        seen = set()    
+        #status_mount_speed=[]    
+        #status_mount_track=[]
         for item in root:
             if "defSwitchVector" in item:
                 vector = item["defSwitchVector"]
@@ -265,14 +267,14 @@ class Telescope(TelescopeBase):
                             seen.add(key)
                             status_mount_speed= vector['state']
                                                         
-                            if status_mount_speed == "Ok" and status_mount_track == 'ON':
-                                return TelescopeSpeed.SPEED_TRACKING
-                            if status_mount_speed == "Idle" and status_mount_track == 'OFF':
-                                return TelescopeSpeed.SPEED_NOT_TRACKING
-                            if status_mount_speed == "Busy":
-                                return TelescopeSpeed.SPEED_SLEWING
-                            else:
-                                return TelescopeSpeed.SPEED_ERROR
+        if status_mount_speed == "Ok" and status_mount_track == 'ON':
+            return TelescopeSpeed.SPEED_TRACKING
+        if status_mount_speed == "Idle" and status_mount_track == 'OFF':
+            return TelescopeSpeed.SPEED_NOT_TRACKING
+        if status_mount_speed == "Busy":
+            return TelescopeSpeed.SPEED_SLEWING
+        else:
+            return TelescopeSpeed.SPEED_ERROR
 
                            
     def __retrieve_eq_coords(self, root):
