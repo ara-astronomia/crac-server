@@ -208,7 +208,7 @@ class Telescope(ABC):
         return self.__within_range(az, config.Config.getFloat("park_az", "telescope"))
 
     def __within_range(self, coord: float, check: float):
-        return coord - 1 <= check <= coord + 1
+        return coord - 2 <= check <= coord + 2
     
     def _calculate_eq_coords_of_park_position(self, started_at: datetime) -> EquatorialCoords:
         aa_coords = AltazimutalCoords(

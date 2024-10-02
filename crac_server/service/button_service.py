@@ -13,13 +13,14 @@ from crac_server.handler.button_handler import (
     ButtonTelescopeHandler, 
     ButtonWeatherHandler,
 )
+import asyncio
 
 
 logger = logging.getLogger(__name__)
 
 
 class ButtonService(ButtonServicer):
-    def SetAction(self, request: ButtonRequest, context):
+    async def SetAction(self, request: ButtonRequest, context):
         logger.debug("Request " + str(request))
         button_mediator = ButtonMediator(request)
 
@@ -31,7 +32,7 @@ class ButtonService(ButtonServicer):
         
         return weather_handler.handle(button_mediator)
 
-    def GetStatus(self, request, context):
+    async def GetStatus(self, request, context):
         tele_switch_button = self.SetAction(
             request = ButtonRequest(
                 action=ButtonAction.CHECK_BUTTON,
@@ -60,5 +61,5 @@ class ButtonService(ButtonServicer):
             ),
             context=context,
         )
-
-        return ButtonsResponse(buttons=(tele_switch_button, ccd_switch_button, flat_ligth_button, dome_light_button))
+        buttons = await asyncio.gather(tele_switch_button, ccd_switch_button, flat_ligth_button, dome_light_button)
+        return ButtonsResponse(buttons=buttons)

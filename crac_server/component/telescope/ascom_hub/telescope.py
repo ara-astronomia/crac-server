@@ -39,7 +39,7 @@ class Telescope(TelescopeBase):
 
     def flat(self, speed: TelescopeSpeed = None):  # type: ignore
         self._unpark_and_track()
-        eq_coords = self._altaz2radec(aa_coords=self._flat_coordinate, obstime=datetime.utcnow())
+        eq_coords = self._altaz2radec(aa_coords=self._flat_coordinate, obstime=datetime.utcnow(), decimal_places=2)
         logger.debug(f"Coordinates for flat: ra: {eq_coords.ra} dec: {eq_coords.dec}")  # type: ignore
         self._put_response("slewtocoordinates", {"RightAscension": eq_coords.ra, "Declination": eq_coords.dec})
         self._put_response("tracking", {"Tracking": False})

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class TelescopeService(TelescopeServicer):
-    def SetAction(self, request, context):
+    async def SetAction(self, request, context):
         logger.debug("TelescopeRequest TelescopeService" + str(request))
         telescope_mediator = TelescopeMediator(request)
 
