@@ -9,10 +9,10 @@ license = "GPL3"
 python = "^3.9"
 crac-protobuf = { git = "https://github.com/ara-astronomia/crac-protobuf", tag="0.1.21.0" }
 grpcio-tools = "^1.43.0"
-gpiozero = "^1.6.2"
+gpiozero = "^2.0.1"
+lgpio = "^0.2.2.0"
 astropy = "^5.0.1"
 # skyfield = "^1.42"
-"RPi.GPIO" = "^0.7.1"
 python-dotenv = "^0.20.0"
 requests = "^2.28.1"
 
