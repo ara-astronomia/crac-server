@@ -7,4 +7,5 @@ WEATHER = Weather(
     fallback_url=Config.getValue("fallback_url", "weather"),
     time_format=Config.getValue("time_format", "weather"),
     time_expired=Config.getInt("time_expired", "weather"),
+    retry_interval=Config.getInt("retry_interval", "weather"),
 )

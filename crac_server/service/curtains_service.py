@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class CurtainsService(CurtainServicer):
-    def SetAction(self, request, context):
+    async def SetAction(self, request, context):
         logger.debug("Request " + str(request))
         curtains_mediator = CurtainsMediator(request)
 

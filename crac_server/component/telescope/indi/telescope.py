@@ -23,7 +23,7 @@ class Telescope(TelescopeBase):
     def sync(self, started_at: datetime):
         self.__call(
             f"""
-                <newSwitchVector device="{self._name}" name="ON_COORD_SET">
+                <setSwitchVector device="{self._name}" name="ON_COORD_SET">
                     <oneSwitch name="SLEW">
                         Off
                     </oneSwitch>
@@ -33,7 +33,7 @@ class Telescope(TelescopeBase):
                     <oneSwitch name="SYNC">
                         On
                     </oneSwitch>
-                </newSwitchVector>
+                </setSwitchVector>
             """
         )
         eq_coords = self._calculate_eq_coords_of_park_position(started_at)
@@ -51,7 +51,7 @@ class Telescope(TelescopeBase):
         )
         self.__call(
             f"""
-                <newSwitchVector device="{self._name}" name="ON_COORD_SET">
+                <setSwitchVector device="{self._name}" name="ON_COORD_SET">
                     <oneSwitch name="SLEW">
                         Off
                     </oneSwitch>
@@ -61,7 +61,7 @@ class Telescope(TelescopeBase):
                     <oneSwitch name="SYNC">
                         Off
                     </oneSwitch>
-                </newSwitchVector>
+                </setSwitchVector>
             """
         )
 
@@ -69,26 +69,26 @@ class Telescope(TelescopeBase):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
-                    <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                    <setSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                         <oneSwitch name="TRACK_OFF">
                             On
                         </oneSwitch>
-                    </newSwitchVector>
+                    </setSwitchVector>
                 """
             )
         else:
             self.__call(
                 f"""
-                    <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                    <setSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                         <oneSwitch name="TRACK_ON">
                             On
                         </oneSwitch>
-                    </newSwitchVector>
+                    </setSwitchVector>
                 """
             )
             self.__call(
                 f"""
-                    <newSwitchVector device="{self._name}" name="ON_COORD_SET">
+                    <setSwitchVector device="{self._name}" name="ON_COORD_SET">
                         <oneSwitch name="SLEW">
                             {"On" if speed == TelescopeSpeed.SPEED_SLEWING else "Off"}
                         </oneSwitch>
@@ -98,7 +98,7 @@ class Telescope(TelescopeBase):
                         <oneSwitch name="SYNC">
                             Off
                         </oneSwitch>
-                    </newSwitchVector>
+                    </setSwitchVector>
                 """
             )
 
@@ -113,11 +113,11 @@ class Telescope(TelescopeBase):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
-                <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                <setSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                     <oneSwitch name="TRACK_OFF">
                         On
                     </oneSwitch>
-                </newSwitchVector>
+                </setSwitchVector>
                 """
             )
 
@@ -132,11 +132,11 @@ class Telescope(TelescopeBase):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
             self.__call(
                 f"""
-                <newSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
+                <setSwitchVector device="{self._name}" name="TELESCOPE_TRACK_STATE">
                     <oneSwitch name="TRACK_OFF">
                         On
                     </oneSwitch>
-                </newSwitchVector>
+                </setSwitchVector>
                 """
             )
 
@@ -156,11 +156,11 @@ class Telescope(TelescopeBase):
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
         self.__call(
             f"""
-                <newSwitchVector device="{self._name}" name="TELESCOPE_PARK">
+                <setSwitchVector device="{self._name}" name="TELESCOPE_PARK">
                     <oneSwitch name="UNPARK">
                         On
                     </oneSwitch>
-                </newSwitchVector>
+                </setSwitchVector>
             """
         )
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords

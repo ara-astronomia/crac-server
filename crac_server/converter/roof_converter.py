@@ -20,8 +20,7 @@ class RoofMediator:
         self._button = ROOF
         self._status = self.button.get_status()
         self._is_disabled = False
-    
-    
+
     @property
     def action(self) -> RoofAction:
         return self._action
@@ -75,6 +74,8 @@ class RoofConverter:
             label = ButtonLabel.LABEL_CLOSING
         elif status is RoofStatus.ROOF_OPENING:
             label = ButtonLabel.LABEL_OPENING
+        elif status is RoofStatus.ROOF_ERROR:
+            label = ButtonLabel.LABEL_ERROR
         return label
 
     # TODO use this after upgrading to python >= 3.10

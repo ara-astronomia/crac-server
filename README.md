@@ -1,3 +1,20 @@
+# Use it on raspberry PI Zero 2 or greater
+* enable SSH by touch ssh on the root of the boot disk https://phoenixnap.com/kb/enable-ssh-raspberry-pi
+* enable wifi by creating wpa_supplicant on the root of the boot disk and putting this inside:
+    ```
+    country=<country_code>
+    ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+    update_config=1
+
+    network={
+    scan_ssid=1
+    ssid="your_wifi_ssid"
+    psk="your_wifi_password"
+    }
+    ```
+* 
+
+
 # Pre-requisite
 
 ```
