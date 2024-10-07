@@ -9,7 +9,7 @@ from astropy.coordinates import (
 )
 from astropy.time import Time
 from collections import deque
-from crac_protobuf.telescope_pb2 import (
+from crac_protobuf.telescope_pb2 import ( # type: ignore
     TelescopeStatus,  # type: ignore
     AltazimutalCoords,  # type: ignore
     EquatorialCoords,  # type: ignore
@@ -35,6 +35,7 @@ class Telescope(ABC):
         self._connection_retry = 0
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._reset()
+        self._retry = 0
 
     @abstractmethod
     def sync(self, started_at: datetime):
@@ -69,6 +70,7 @@ class Telescope(ABC):
         if self._polling:
             self._polling = False
             self.t.join()
+            self.t = None
     
     def queue_sync(self, started_at: datetime):
         self._jobs.append({"action": self.sync, "started_at": started_at})
@@ -127,7 +129,7 @@ class Telescope(ABC):
         if not self._hostname or not self._port:
             return
 
-        if self.status is not TelescopeStatus.LOST:  # type: ignore
+        if self.status < TelescopeStatus.LOST:  # type: ignore
             self.s.close()
 
     def __read(self):
@@ -140,6 +142,7 @@ class Telescope(ABC):
         while self._polling:
             if not self.__open_connection():
                 self.status = TelescopeStatus.LOST
+                self._retry += 1
                 continue
 
             try:
@@ -153,8 +156,11 @@ class Telescope(ABC):
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
+                self._retry += 1
                 continue
             finally:
+                if self._retry > 10:
+                    self.status = TelescopeStatus.DISCONNECTED
                 self.__disconnect()
                 sleep(config.Config.getFloat("polling_interval", "telescope"))
         else:
@@ -166,6 +172,7 @@ class Telescope(ABC):
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
+        self._retry = 0
 
     def _retrieve_aa_coords(self, eq_coords):
         if eq_coords:
