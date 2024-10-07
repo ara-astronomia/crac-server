@@ -51,6 +51,7 @@ class TelescopeDisconnectedHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if mediator.status is TelescopeStatus.DISCONNECTED or not mediator.button.polling:
             mediator.speed=TelescopeSpeed.SPEED_ERROR
+            mediator.button.polling_end()
             self._next_handler = None
 
         return super().handle(mediator)
