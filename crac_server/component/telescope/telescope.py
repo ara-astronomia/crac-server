@@ -140,12 +140,12 @@ class Telescope(ABC):
         """
 
         while self._polling:
-            if not self.__open_connection():
-                self.status = TelescopeStatus.LOST
-                self._retry += 1
-                continue
-
             try:
+                if not self.__open_connection():
+                    self.status = TelescopeStatus.LOST
+                    self._retry += 1
+                    continue
+
                 if len(self._jobs) > 0:
                     logger.debug(f"there are {len(self._jobs)} jobs: {self._jobs}")
                     job = self._jobs.popleft()
@@ -159,7 +159,7 @@ class Telescope(ABC):
                 self._retry += 1
                 continue
             finally:
-                if self._retry > 10:
+                if self._retry > 100:
                     self.status = TelescopeStatus.DISCONNECTED
                 self.__disconnect()
                 sleep(config.Config.getFloat("polling_interval", "telescope"))
