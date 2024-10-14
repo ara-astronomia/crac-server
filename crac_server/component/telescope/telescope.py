@@ -150,7 +150,7 @@ class Telescope(ABC):
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 
-                self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
+                self.eq_coords, self.aa_coords, self.airmass, self.speed, self.status = self.retrieve()
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
