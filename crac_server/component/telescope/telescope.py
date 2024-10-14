@@ -265,7 +265,7 @@ class Telescope(ABC):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
-        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
+        observing_location = EarthLocation(lat=lat, lon=lon*u.rad, height=height*u.m)
         obstime=Time.now()
         alt=alt_az.alt
         azimuth=alt_az.az
