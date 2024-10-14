@@ -267,7 +267,6 @@ class Telescope(ABC):
         height = config.Config.getInt("height", "geography")
         print (height, lat ,lon)
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
-        print (f"questo è il print i observing_location: {observing_location}")      
         obstime=Time.now()
         alt=alt_az.alt
         #azimuth=alt_az.az
@@ -277,7 +276,8 @@ class Telescope(ABC):
         azimuth =0 * u.deg
         altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
         print(altaz_frame)
-        airmass = round(altaz_frame.secz, 5)
+        airmass = altaz_frame.secz
+        print(type(airmass)) #round((1 / np.sin(alt)), 5)
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
     
