@@ -166,7 +166,7 @@ class Telescope(ABC):
         self.status = TelescopeStatus.DISCONNECTED
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
-        self.arimass : Airmass = None
+        self.airmass : Airmass = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
 
     def _retrieve_aa_coords(self, eq_coords):
