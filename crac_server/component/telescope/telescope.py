@@ -277,7 +277,8 @@ class Telescope(ABC):
         azimuth =0 * u.deg
         altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
         print(altaz_frame)
-        airmass = round((altaz_frame.secz), 5) #round((1 / np.sin(alt)), 5)
+        airmass = altaz_frame.secz
+        airmass = round(airmass, 5) #round((1 / np.sin(alt)), 5)
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
     
