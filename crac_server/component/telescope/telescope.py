@@ -262,10 +262,16 @@ class Telescope(ABC):
         return AltazimutalCoords(alt=alt, az=az)
 
     def _airmass (self, alt_az: AltazimutalCoords):
+        lat = config.Config.getValue("lat", "geography")
+        lon = config.Config.getValue("lon", "geography")
+        height = config.Config.getInt("height", "geography")
+        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
+        obstime=Time.now()
         alt=alt_az.alt
         altezza = alt * u.deg
         print(f"questo è il valore dell'altezza: {alt}")
-        airmass = altezza.secz #round((1 / np.sin(alt)), 5)
+        altaz_frame=AltAz(alt=altezza,loction=observing_location,obstime=obstime)
+        airmass = altaz_frame.secz #round((1 / np.sin(alt)), 5)
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
     
