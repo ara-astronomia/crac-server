@@ -266,7 +266,7 @@ class Telescope(ABC):
         print(f"questo è il valore dell'altezza: {alt}")
         airmass=(1 / np.sin(alt))
         print (f"questo è il valore di airmass calcolato: {airmass}")
-        return Airmass()
+        return Airmass(airmass)
     
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
