@@ -197,7 +197,7 @@ class Telescope(TelescopeBase):
         logger.debug(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords, root)
         logger.debug(f"data received from json: {status}")
-        airmass = self._airmass(aa_coords, decimal_places=9) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
+        airmass = self._airmass(aa_coords, root)
         logger.debug(f"valore di airmass: {airmass}")
 
         return (eq_coords, aa_coords, airmass, speed, status)
