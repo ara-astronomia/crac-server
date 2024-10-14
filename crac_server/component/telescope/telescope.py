@@ -270,10 +270,11 @@ class Telescope(ABC):
         print (f"questo è il print i observing_location: {observing_location}")      
         obstime=Time.now()
         alt=alt_az.alt
-        azimuth=alt_az.az
+        #azimuth=alt_az.az
         altezza = alt * u.deg
         print (observing_location)
         print(f"questo è il valore dell'altezza: {alt}")
+        azimuth =0 * u.deg
         altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
         print(altaz_frame)
         airmass = altaz_frame.secz #round((1 / np.sin(alt)), 5)
