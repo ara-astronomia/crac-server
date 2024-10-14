@@ -266,10 +266,10 @@ class Telescope(ABC):
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
         print (height, lat ,lon)
-        lat = lat * u.deg
-        lon= lon * u.deg
-        height = height*u.m
-        print(height, lat,lon) 
+        lat1 = lat * u.deg
+        lon1 = lon * u.deg
+        height1 = height*u.m
+        print(height1, lat1,lon1) 
         observing_location = EarthLocation(lat=lat * u.deg, lon=lon * u.deg, height=height*u.m)
         
         obstime=Time.now()
