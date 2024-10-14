@@ -263,7 +263,8 @@ class Telescope(ABC):
 
     def _airmass (self, alt: AltazimutalCoords):
         print (alt)
-        airmass= alt.alt.secz
+        print(type(alt))
+        airmass= 1.34
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass()
     
