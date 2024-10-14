@@ -20,7 +20,7 @@ from crac_server import config
 from datetime import datetime
 from threading import Thread
 from time import sleep
-
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +264,7 @@ class Telescope(ABC):
     def _airmass (self, alt_az: AltazimutalCoords):
         alt=alt_az.alt
         print(alt)
-        airmass= alt_az.secz
+        airmass=(1 / np.sin(alt))
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass()
     
