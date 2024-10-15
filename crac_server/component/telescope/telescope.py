@@ -277,9 +277,7 @@ class Telescope(ABC):
         altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
         print(altaz_frame)
         airmass_float = altaz_frame.secz
-        print(type(airmass_float)) #round((1 / np.sin(alt)), 5)
-        airmass = (float(airmass_float))
-        print (type (airmass))
+        airmass = round((float(airmass_float)), 3)
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
     
