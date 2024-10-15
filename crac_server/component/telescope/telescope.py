@@ -294,7 +294,7 @@ class Telescope(ABC):
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
         coord_ra=coord.ra * u.hour
         print (coord_ra)
-        hour_angle = (local_sidereal_time - coord_ra).wrap_at(24 * u.hour)
+        hour_angle = (local_sidereal_time - coord).wrap_at(24 * u.hour)
         hour_angle_in_time = TimeDelta(hour_angle.hour * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle_in_time}")
         transit_time = obstime - hour_angle_in_time
