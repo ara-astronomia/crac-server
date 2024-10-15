@@ -288,7 +288,7 @@ class Telescope(ABC):
         print(eq_coords)
         print (type(eq_coords))
         coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
-        print (coord.ra)
+        print (type(coord))
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
         coord_ra=coord.ra * u.hour
