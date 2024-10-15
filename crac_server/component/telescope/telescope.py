@@ -282,7 +282,7 @@ class Telescope(ABC):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
-        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
+        observing_location = EarthLocation(lat=lat, lon=lon*u.deg, height=height*u.m)  
         obstime=Time.now()
         coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         print (type(coord.ra))
