@@ -7,7 +7,7 @@ from astropy.coordinates import (
     AltAz,
     SkyCoord
 )
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from collections import deque
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
@@ -285,7 +285,8 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         print (f" valore di time now: {obstime}")
-        obstime = obstime +Time.delta(2)
+        delta_t=TimeDelta(2 * u.hour)
+        obstime = obstime + delta_t
         print (f" valore di time now corretto per l'ora locale: {obstime}")
         #coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         #print (type(coord.ra))
