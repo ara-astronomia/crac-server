@@ -287,7 +287,7 @@ class Telescope(ABC):
         print (f"valore di time now: {obstime}")
         print(eq_coords)
         print (f"type eq_coords from protobuf:{(type(eq_coords))}")
-        coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
+        coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         print(coord)
         print (f"type coord from astropy SkyCoord: {(type(coord))}")
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
