@@ -294,7 +294,7 @@ class Telescope(ABC):
         hour_angle_in_time = TimeDelta(hour_angle.hour * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle_in_time}")
         transit_time = obstime - hour_angle_in_time
-        print(f"Il tempo di transito al meridiano è: {transit_time.iso}")
+        print(f"Il tempo di transito al meridiano è: {transit_time}")
         return Transit(transit=transit_time)
 
 
