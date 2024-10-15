@@ -284,6 +284,9 @@ class Telescope(ABC):
         height = config.Config.getInt("height", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
+        print (f" valore di time now: {obsitme}")
+        obstime = obstime +2
+        print (f" valore di time now corretto per l'ora locale: {obstime}")
         #coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         #print (type(coord.ra))
         #print (coord.ra)
