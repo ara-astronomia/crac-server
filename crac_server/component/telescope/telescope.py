@@ -289,7 +289,7 @@ class Telescope(ABC):
         #obstime = obstime + delta_t
         #print (f" valore di time now corretto per l'ora locale: {obstime}")
         print(eq_coords)
-        coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
+        coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
         #print (type(coord.ra))
         print (coord.ra)
         #ra=6.065656
