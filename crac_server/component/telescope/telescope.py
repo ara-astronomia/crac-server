@@ -285,6 +285,8 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", frame="icrs")
+        print (type(coord.ra))
+        print (coord.ra)
         
         local_sidereal_time = obstime.sidereal_time('mean', longitude=observing_location.lon)
         hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
