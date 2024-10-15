@@ -292,9 +292,12 @@ class Telescope(ABC):
         print (f"type coord from astropy SkyCoord: {(type(coord))}")
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
-        coord_ra=coord.ra * u.hour
-        print (coord_ra)
-        hour_angle = (local_sidereal_time - coord).wrap_at(24 * u.hour)
+        #coord_ra=coord.ra * u.hour
+        print (coord.ra)
+        print(f" formato di coord.ra :{(type(coord.ra))}")
+        hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
+        print (hour_angle)
+        print(f"type hour_angle: {(type(hour_angle))}")
         hour_angle_in_time = TimeDelta(hour_angle.hour * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle_in_time}")
         transit_time = obstime - hour_angle_in_time
