@@ -286,6 +286,7 @@ class Telescope(ABC):
         obstime=Time.now()
         print (f" valore di time now: {obstime}")
         print(eq_coords)
+        print (type(eq_coords))
         coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
         print (coord.ra)
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
