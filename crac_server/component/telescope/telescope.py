@@ -281,6 +281,7 @@ class Telescope(ABC):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
+        equinox=config.Config.getInt("height", "equinox")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="icrs")
