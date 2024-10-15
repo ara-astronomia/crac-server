@@ -151,7 +151,7 @@ class Telescope(ABC):
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 
-                self.eq_coords, self.aa_coords, self.airmass, self.speed, self.status = self.retrieve()
+                self.eq_coords, self.aa_coords, self.airmass, self.meridian_transit, self.speed, self.status = self.retrieve()
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
@@ -168,6 +168,7 @@ class Telescope(ABC):
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
         self.airmass : Airmass = None
+        self.transit: Transit = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
 
     def _retrieve_aa_coords(self, eq_coords):
@@ -277,15 +278,15 @@ class Telescope(ABC):
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
 
-    def _meridian_transit (self, eq_coords: EquatorialCoords):
+    def _transit (self, eq_coords: EquatorialCoords):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
         equinox=config.Config.getInt("equinox", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
-        coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="icrs")
-        vega = SkyCoord(ra=279.23473479 * u.deg, dec=38.78368896 * u.deg, frame='icrs')
+        coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", frame="icrs")
+        
         local_sidereal_time = obstime.sidereal_time('mean', longitude=observing_location.lon)
         hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
 
