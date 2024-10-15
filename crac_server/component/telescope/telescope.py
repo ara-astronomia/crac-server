@@ -303,6 +303,7 @@ class Telescope(ABC):
         transit_time = obstime - hour_angle_in_time
         print(f"Il tempo di transito al meridiano è: {transit_time}")
         transit_timestamp=transit_time.unix
+        print(transit_timestamp)
         return Transit(transit=transit_timestamp)
 
 
