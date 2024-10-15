@@ -304,7 +304,7 @@ class Telescope(ABC):
         print(f"Il tempo di transito al meridiano è: {transit_time}")
         transit_timestamp=str(transit_time) #.unix
         print(transit_timestamp)
-        return Transit(transit=transit_timestamp)
+        return Transit(transit="transit_timestamp")
 
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
