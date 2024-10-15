@@ -252,9 +252,6 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=observing_time)
         equinox = config.Config.getValue("equinox", "geography")
-        print (f"coordinata AR {eq_coords.ra}")
-        print (f"coordinata DEC {eq_coords.dec}")
-        print (type(eq_coords.ra))
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="fk5")
         altaz_coords = coord.transform_to(aa)
         alt = float(altaz_coords.alt / u.deg)
@@ -264,7 +261,10 @@ class Telescope(ABC):
             az = round(az, decimal_places)
         return AltazimutalCoords(alt=alt, az=az)
 
-    def _airmass (self, alt_az: AltazimutalCoords):
+    def _airmass (self, alt_az: AltazimutalCoords, eq_coords: EquatorialCoords):
+        print (f"coordinata AR {eq_coords.ra}")
+        print (f"coordinata DEC {eq_coords.dec}")
+        print (type(eq_coords.ra))
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
