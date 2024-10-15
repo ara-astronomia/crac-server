@@ -288,15 +288,15 @@ class Telescope(ABC):
         #delta_t=TimeDelta(2 * u.hour)
         #obstime = obstime + delta_t
         #print (f" valore di time now corretto per l'ora locale: {obstime}")
-        #coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
+        coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         #print (type(coord.ra))
-        #print (coord.ra)
-        ra=6.065656
+        print (coord.ra)
+        #ra=6.065656
         
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
         print (type(local_sidereal_time))
-        hour_angle = (local_sidereal_time - ra).wrap_at(24 * u.hour)
+        hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle}")
 
         # Il transito avviene quando l'angolo orario è pari a 0, quindi calcola il tempo di transito
