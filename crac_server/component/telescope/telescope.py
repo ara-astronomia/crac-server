@@ -265,21 +265,16 @@ class Telescope(ABC):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
-        print (height, lat ,lon)
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         alt=alt_az.alt
-        #azimuth=alt_az.az
         altezza = alt * u.deg
-        print (observing_location)
-        print(f"questo è il valore dell'altezza: {alt}")
         azimuth =0 * u.deg
         altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
-        print(altaz_frame)
         airmass_float = altaz_frame.secz
         airmass = round((float(airmass_float)), 3)
         print (f"questo è il valore di airmass calcolato: {airmass}")
-        return Airmass(airmass=airmass)
+        return Airmass(airmass)
     
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
