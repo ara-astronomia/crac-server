@@ -285,24 +285,15 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         print (f" valore di time now: {obstime}")
-        #delta_t=TimeDelta(2 * u.hour)
-        #obstime = obstime + delta_t
-        #print (f" valore di time now corretto per l'ora locale: {obstime}")
         print(eq_coords)
         coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
-        #print (type(coord.ra))
         print (coord.ra)
-        #ra=6.065656
-        
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
-
         hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
-        print (f"qusto è il valore dell'angolo orario: {hour_angle}")
-
-        # Il transito avviene quando l'angolo orario è pari a 0, quindi calcola il tempo di transito
-        # Il tempo di transito è semplicemente il tempo attuale aggiunto all'angolo orario
-        transit_time = obstime - hour_angle
+        hour_angle_in_time = TimeDelta(hour_angle.hour * u.hour)
+        print (f"qusto è il valore dell'angolo orario: {hour_angle_in_time}")
+        transit_time = obstime - hour_angle_in_time
         print(f"Il tempo di transito al meridiano è: {transit_time.iso}")
         return Transit(transit=transit_time)
 
