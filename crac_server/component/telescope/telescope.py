@@ -252,6 +252,9 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=observing_time)
         equinox = config.Config.getValue("equinox", "geography")
+        print (f"coordinata AR {eq_coords.ra}")
+        print (f"coordinata DEC {eq_coords.dec}")
+        print (type(eq_coords.ra))
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="fk5")
         altaz_coords = coord.transform_to(aa)
         alt = float(altaz_coords.alt / u.deg)
@@ -274,8 +277,18 @@ class Telescope(ABC):
         airmass_float = altaz_frame.secz
         airmass = round((float(airmass_float)), 3)
         print (f"questo è il valore di airmass calcolato: {airmass}")
-        return Airmass(airmass)
-    
+        return Airmass(airmass=airmass)
+    '''
+    def _meridian_transit (self, eq_coords: EquatorialCoords):
+        lat = config.Config.getValue("lat", "geography")
+        lon = config.Config.getValue("lon", "geography")
+        height = config.Config.getInt("height", "geography")
+        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
+        obstime=Time.now()
+        coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="icrs")
+        vega = SkyCoord(ra=279.23473479 * u.deg, dec=38.78368896 * u.deg, frame='icrs')
+        local_sidereal_time = obstime.sidereal_time('mean', longitude=observing_location.lon)
+    '''
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
