@@ -275,7 +275,7 @@ class Telescope(ABC):
         altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
         airmass_float = altaz_frame.secz
         airmass = round((float(airmass_float)), 3)
-        print (f"questo è il valore di airmass calcolato: {airmass}")
+        logger.debug(f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
 
     def _transit (self, eq_coords: EquatorialCoords):
@@ -284,11 +284,12 @@ class Telescope(ABC):
         height = config.Config.getInt("height", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
-        print (f" valore di time now: {obstime}")
+        print (f"valore di time now: {obstime}")
         print(eq_coords)
-        print (type(eq_coords))
+        print (f"type eq_coords from protobuf:{(type(eq_coords))}")
         coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
-        print (type(coord))
+        print(coord)
+        print (f"type coord from astropy SkyCoord: {(type(coord))}")
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
         coord_ra=coord.ra * u.hour
