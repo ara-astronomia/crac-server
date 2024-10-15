@@ -297,7 +297,7 @@ class Telescope(ABC):
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
 
-        hour_angle = (local_sidereal_time - coord.ra)#.wrap_at(24 * u.hour)
+        hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle}")
 
         # Il transito avviene quando l'angolo orario è pari a 0, quindi calcola il tempo di transito
