@@ -295,6 +295,7 @@ class Telescope(ABC):
         
         local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
+        print (type(local_sideral_time))
         hour_angle = (local_sidereal_time - ra).wrap_at(24 * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle}")
 
