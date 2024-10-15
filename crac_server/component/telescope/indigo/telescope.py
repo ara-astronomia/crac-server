@@ -202,7 +202,7 @@ class Telescope(TelescopeBase):
         transit = self._transit(eq_coords)
         logger.debug(f"valore di airmass: {transit}")
 
-        return (eq_coords, aa_coords, airmass, speed, status)
+        return (eq_coords, aa_coords, airmass, transit, speed, status)
     
     def _retrieve_status(self, aa_coords: AltazimutalCoords, root: Any) -> TelescopeStatus:
         if not self._polling:
