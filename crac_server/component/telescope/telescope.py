@@ -151,7 +151,7 @@ class Telescope(ABC):
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 
-                self.eq_coords, self.aa_coords, self.airmass, self.meridian_transit, self.speed, self.status = self.retrieve()
+                self.eq_coords, self.aa_coords, self.airmass, self.transit, self.speed, self.status = self.retrieve()
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
@@ -282,7 +282,6 @@ class Telescope(ABC):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
-        equinox=config.Config.getInt("equinox", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", frame="icrs")
