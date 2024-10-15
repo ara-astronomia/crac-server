@@ -285,9 +285,9 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         print (f" valore di time now: {obstime}")
-        delta_t=TimeDelta(2 * u.hour)
-        obstime = obstime + delta_t
-        print (f" valore di time now corretto per l'ora locale: {obstime}")
+        #delta_t=TimeDelta(2 * u.hour)
+        #obstime = obstime + delta_t
+        #print (f" valore di time now corretto per l'ora locale: {obstime}")
         #coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         #print (type(coord.ra))
         #print (coord.ra)
