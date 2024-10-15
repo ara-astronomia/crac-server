@@ -285,8 +285,8 @@ class Telescope(ABC):
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
         #coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
-        print (type(coord.ra))
-        print (coord.ra)
+        #print (type(coord.ra))
+        #print (coord.ra)
         ra=12,65656
         
         local_sidereal_time = obstime.sidereal_time('mean', longitude=observing_location.lon)
