@@ -199,6 +199,8 @@ class Telescope(TelescopeBase):
         logger.debug(f"data received from json: {status}")
         airmass = self._airmass(aa_coords)
         logger.debug(f"valore di airmass: {airmass}")
+        meridian_transit = self._meridian_transit(eq_coords)
+        logger.debug(f"valore di airmass: {meridian_transit}")
 
         return (eq_coords, aa_coords, airmass, speed, status)
     
