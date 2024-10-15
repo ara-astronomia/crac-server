@@ -14,7 +14,8 @@ from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords,  # type: ignore
     EquatorialCoords,  # type: ignore
     TelescopeSpeed,  # type: ignore
-    Airmass, #type: ignore
+    Airmass, # type: ignore
+    Transit, # type: ignore
 )
 from crac_server import config
 from datetime import datetime
@@ -261,10 +262,7 @@ class Telescope(ABC):
             az = round(az, decimal_places)
         return AltazimutalCoords(alt=alt, az=az)
 
-    def _airmass (self, alt_az: AltazimutalCoords, eq_coords: EquatorialCoords):
-        print (f"coordinata AR {eq_coords.ra}")
-        print (f"coordinata DEC {eq_coords.dec}")
-        print (type(eq_coords.ra))
+    def _airmass (self, alt_az: AltazimutalCoords,):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
@@ -278,7 +276,7 @@ class Telescope(ABC):
         airmass = round((float(airmass_float)), 3)
         print (f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
-    '''
+
     def _meridian_transit (self, eq_coords: EquatorialCoords):
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
@@ -288,7 +286,15 @@ class Telescope(ABC):
         coord = SkyCoord(ra=str(eq_coords.ra)+"h", dec=str(eq_coords.dec)+"d", equinox=equinox, frame="icrs")
         vega = SkyCoord(ra=279.23473479 * u.deg, dec=38.78368896 * u.deg, frame='icrs')
         local_sidereal_time = obstime.sidereal_time('mean', longitude=observing_location.lon)
-    '''
+        hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
+
+        # Il transito avviene quando l'angolo orario è pari a 0, quindi calcola il tempo di transito
+        # Il tempo di transito è semplicemente il tempo attuale aggiunto all'angolo orario
+        transit_time = obstime - hour_angle
+        print(f"Il tempo di transito al meridiano è: {transit_time.iso}")
+        return Transit(transit=transit_time)
+
+
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
