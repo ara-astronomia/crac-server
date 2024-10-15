@@ -284,14 +284,14 @@ class Telescope(ABC):
         height = config.Config.getInt("height", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
         obstime=Time.now()
-        coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
+        #coord = SkyCoord(ra=(eq_coords.ra), dec=(eq_coords.dec), frame="icrs")
         print (type(coord.ra))
         print (coord.ra)
-        coord.ra=12,65656
+        ra=12,65656
         
         local_sidereal_time = obstime.sidereal_time('mean', longitude=observing_location.lon)
         print (f" questo è il tempo siderale locale: {local_sidereal_time}")
-        hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
+        hour_angle = (local_sidereal_time - ra).wrap_at(24 * u.hour)
 
         # Il transito avviene quando l'angolo orario è pari a 0, quindi calcola il tempo di transito
         # Il tempo di transito è semplicemente il tempo attuale aggiunto all'angolo orario
