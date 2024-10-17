@@ -303,9 +303,11 @@ class Telescope(ABC):
         transit_time = obstime - hour_angle_in_time
         print(f"Il tempo di transito al meridiano è: {transit_time}")
         transit_timestamp=transit_time.fits
-        print(transit_timestamp)
-        print (type(transit_timestamp))
-        return Transit(transit="transit_timestamp")
+        transit_split = transit_timestamp.split("T")
+        transit=transit_split[1]
+        print(transit)
+        print (type(transit))
+        return Transit(transit=transit)
 
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
