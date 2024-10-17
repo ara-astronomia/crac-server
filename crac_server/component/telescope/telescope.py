@@ -168,7 +168,6 @@ class Telescope(ABC):
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
         self.airmass : Airmass = None
-        self.transit: Transit = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
 
     def _retrieve_aa_coords(self, eq_coords):
@@ -277,40 +276,6 @@ class Telescope(ABC):
         airmass = round((float(airmass_float)), 3)
         logger.debug(f"questo è il valore di airmass calcolato: {airmass}")
         return Airmass(airmass=airmass)
-
-    def _transit (self, eq_coords: EquatorialCoords):
-        lat = config.Config.getValue("lat", "geography")
-        lon = config.Config.getValue("lon", "geography")
-        height = config.Config.getInt("height", "geography")
-        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
-        obstime=Time.now()
-        print (f"valore di time now: {obstime}")
-        print(eq_coords)
-        print (f"type eq_coords from protobuf:{(type(eq_coords))}")
-        coord = SkyCoord(ra=(eq_coords.ra)* u.deg, dec=(eq_coords.dec)* u.deg, frame="icrs")
-        print(coord)
-        print (f"type coord from astropy SkyCoord: {(type(coord))}")
-        local_sidereal_time = obstime.sidereal_time('apparent', longitude=observing_location.lon)
-        print (f" questo è il tempo siderale locale: {local_sidereal_time}")
-        #coord_ra=coord.ra * u.hour
-        print (coord.ra)
-        print(f" formato di coord.ra :{(type(coord.ra))}")
-        hour_angle = (local_sidereal_time - coord.ra).wrap_at(24 * u.hour)
-        print (hour_angle)
-        print(f"type hour_angle: {(type(hour_angle))}")
-        hour_angle_in_time = TimeDelta(hour_angle.hour * u.hour)
-        print (f"qusto è il valore dell'angolo orario: {hour_angle_in_time}")
-        transit_time = obstime - hour_angle #_in_time
-        print(f"Il tempo di transito al meridiano è: {transit_time}")
-        transit_timestamp=transit_time.fits
-        transit_split = transit_timestamp.split("T")
-        transit=transit_split[1]
-        time_to_transit= obstime - transit_time
-        print(time_to_transit)
-        print(transit)
-        print (type(transit))
-        return Transit(transit=transit)
-
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
