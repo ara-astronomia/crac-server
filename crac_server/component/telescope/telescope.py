@@ -305,6 +305,8 @@ class Telescope(ABC):
         transit_timestamp=transit_time.fits
         transit_split = transit_timestamp.split("T")
         transit=transit_split[1]
+        time_to_transit= Time.now - transit_timestamp
+        print(time_to_transit)
         print(transit)
         print (type(transit))
         return Transit(transit=transit)
