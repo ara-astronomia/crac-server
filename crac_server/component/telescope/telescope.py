@@ -300,7 +300,7 @@ class Telescope(ABC):
         print(f"type hour_angle: {(type(hour_angle))}")
         hour_angle_in_time = TimeDelta(hour_angle.hour * u.hour)
         print (f"qusto è il valore dell'angolo orario: {hour_angle_in_time}")
-        transit_time = obstime - hour_angle_in_time
+        transit_time = obstime - hour_angle #_in_time
         print(f"Il tempo di transito al meridiano è: {transit_time}")
         transit_timestamp=transit_time.fits
         transit_split = transit_timestamp.split("T")
