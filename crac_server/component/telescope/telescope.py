@@ -15,7 +15,6 @@ from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,  # type: ignore
     TelescopeSpeed,  # type: ignore
     Airmass, # type: ignore
-    Transit, # type: ignore
 )
 from crac_server import config
 from datetime import datetime
