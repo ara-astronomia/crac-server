@@ -14,7 +14,7 @@ from crac_protobuf.telescope_pb2 import (
     AltazimutalCoords,  # type: ignore
     EquatorialCoords,  # type: ignore
     TelescopeSpeed,  # type: ignore
-    Airmass, # type: ignore
+    TelescopeResponse # type: ignore
 )
 from crac_server import config
 from datetime import datetime
@@ -166,7 +166,7 @@ class Telescope(ABC):
         self.status = TelescopeStatus.DISCONNECTED
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
-        self.airmass : Airmass = None
+        self.airmass : TelescopeResponse.airmass = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
 
     def _retrieve_aa_coords(self, eq_coords):
@@ -274,7 +274,7 @@ class Telescope(ABC):
         airmass_float = altaz_frame.secz
         airmass = round((float(airmass_float)), 3)
         logger.debug(f"questo è il valore di airmass calcolato: {airmass}")
-        return Airmass(airmass=airmass)
+        return TelescopeResponse.airmass(airmass=airmass)
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
