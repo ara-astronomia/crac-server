@@ -229,7 +229,7 @@ class Telescope(TelescopeBase):
 
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         print (f" valore delle coordinate aa_coords di flat: {aa_coords}")#logger.debug(aa_coords)
-        #print (f" valore delle coordinate eq_coords di flat: {eq_coords}")
+        print (f" valore delle coordinate eq_coords di flat: {eq_coords}")
         #print(type(eq_coords))
         #print(type(eq_coords.ra))
         logger.debug(aa_coords)
@@ -237,9 +237,9 @@ class Telescope(TelescopeBase):
         self.__call(
                     {"newNumberVector": 
                         { 
-                            "device": self._name, "name": "MOUNT_HORIZONTAL_COORDINATES", "state": "Ok", "items": 
+                            "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items": 
                                 [
-                                    {"name": "ALT", "value": aa_coords.alt, "name": "AZ", "value": aa_coords.az} 
+                                    {"name": "RA", "value": eq_coords.ra, "name": "DEC", "value": aa_coords.dec} 
                                 ]
                         }
                     }
