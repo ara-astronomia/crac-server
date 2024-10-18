@@ -297,6 +297,8 @@ class Telescope(TelescopeBase):
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
+                            
+        print(f"coordinate di ritorno da indigo: {ra, dec}")
         if ra and dec:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
