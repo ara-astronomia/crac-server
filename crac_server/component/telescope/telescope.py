@@ -274,7 +274,7 @@ class Telescope(ABC):
         airmass_float = altaz_frame.secz
         airmass = round((float(airmass_float)), 3)
         logger.debug(f"questo è il valore di airmass calcolato: {airmass}")
-        return TelescopeResponse(airmass=airmass)
+        return TelescopeResponse.airmass
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
