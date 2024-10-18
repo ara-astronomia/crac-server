@@ -228,20 +228,18 @@ class Telescope(TelescopeBase):
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
 
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
-        print (f" valore delle coordinate aa_coords di flat: {aa_coords}")#logger.debug(aa_coords)
-        print (f" valore delle coordinate eq_coords di flat: {eq_coords}")
-        #print(type(eq_coords))
-        #print(type(eq_coords.ra))
-        logger.debug(aa_coords)
+        print(f"valori di flat_alt_az: {aa_coords}")
+        print(f"valori di flat_ar_dec: {eq_coords}")
         self.queue_set_speed(speed)
         self.__call(
                     {"newNumberVector": 
                         { 
                             "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items": 
-                                [
-                                    {"name": "DEC", "value": eq_coords.dec, "name": "RA", "value": eq_coords.ra} 
-                                ]
-                        }
+                            [
+                                { "name": "RA", "value": eq_coords.ra},
+                                { "name": "DEC", "value": eq_coords.dec} 
+                            ] 
+                        } 
                     }
                     )  
         
@@ -297,8 +295,6 @@ class Telescope(TelescopeBase):
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
-                            
-        print(f"coordinate di ritorno da indigo: {ra, dec}")
         if ra and dec:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
