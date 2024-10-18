@@ -290,6 +290,6 @@ class Telescope(ABC):
         ra = float((ra_dec.ra / 15) / u.deg)  # type: ignore
         dec = float(ra_dec.dec / u.deg)  # type: ignore
         if decimal_places > 0:
-            ra = round(ra, decimal_places)
-            dec = round(dec, decimal_places)
+            ra = round(ra, 6)
+            dec = round(dec, 6)
         return EquatorialCoords(ra=ra, dec=dec)
