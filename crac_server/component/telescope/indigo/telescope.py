@@ -236,8 +236,7 @@ class Telescope(TelescopeBase):
                         { 
                             "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items": 
                             [
-                                { "name": "RA", "value": eq_coords.ra},
-                                { "name": "DEC", "value": eq_coords.dec} 
+                                { "name": "RA", "value": eq_coords.ra}
                             ] 
                         } 
                     }
