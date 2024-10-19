@@ -353,12 +353,13 @@ class Telescope(TelescopeBase):
             print (f"chiamata response_with_newline")
             responses.append(response_with_newline.decode('utf-8'))
 
-
+        '''
         # Send request without newline
         response_without_newline = send_and_receive(request_json.encode('utf-8'))
         if response_without_newline:
             print (f"chiamata response_without_newline")
             responses.append(response_without_newline.decode('utf-8'))
+        '''
 
         # Combine responses and process them
         combined_response = "\n".join(responses)  
