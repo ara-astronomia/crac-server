@@ -163,9 +163,10 @@ class Telescope(TelescopeBase):
                     ),
                 speed=speed
                 )
+        print (f"chiamata ad indigo per invio coord di flat")
            
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            print (f"chiamata ad indigo per invio coord di flat")
+            
             self.__call(
                             {"newSwitchVector": 
                                 { 
