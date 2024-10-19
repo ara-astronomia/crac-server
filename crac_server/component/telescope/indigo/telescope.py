@@ -165,6 +165,7 @@ class Telescope(TelescopeBase):
                 )
            
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            print (f"chiamata ad indigo per invio coord di flat")
             self.__call(
                             {"newSwitchVector": 
                                 { 
@@ -333,7 +334,7 @@ class Telescope(TelescopeBase):
                 time.sleep(5)
                 while True:
                     try:
-                        part = self.s.recv(2500000)
+                        part = self.s.recv(20000)
                         if not part:
                             break
                         response +=part
