@@ -335,7 +335,7 @@ class Telescope(TelescopeBase):
                 time.sleep(5)
                 while True:
                     try:
-                        part = self.s.recv(20000)
+                        part = self.s.recv(200000)
                         if not part:
                             break
                         response +=part
