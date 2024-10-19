@@ -323,63 +323,63 @@ class Telescope(TelescopeBase):
             raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
 
     def __call(self, script):
-    request_json = json.dumps(script)
-    self.s.settimeout(1)  # Set a timeout for the socket  
-    responses = []
+        request_json = json.dumps(script)
+        self.s.settimeout(1)  # Set a timeout for the socket  
+        responses = []
 
-    def send_and_receive(request):
-        response = b""
-        try:
-            self.s.sendall(request)
-            time.sleep(5)  # Attendi per ricevere la risposta
-            while True:
-                try:
-                    part = self.s.recv(200000)
-                    if not part:
+        def send_and_receive(request):
+            response = b""
+            try:
+                self.s.sendall(request)
+                time.sleep(5)  # Attendi per ricevere la risposta
+                while True:
+                    try:
+                        part = self.s.recv(200000)
+                        if not part:
+                            break
+                        response += part
+
+                    except socket.timeout:
+                        print("Socket timeout, stopping reception.")
                         break
-                    response += part
 
-                except socket.timeout:
-                    print("Socket timeout, stopping reception.")
-                    break
+                return response
+            except Exception as e:
+                if isinstance(e, socket.error) and e.errno == errno.EPIPE:
+                    print(f"Si è verificato un errore: {e}")
+                return None
 
-            return response
-        except Exception as e:
-            if isinstance(e, socket.error) and e.errno == errno.EPIPE:
-                print(f"Si è verificato un errore: {e}")
-            return None
-
-    # Prima invia la richiesta con newline
-    response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
-    if response_with_newline:
-        print(f"Chiamata con newline")
-        responses.append(response_with_newline.decode('utf-8'))
-    else:
-        # Se la prima richiesta fallisce, invia la richiesta senza newline
-        response_without_newline = send_and_receive(request_json.encode('utf-8'))
-        if response_without_newline:
-            print(f"Chiamata senza newline")
-            responses.append(response_without_newline.decode('utf-8'))
+        # Prima invia la richiesta con newline
+        response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
+        if response_with_newline:
+            print(f"Chiamata con newline")
+            responses.append(response_with_newline.decode('utf-8'))
         else:
-            print("Nessuna risposta dal server con entrambe le formattazioni.")
-            return []  # Nessuna risposta ricevuta, ritorniamo una lista vuota
+            # Se la prima richiesta fallisce, invia la richiesta senza newline
+            response_without_newline = send_and_receive(request_json.encode('utf-8'))
+            if response_without_newline:
+                print(f"Chiamata senza newline")
+                responses.append(response_without_newline.decode('utf-8'))
+            else:
+                print("Nessuna risposta dal server con entrambe le formattazioni.")
+                return []  # Nessuna risposta ricevuta, ritorniamo una lista vuota
 
-    # Combina le risposte e processale
-    combined_response = "\n".join(responses)
+        # Combina le risposte e processale
+        combined_response = "\n".join(responses)
 
-    # Usa una regex per trovare e separare tutti gli oggetti JSON completi nella risposta combinata
-    json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', combined_response)
+        # Usa una regex per trovare e separare tutti gli oggetti JSON completi nella risposta combinata
+        json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', combined_response)
 
-    # Converti ciascun JSON string in un oggetto Python
-    response_objects = []
-    for json_str in json_strings:
-        try:
-            json_obj = json.loads(json_str)
-            response_objects.append(json_obj)
-        except json.JSONDecodeError as e:
-            print(f"Errore nella decodifica del JSON: {e}")
+        # Converti ciascun JSON string in un oggetto Python
+        response_objects = []
+        for json_str in json_strings:
+            try:
+                json_obj = json.loads(json_str)
+                response_objects.append(json_obj)
+            except json.JSONDecodeError as e:
+                print(f"Errore nella decodifica del JSON: {e}")
 
-    return response_objects
+        return response_objects
 
 ''' 
     def __call(self, script):
