@@ -359,14 +359,14 @@ class Telescope(TelescopeBase):
             if response:
                 print(f"Chiamata con payload: {payload}")
                 responses.append(response.decode('utf-8'))
-        
+        '''
         
         response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
         if response_with_newline:
             print (f"chiamata response_with_newline")
             responses.append(response_with_newline.decode('utf-8'))
 
-        '''
+        
         # Send request without newline
         response_without_newline = send_and_receive(request_json.encode('utf-8'))
         if response_without_newline:
