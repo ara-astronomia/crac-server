@@ -165,6 +165,7 @@ class Telescope(TelescopeBase):
                 )
            
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            
             self.__call(
                             {"newSwitchVector": 
                                 { 
@@ -197,8 +198,10 @@ class Telescope(TelescopeBase):
         logger.debug(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords, root)
         logger.debug(f"data received from json: {status}")
+        airmass = self._airmass(aa_coords)
+        logger.debug(f"valore di airmass: {airmass}")
 
-        return (eq_coords, aa_coords, speed, status)
+        return (eq_coords, aa_coords, airmass, speed, status)
     
     def _retrieve_status(self, aa_coords: AltazimutalCoords, root: Any) -> TelescopeStatus:
         if not self._polling:
@@ -226,20 +229,21 @@ class Telescope(TelescopeBase):
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
 
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
-        logger.debug(aa_coords)
-        logger.debug(eq_coords)
+        print(f"valori di flat_alt_az: {aa_coords}")
+        print(f"valori di flat_ar_dec: {eq_coords}")
         self.queue_set_speed(speed)
         self.__call(
                     {"newNumberVector": 
                         { 
                             "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items": 
                             [
-                                { "name": "DEC", "value": eq_coords.dec}, 
-                                { "name": "RA", "value": eq_coords.ra} 
+                                { "name": "RA", "value": eq_coords.ra},
+                                { "name": "DEC", "value": eq_coords.dec} 
                             ] 
                         } 
                     }
                     )  
+        
     def __retrieve_speed(self, root):
         seen = set()    
         #status_mount_speed=[]    
@@ -292,6 +296,7 @@ class Telescope(TelescopeBase):
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
+        print(f"valori di ar e dec di ritorno da indigo: {ra, dec}")                        
         if ra and dec:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
@@ -316,7 +321,67 @@ class Telescope(TelescopeBase):
             return AltazimutalCoords(alt=alt, az=az)
         else:
             raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
- 
+
+    def __call(self, script):
+        request_json = json.dumps(script)
+        self.s.settimeout(1)  # Set a timeout for the socket  
+        responses = []
+
+        def send_and_receive(request):
+            response = b""
+            try:
+                self.s.sendall(request)
+                time.sleep(5)  # Attendi per ricevere la risposta
+                while True:
+                    try:
+                        part = self.s.recv(200000)
+                        if not part:
+                            break
+                        response += part
+
+                    except socket.timeout:
+                        print("Socket timeout, stopping reception.")
+                        break
+
+                return response
+            except Exception as e:
+                if isinstance(e, socket.error) and e.errno == errno.EPIPE:
+                    print(f"Si è verificato un errore: {e}")
+                return None
+
+        # Prima invia la richiesta con newline
+        response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
+        if response_with_newline:
+            print(f"Chiamata con newline")
+            responses.append(response_with_newline.decode('utf-8'))
+        else:
+            # Se la prima richiesta fallisce, invia la richiesta senza newline
+            response_without_newline = send_and_receive(request_json.encode('utf-8'))
+            if response_without_newline:
+                print(f"Chiamata senza newline")
+                responses.append(response_without_newline.decode('utf-8'))
+            else:
+                print("Nessuna risposta dal server con entrambe le formattazioni.")
+                return []  # Nessuna risposta ricevuta, ritorniamo una lista vuota
+
+        # Combina le risposte e processale
+        combined_response = "\n".join(responses)
+
+        # Usa una regex per trovare e separare tutti gli oggetti JSON completi nella risposta combinata
+        json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', combined_response)
+
+        # Converti ciascun JSON string in un oggetto Python
+        response_objects = []
+        for json_str in json_strings:
+            try:
+                json_obj = json.loads(json_str)
+                response_objects.append(json_obj)
+            except json.JSONDecodeError as e:
+                print(f"Errore nella decodifica del JSON: {e}")
+
+        return response_objects
+
+''' 
     def __call(self, script):
         request_json = json.dumps(script)
         self.s.settimeout(1)  # Set a timeout for the socket  
@@ -329,7 +394,7 @@ class Telescope(TelescopeBase):
                 time.sleep(5)
                 while True:
                     try:
-                        part = self.s.recv(2500000)
+                        part = self.s.recv(200000)
                         if not part:
                             break
                         response +=part
@@ -342,16 +407,19 @@ class Telescope(TelescopeBase):
             except Exception as e:
                 if isinstance(e, socket.error) and e.errno == errno.EPIPE:
                     print(f"Si è verificato un errore: {e}")
-            
+        
         response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
         if response_with_newline:
+            print (f"chiamata response_with_newline")
             responses.append(response_with_newline.decode('utf-8'))
 
-
+        
         # Send request without newline
         response_without_newline = send_and_receive(request_json.encode('utf-8'))
         if response_without_newline:
+            print (f"chiamata response_without_newline")
             responses.append(response_without_newline.decode('utf-8'))
+        
 
         # Combine responses and process them
         combined_response = "\n".join(responses)  
@@ -369,3 +437,4 @@ class Telescope(TelescopeBase):
                 print(f"Errore nella decodifica del JSON: {e}")
        
         return response_objects
+        '''

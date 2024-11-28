@@ -208,16 +208,16 @@ class Curtain:
             self.disable_motor()
 
     def disable(self):
-        logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
+        #logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         if not self.__is_opening__() and not self.__is_closing__():
             self.to_disable = True
             self.bring_down()
-            logger.debug("Curtain: %s, self.to_disable after bring down is %s", self._orientation, self.to_disable)
+            #logger.debug("Curtain: %s, self.to_disable after bring down is %s", self._orientation, self.to_disable)
 
     def enable(self):
-        logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
+        #logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
         self.motor.enable_device.on()
-        logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
+        #logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
 
     def disable_motor(self):
 

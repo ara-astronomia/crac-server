@@ -7,7 +7,7 @@ license = "GPL3"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-crac-protobuf = { git = "https://github.com/ara-astronomia/crac-protobuf", tag="0.1.21.0" }
+crac-protobuf = { git = "https://github.com/ara-astronomia/crac-protobuf", branch="fixed-path-file-proto" }
 grpcio-tools = "^1.43.0"
 gpiozero = "^2.0.1"
 lgpio = "^0.2.2.0"

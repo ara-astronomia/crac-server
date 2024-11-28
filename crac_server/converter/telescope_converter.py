@@ -128,7 +128,8 @@ class TelescopeConverter:
         )
 
         return TelescopeResponse(
-            status=mediator.status, 
+            status=mediator.status,
+            airmass=mediator.button.airmass,
             aa_coords=mediator.button.aa_coords, 
             eq_coords=mediator.button.eq_coords,
             speed=mediator.speed, 

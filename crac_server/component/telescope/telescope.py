@@ -7,19 +7,20 @@ from astropy.coordinates import (
     AltAz,
     SkyCoord
 )
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from collections import deque
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
     AltazimutalCoords,  # type: ignore
     EquatorialCoords,  # type: ignore
     TelescopeSpeed,  # type: ignore
+    TelescopeResponse # type: ignore
 )
 from crac_server import config
 from datetime import datetime
 from threading import Thread
 from time import sleep
-
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ class Telescope(ABC):
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 
-                self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
+                self.eq_coords, self.aa_coords, self.airmass, self.speed, self.status = self.retrieve()
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
@@ -165,6 +166,7 @@ class Telescope(ABC):
         self.status = TelescopeStatus.DISCONNECTED
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
+        self.airmass : TelescopeResponse.airmass = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
 
     def _retrieve_aa_coords(self, eq_coords):
@@ -259,6 +261,21 @@ class Telescope(ABC):
             az = round(az, decimal_places)
         return AltazimutalCoords(alt=alt, az=az)
 
+    def _airmass (self, alt_az: AltazimutalCoords,):
+        lat = config.Config.getValue("lat", "geography")
+        lon = config.Config.getValue("lon", "geography")
+        height = config.Config.getInt("height", "geography")
+        observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)  
+        obstime=Time.now()
+        alt=alt_az.alt
+        altezza = alt * u.deg
+        azimuth =0 * u.deg
+        altaz_frame=AltAz(alt=altezza, az=azimuth, location=observing_location,obstime=obstime)
+        airmass_float = altaz_frame.secz
+        airmass = round((float(airmass_float)), 3)
+        logger.debug(f"questo è il valore di airmass calcolato: {airmass}")
+        return airmass
+    
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
@@ -273,6 +290,6 @@ class Telescope(ABC):
         ra = float((ra_dec.ra / 15) / u.deg)  # type: ignore
         dec = float(ra_dec.dec / u.deg)  # type: ignore
         if decimal_places > 0:
-            ra = round(ra, decimal_places)
-            dec = round(dec, decimal_places)
+            ra = round(ra, 6)
+            dec = round(dec, 6)
         return EquatorialCoords(ra=ra, dec=dec)
