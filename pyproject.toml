@@ -9,14 +9,11 @@ license = "GPL3"
 python = "^3.9"
 crac-protobuf = { git = "https://github.com/ara-astronomia/crac-protobuf", branch="14-implement-contract-for-ups" }
 grpcio-tools = "^1.43.0"
-gpiozero = "^1.6.2"
+gpiozero = "^2.0.1"
+lgpio = "^0.2.2.0"
 astropy = "^5.0.1"
 # skyfield = "^1.42"
-# "RPi.GPIO" = { version = "^0.7.1", markers = "platform_machine == \"armv6l\"" }
-opencv-python = "^4.5.5"
-pytapo = "^2.0"
 python-dotenv = "^0.20.0"
-libpyfoscam = "^1.1"
 requests = "^2.28.1"
 nut2 = "^2.1.1"
 
@@ -28,7 +25,3 @@ python-dateutil = "^2.8.2"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-#[[tool.poetry.source]]
-#name = "piwheels"
-#url = "https://www.piwheels.org/simple/"

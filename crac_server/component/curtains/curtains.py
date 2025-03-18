@@ -1,5 +1,6 @@
 import logging
 import threading
+from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Curtain:
-    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int]):
+    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int], orientation: str):
         self.__base__()
         self.rotary_encoder = RotaryEncoder(**rotary_encoder)
         self.curtain_closed = DigitalInputDevice(**curtain_closed)
@@ -18,14 +19,17 @@ class Curtain:
         self.motor.enable_device.off()
         self.__event_detect__()
         self.lock = threading.Lock()
+        self.lock_rotation = threading.Lock()
         self.to_disable = False
+        self._orientation = orientation
 
     def __base__(self):
-        self.__sub_min_step__ = -5
+        self.__sub_min_step__ = Config.getInt("n_step_sub_min", "encoder_step")
         self.__min_step__ = 0
         self.__max_step__ = Config.getInt("n_step_corsa", "encoder_step")
         self.__security_step__ = Config.getInt("n_step_sicurezza", "encoder_step")
-        self.target = None
+        self.__tolerance_steps__ = Config.getInt("tolerance_steps", "encoder_step")
+        self.target : Union[None, int] = None
 
     def __event_detect__(self):
         self.curtain_closed.when_activated = self.__reset_steps__
@@ -48,36 +52,45 @@ class Curtain:
     def __stop__(self):
         with self.lock:
             self.motor.stop()
+    
+    def __steps_inside_tolerance_area__(self):
+        if self.target is not None:
+            return  self.target - self.__tolerance_steps__  <= self.steps() <= self.target
+        return True
 
     def __check_and_stop__(self):
-        logger.debug("Number of steps: %s", self.steps())
-        logger.debug("target: %s", self.target)
-        if (
-            self.target is None or
-            self.steps() == self.target or
-            self.steps() >= self.__security_step__ or
-            self.steps() <= self.__sub_min_step__ or
-            not self.motor.enable_device.value
-        ):
-            self.__stop__()
-            self.target = None
-            if self.to_disable:
-                self.disable_motor()
+        with self.lock_rotation:
+            logger.debug("Curtain %s: Number of steps: %s", self._orientation, self.steps())
+            logger.debug("Curtain: %s: target: %s", self._orientation, self.target)
+            if (
+                self.target is None or
+                self.__steps_inside_tolerance_area__() or
+                self.steps() >= self.__security_step__ or
+                self.steps() <= self.__sub_min_step__ or
+                not self.motor.enable_device.value
+            ):
+                self.__stop__()
+                logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
+                self.target = None
+                if self.to_disable:
+                    self.disable_motor()
                 
 
     def __reset_steps__(self, open_or_closed):
-        self.__stop__()
+        with self.lock_rotation:
+            self.target = None
+            self.__stop__()
 
-        if open_or_closed == self.curtain_open:
-            self.rotary_encoder.steps = self.__max_step__
-        elif open_or_closed == self.curtain_closed:
-            self.rotary_encoder.steps = self.__min_step__
+            if open_or_closed == self.curtain_open:
+                self.rotary_encoder.steps = self.__max_step__
+            elif open_or_closed == self.curtain_closed:
+                self.rotary_encoder.steps = self.__min_step__
 
     def __is_danger__(self):
         return (
-            self.steps() > self.__max_step__ or self.steps() < self.__min_step__ or
-            (self.steps() == self.__max_step__ and not self.curtain_open.is_active and self.motor.value == 1) or
-            (self.steps() == self.__min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
+            self.steps() > self.__security_step__ or self.steps() < self.__sub_min_step__ or
+            (self.steps() == self.__security_step__ and not self.curtain_open.is_active and self.motor.value == 1) or
+            (self.steps() == self.__sub_min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
         )
 
     def __is_disabled__(self) -> bool:
@@ -162,33 +175,26 @@ class Curtain:
 
         """ Move the motor in a direction based on the starting and target steps """
 
-        # if curtains are disabled, we don't want to move them
-        if not self.motor.enable_device.value:
-            return
+        with self.lock_rotation:
 
-        status = self.get_status()
-        logger.debug("Status in move method: %s", status)
-        
-        # while the motors are moving we don't want to start another movement
-        if status > CurtainStatus.CURTAIN_OPENED or self.motor.value:
-            return
+            # if curtains are disabled, we don't want to move them
+            if not self.motor.enable_device.value:
+                return
 
-        self.target = step
+            status = self.get_status()
+            logger.debug("Curtain: %s, Status in move method: %s", self._orientation, CurtainStatus.Name(status))
+            
+            # while the motors are moving we don't want to start another movement
+            if status > CurtainStatus.CURTAIN_OPENED or self.motor.value:
+                return
 
-        # deciding the movement direction
-        if self.steps() < self.target:
-            self.__open__()
-        elif self.steps() > self.target:
-            self.__close__()
+            self.target = step
 
-    def open_up(self):
-
-        """
-            Open up the curtain completely
-            It's a shortcut to move()
-        """
-
-        self.move(self.__max_step__)
+            # deciding the movement direction
+            if self.steps() < self.target - self.__tolerance_steps__:
+                self.__open__()
+            elif self.steps() > self.target + self.__tolerance_steps__:
+                self.__close__()
 
     def bring_down(self):
 
@@ -202,16 +208,16 @@ class Curtain:
             self.disable_motor()
 
     def disable(self):
-        logger.debug(f"self.to_disable is {self.to_disable}")
+        logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         if not self.__is_opening__() and not self.__is_closing__():
             self.to_disable = True
             self.bring_down()
-            logger.debug(f"self.to_disable after bring down is {self.to_disable}")
+            logger.debug("Curtain: %s, self.to_disable after bring down is %s", self._orientation, self.to_disable)
 
     def enable(self):
-        logger.debug(f"motor is {self.motor.enable_device.value}")
+        logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
         self.motor.enable_device.on()
-        logger.debug(f"motor after enabling is {self.motor.enable_device.value}")
+        logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
 
     def disable_motor(self):
 

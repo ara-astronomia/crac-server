@@ -1,10 +1,36 @@
+# Use it on raspberry PI Zero 2 or greater
+* enable SSH by touch ssh on the root of the boot disk https://phoenixnap.com/kb/enable-ssh-raspberry-pi
+* enable wifi by creating wpa_supplicant on the root of the boot disk and putting this inside:
+    ```
+    country=<country_code>
+    ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+    update_config=1
+
+    network={
+    scan_ssid=1
+    ssid="your_wifi_ssid"
+    psk="your_wifi_password"
+    }
+    ```
+* 
+
+
 # Pre-requisite
 
+```
 sudo apt install libopencv-dev python3-opencv
+```
 
 # Install Dependencies and Configure environment
 
 We are using Poetry as a dependency management and packaging
+Requisite for poetry:
+
+```
+sudo apt-get install python3-distutils
+sudo apt-get install python3-dev
+```
+
 Go to https://python-poetry.org/ and install it
 
 Before using this project, you should clone the crac-protobuf project 

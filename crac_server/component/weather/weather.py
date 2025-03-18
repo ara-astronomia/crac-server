@@ -13,16 +13,15 @@ logger = logging.getLogger(__name__)
 
 
 class Weather:
-    def __init__(self, url: str, fallback_url: str, time_format: str, time_expired: int):
+    def __init__(self, url: str, fallback_url: str, time_format: str, time_expired: int, retry_interval: int):
         self._url = url
         self._fallback_url = fallback_url
         self._json = {}
         self._updated_at : Union[datetime, None] = None
+        self._last_attempt_at : Union[datetime, None] = None
         self._time_format = time_format
         self._time_expired = time_expired
-        self.lock = Lock()
-        self.t = Thread(target=self._retrieve_async)
-        self.t.start()
+        self._retry_interval = retry_interval
 
     @property
     def url(self):
@@ -39,6 +38,14 @@ class Weather:
     @updated_at.setter
     def updated_at(self, value: str):
         self._updated_at = datetime.strptime(value, self._time_format)
+
+    @property
+    def last_attempt_at(self):
+        return self._last_attempt_at
+    
+    @last_attempt_at.setter
+    def last_attempt_at(self, value: datetime):
+        self._last_attempt_at = value
 
     @property
     def json(self):
@@ -83,6 +90,9 @@ class Weather:
     def is_expired(self) -> bool:
         return not self.updated_at or (datetime.now() - self.updated_at).seconds >= self._time_expired
     
+    def is_retriable(self) -> bool:
+        return not self.last_attempt_at or (datetime.now() - self.last_attempt_at).seconds >= self._retry_interval
+    
     @property
     def is_unavailable(self) -> bool:
         return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
@@ -111,17 +121,28 @@ class Weather:
             return json_result["current"], json_result["time"]
         except (HTTPError, URLError, TimeoutError) as error:
             logger.error("Fallback url in error")
+            self.last_attempt_at = datetime.now()
             raise error
 
 
-    def _get_sensor(self, name: str) -> tuple[float, str]:
-        # with self.lock:
-        #     if self.is_expired():
-        #         try:
-        #             self.json, self.updated_at = self._retrieve_data()
-        #         except (HTTPError, URLError, TimeoutError) as error:
-        #             logger.error("url in error")
-        #             self.json, self.updated_at = self._retrieve_fallback_data()
-
+    def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
+        if self.is_expired() and self.is_retriable():
+            try:
+                self.json, self.updated_at = self._retrieve_data()
+            except (HTTPError, URLError, TimeoutError) as error:
+                logger.error("url in error")
+                self.json, self.updated_at = self._retrieve_fallback_data()
+            if (datetime.now() - self.updated_at).seconds >= self._time_expired * 3:
+                    self.last_attempt_at = datetime.now()
+        
         sensor = self.json[name]
-        return float(sensor["value"].replace(',', '.')), html.unescape(sensor["unit_of_measurement"]).strip()
+        return self.__convert_to_float(sensor["value"]), html.unescape(sensor["unit_of_measurement"]).strip()
+
+    def __convert_to_float(self, value: str):
+        value = value.strip().replace(',', '.')
+        if value == 'N/A':
+            return value
+        else:
+            return float(value)
+        
+        
