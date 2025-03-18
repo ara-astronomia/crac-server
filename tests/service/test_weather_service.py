@@ -9,13 +9,13 @@ from crac_server.component.telescope import TELESCOPE
 from crac_server.component.weather import WEATHER
 from crac_server.service.weather_service import WeatherService
 
-class TestWeatherService(unittest.TestCase):
+class TestWeatherService(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         WEATHER = MagicMock()
         self.weather_service = WeatherService()
     
-    def test_get_status(self):
+    async def test_get_status(self):
         wind_speed = PropertyMock(return_value=(7, "km/h"))
         type(WEATHER).wind_speed = wind_speed  # type: ignore
         wind_gust_speed = PropertyMock(return_value=(12, "km/h"))
@@ -31,7 +31,7 @@ class TestWeatherService(unittest.TestCase):
         barometer_trend = PropertyMock(return_value=(-3, "mbar"))
         type(WEATHER).barometer_trend = barometer_trend  # type: ignore
 
-        response = self.weather_service.GetStatus(None, None)
+        response = await self.weather_service.GetStatus(None, None)
         for chart in response.charts:
             if chart.urn == "weather.chart.wind":
                 wind_chart = chart
@@ -56,14 +56,14 @@ class TestWeatherService(unittest.TestCase):
         self.assertEqual((barometer_chart.value, barometer_chart.unit_of_measurement), WEATHER.barometer)  # type: ignore            
         self.assertEqual((barometer_trend_chart.value, barometer_trend_chart.unit_of_measurement), WEATHER.barometer_trend)  # type: ignore
 
-    def test_retriever_raise_exception(self):
+    async def test_retriever_raise_exception(self):
         self.weather_service.weather_converter.convert = MagicMock(side_effect=Exception())
-        response = self.weather_service.GetStatus(None, None)
+        response = await self.weather_service.GetStatus(None, None)
         self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
 
-    def test_status_danger_close_crac(self):
+    async def test_status_danger_close_crac(self):
         self.weather_service.weather_converter.convert = MagicMock(return_value=WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER))
         type(TELESCOPE).polling = True  # type: ignore
         self.weather_service._emergency_closure = MagicMock()
-        self.weather_service.GetStatus(None, None)
+        await self.weather_service.GetStatus(None, None)
         self.weather_service._emergency_closure.assert_called_once()

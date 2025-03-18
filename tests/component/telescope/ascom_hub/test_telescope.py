@@ -78,7 +78,7 @@ class TestTelescope(unittest.TestCase):
     @patch('requests.put')
     def test_flat(self, request):
         request.return_value = self.mocked_put_request()
-        eq_coords = self.telescope._altaz2radec(aa_coords=self.telescope._flat_coordinate, obstime=datetime.utcnow())
+        eq_coords = self.telescope._altaz2radec(aa_coords=self.telescope._flat_coordinate, obstime=datetime.utcnow(), decimal_places=2)
         self.telescope.flat()
         request.assert_any_call(f'http://{self._host}:{self._port}/api/v1/telescope/0/slewtocoordinates', data={"RightAscension": eq_coords.ra, "Declination": eq_coords.dec, "ClientId": 1, "ClientTransactionID": 1})
         request.assert_any_call(f'http://{self._host}:{self._port}/api/v1/telescope/0/tracking', data={"Tracking": False, "ClientId": 1, "ClientTransactionID": 1})
@@ -103,18 +103,6 @@ class TestTelescope(unittest.TestCase):
         self.telescope._retrieve_speed = MagicMock(return_value=TelescopeSpeed.SPEED_TRACKING)
         indicators = self.telescope.retrieve()
         self.assertEqual(indicators, (eq_coords, az_coords, TelescopeSpeed.SPEED_TRACKING, ANY))
-    
-    def test_radec2altaz(self):
-        eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)
-        aa_coords = self.telescope._radec2altaz(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc))
-        self.assertEqual(aa_coords.az, 0.20000345603265943)
-        self.assertEqual(aa_coords.alt, 0.09999827706661533)
-    
-    def test_altaz2radec(self):
-        eq_coords = AltazimutalCoords(az=0.20000345603265943, alt=0.09999827706661533)
-        eq_coords = self.telescope._altaz2radec(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc))
-        self.assertEqual(eq_coords.ra, 9.364493538085952)
-        self.assertEqual(eq_coords.dec, 47.96211229051406)
 
     def test_rounded_radec2altaz(self):
         eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)

@@ -36,7 +36,7 @@ class WeatherService(WeatherServicer):
         self.lock = Lock()
         self.weather_converter = WeatherConverter()
 
-    def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
+    async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         try:
             response = self.weather_converter.convert(WEATHER)
         except:

@@ -1,14 +1,17 @@
 from crac_server.component.curtains.curtains import Curtain
 from threading import Thread
 from time import sleep
+from crac_protobuf.curtains_pb2 import CurtainOrientation
 
 
 class MockCurtain(Curtain):
 
-    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int]):
-        super().__init__(rotary_encoder, curtain_closed, curtain_open, motor)
-        self.curtain_closed.pin.drive_low()
-        self.curtain_open.pin.drive_high()
+    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int], orientation: CurtainOrientation):
+        super().__init__(rotary_encoder, curtain_closed, curtain_open, motor, orientation)
+        if  self.curtain_closed.pin:
+            self.curtain_closed.pin.drive_low()
+        if  self.curtain_open.pin:
+            self.curtain_open.pin.drive_high()
 
     def __rotate_cw__(self, *inputs):
         [input.pin.drive_low() for input in inputs if self.target is not None]
@@ -19,14 +22,16 @@ class MockCurtain(Curtain):
         [input.pin.drive_high() for input in reversed(inputs) if self.target is not None]
 
     def __check_curtains_limit__(self):
-        if self.steps() <= self.__min_step__:
-            self.curtain_closed.pin.drive_low()
-        else:
-            self.curtain_closed.pin.drive_high()
-        if self.steps() >= self.__max_step__:
-            self.curtain_open.pin.drive_low()
-        else:
-            self.curtain_open.pin.drive_high()
+        if  self.curtain_closed.pin:
+            if self.steps() <= self.__min_step__ + self.__tolerance_steps__:
+                self.curtain_closed.pin.drive_low()
+            else:
+                self.curtain_closed.pin.drive_high()
+        if  self.curtain_open.pin:
+            if self.steps() >= self.__max_step__ - self.__tolerance_steps__:
+                self.curtain_open.pin.drive_low()
+            else:
+                self.curtain_open.pin.drive_high()
 
     def __open__(self):
         super().__open__()

@@ -1,7 +1,6 @@
+import asyncio
 import logging
-import threading
 from gpiozero import OutputDevice, DigitalInputDevice
-
 from crac_server.config import Config
 from crac_protobuf.roof_pb2 import RoofStatus
 
@@ -14,17 +13,26 @@ class RoofControl():
         self.motor = OutputDevice(Config.getInt("switch_roof", "roof_board"))
         self.roof_closed_switch = DigitalInputDevice(Config.getInt("roof_verify_closed", "roof_board"), pull_up=True)
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
-        self.lock = threading.Lock()
+        self.timeout = Config.getInt("roof_timeout", "roof_board")
+        self.lock = asyncio.Lock()
+        self.is_blocked = False
 
-    def open(self):
-        with self.lock:
+    async def open(self):
+        async with self.lock:
             self.motor.on()
-            self.roof_open_switch.wait_for_active()
+            self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
+        if self.is_blocked:
+            await self.close()
+            print(self.motor.value)
+            print(self.roof_open_switch.is_active)
+            print(self.roof_closed_switch.is_active)
+        return not self.is_blocked
 
-    def close(self):
-        with self.lock:
+    async def close(self):
+        async with self.lock:
             self.motor.off()
-            self.roof_closed_switch.wait_for_active()
+            self.is_blocked = not self.roof_closed_switch.wait_for_active(self.timeout)
+            return not self.is_blocked
 
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active
@@ -34,7 +42,7 @@ class RoofControl():
         is_switched_on = self.motor.value
         logger.debug(f'roof motor switch is {is_switched_on}')
 
-        if is_roof_closed and is_roof_open:
+        if (is_roof_closed and is_roof_open) or self.is_blocked:
             status = RoofStatus.ROOF_ERROR
         elif is_roof_closed and not is_switched_on:
             status = RoofStatus.ROOF_CLOSED

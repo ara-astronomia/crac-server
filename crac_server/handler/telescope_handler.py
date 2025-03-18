@@ -93,9 +93,9 @@ class TelescopeFlatterHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if (
                 mediator.status is TelescopeStatus.FLATTER and 
-                SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.OFF
+                SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.ON
             ):
-            mediator.button.queue_set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
+            mediator.button.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
         return super().handle(mediator)
 
