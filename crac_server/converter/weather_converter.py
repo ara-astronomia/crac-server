@@ -1,11 +1,12 @@
 from datetime import datetime
 import logging
 from crac_protobuf.chart_pb2 import (
-    WeatherResponse, # type: ignore
-    Chart, # type: ignore
-    Threshold, # type: ignore
-    ThresholdType, # type: ignore
-    ChartStatus,  # type: ignore
+    WeatherResponse,
+    Chart,
+    Threshold,
+    ThresholdType,
+    ChartStatus,
+    WeatherStatus 
 )
 from crac_server.component.weather.weather import Weather
 from crac_server.config import Config
