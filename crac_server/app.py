@@ -1,6 +1,8 @@
+import os
 import logging
 import logging.config
-logging.config.fileConfig('logging.conf')
+config_path = os.path.join(os.path.dirname(__file__), 'logging.conf')
+logging.config.fileConfig(config_path)
 
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
