@@ -208,10 +208,10 @@ class Telescope(ABC):
         return self.__within_range_park(az, config.Config.getFloat("park_az", "telescope"))
 
     def __within_range_park(self, coord: float, check: float):
-        return coord - 0.1 <= check <= coord + 0.1
+        return coord - (config.Config.getFloat("range_park", "telescope")) <= check <= coord + (config.Config.getFloat("range_park", "telescope"))
     
     def __within_range_flat(self, coord: float, check: float):
-        return coord - 0.05 <= check <= coord + 0.05
+        return coord - (config.Config.getFloat("range_flat", "telescope")) <= check <= coord + (config.Config.getFloat("range_flat", "telescope"))
     
     def _calculate_eq_coords_of_park_position(self, started_at: datetime) -> EquatorialCoords:
         aa_coords = AltazimutalCoords(
