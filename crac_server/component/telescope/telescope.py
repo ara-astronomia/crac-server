@@ -196,19 +196,22 @@ class Telescope(ABC):
                 return TelescopeStatus.EAST
 
     def __within_flat_alt_range(self, alt: float):
-        return self.__within_range(alt, config.Config.getFloat("flat_alt", "telescope"))
+        return self.__within_range_flat(alt, config.Config.getFloat("flat_alt", "telescope"))
 
     def __within_park_alt_range(self, alt: float):
-        return self.__within_range(alt, config.Config.getFloat("park_alt", "telescope"))
+        return self.__within_range_park(alt, config.Config.getFloat("park_alt", "telescope"))
 
     def __within_flat_az_range(self, az: float):
-        return self.__within_range(az, config.Config.getFloat("flat_az", "telescope"))
+        return self.__within_range_flat(az, config.Config.getFloat("flat_az", "telescope"))
 
     def __within_park_az_range(self, az: float):
-        return self.__within_range(az, config.Config.getFloat("park_az", "telescope"))
+        return self.__within_range_park(az, config.Config.getFloat("park_az", "telescope"))
 
-    def __within_range(self, coord: float, check: float):
-        return coord - 2 <= check <= coord + 2
+    def __within_range_park(self, coord: float, check: float):
+        return coord - (config.Config.getFloat("range_park", "telescope")) <= check <= coord + (config.Config.getFloat("range_park", "telescope"))
+    
+    def __within_range_flat(self, coord: float, check: float):
+        return coord - (config.Config.getFloat("range_flat", "telescope")) <= check <= coord + (config.Config.getFloat("range_flat", "telescope"))
     
     def _calculate_eq_coords_of_park_position(self, started_at: datetime) -> EquatorialCoords:
         aa_coords = AltazimutalCoords(
