@@ -326,7 +326,7 @@ class Telescope(TelescopeBase):
             response=b""
             try:
                 self.s.sendall(request)
-                time.sleep(5)
+                time.sleep(0.4)
                 while True:
                     try:
                         part = self.s.recv(2500000)
