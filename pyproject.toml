@@ -1,27 +1,39 @@
-[tool.poetry]
+[project]
+# Questa è la sezione standard PEP 621, equivalente a [tool.poetry] name, version, description, e authors.
 name = "crac-server"
 version = "0.1.0"
 description = "Server for controlling the Dome and the Telescope"
-authors = ["Alessio Caradossi <alessio@theeyes.org>"]
-license = "GPL3"
+authors = [
+    { name = "Alessio Caradossi", email = "alessio@theeyes.org" }
+]
+license = { text = "GPL3" }
+requires-python = ">=3.9"
 
-[tool.poetry.dependencies]
-python = "^3.9"
-crac-protobuf = { git = "https://github.com/ara-astronomia/crac-protobuf", branch="14-implement-contract-for-ups" }
-grpcio-tools = "^1.43.0"
-gpiozero = "^2.0.1"
-lgpio = "^0.2.2.0"
-astropy = "^5.0.1"
-# skyfield = "^1.42"
-python-dotenv = "^0.20.0"
-requests = "^2.28.1"
-nut2 = "^2.1.1"
+dependencies = [
+    # Dipendenza Git: UV le gestisce direttamente se specificate così.
+    "crac-protobuf @ git+https://github.com/ara-astronomia/crac-protobuf@14-implement-contract-for-ups",
+    
+    # Dipendenze PyPI standard
+    "grpcio-tools~=1.43.0",
+    "gpiozero~=2.0.1",
+    "lgpio~=0.2.2.0",
+    "astropy~=5.0.1",
+    # "skyfield~=1.42", # Commentato come nell'originale
+    "python-dotenv~=0.20.0",
+    "requests~=2.28.1",
+    "nut2~=2.1.1",
+]
 
-[tool.poetry.dev-dependencies]
-autopep8 = "^1.6.0"
-coverage = "^6.3.2"
-python-dateutil = "^2.8.2"
+[project.optional-dependencies]
+# N.B.: Le dipendenze di sviluppo (dev-dependencies) vengono spostate qui
+# e dovranno essere installate specificando [dev]
+dev = [
+    "autopep8~=1.6.0",
+    "coverage~=6.3.2",
+    "python-dateutil~=2.8.2",
+]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools", "wheel"] # Requisiti standard di build
+build-backend = "setuptools.build_meta"
+

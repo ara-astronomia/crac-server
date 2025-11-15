@@ -10,7 +10,13 @@ class Ups(UpsBase):
             password=password,
             timeout=time_expired
             )
-
+        try:
+            self.client.authenticate()
+            print(f"DEBUG: Connessione NUT autenticata su {host}:3493 per utente {login}")
+        except Exception as e:
+            # Se fallisce qui, significa che le credenziali o la porta sono sbagliate.
+            print(f"ERRORE NUT: Autenticazione fallita: {e}")
+            
     def status_for(self, device: str) -> dict[str,str]:
         raw_data = self.client.list_vars(device)
 
