@@ -11,12 +11,14 @@ class Ups(UpsBase):
             timeout=time_expired
             )
         try:
-            self.client.authenticate()
-            print(f"DEBUG: Connessione NUT autenticata su {host}:3493 per utente {login}")
+            # list_ups è un comando semplice e dovrebbe essere il primo ad essere chiamato
+            self.client.list_ups() 
+            print(f"DEBUG: Connessione NUT stabilita e autenticata su {host}:3493.")
         except Exception as e:
-            # Se fallisce qui, significa che le credenziali o la porta sono sbagliate.
-            print(f"ERRORE NUT: Autenticazione fallita: {e}")
-            
+            # Cattura errori come Timeout, ConnectionRefused o BrokenPipe
+            print(f"ERRORE NUT: Connessione o autenticazione fallita: {e}")
+            raise ConnectionError(f"Impossibile connettersi/autenticarsi con NUT: {e}")
+
     def status_for(self, device: str) -> dict[str,str]:
         raw_data = self.client.list_vars(device)
 

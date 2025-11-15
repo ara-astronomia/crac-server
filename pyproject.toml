@@ -14,7 +14,7 @@ dependencies = [
     "crac-protobuf @ git+https://github.com/ara-astronomia/crac-protobuf@14-implement-contract-for-ups",
     
     # Dipendenze PyPI standard
-    "grpcio-tools~=1.43.0",
+    "grpcio-tools",
     "gpiozero~=2.0.1",
     "lgpio~=0.2.2.0",
     "astropy~=5.0.1",
