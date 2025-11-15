@@ -11,9 +11,15 @@ class Ups(UpsBase):
         ups_path = os.path.join(os.path.dirname(__file__), "ups.ini")
         ups_config = ConfigParser()
         ups_config.read(ups_path)
-        voltage = ups_config.get(device, "output.voltage", fallback='220')
+        voltage = ups_config.get(device, "input.voltage", fallback='220')
         battery = ups_config.get(device, "battery.charge", fallback='100')
-        ups_config[device] = {"output.voltage": voltage, "battery.charge": battery}
+        ups_status = ups_config.get(device, "ups.status", fallback='OL')
+        ups_config[device] = {
+            "input.voltage": voltage,
+            "battery.charge": battery,
+            "ups.status": ups_status
+        }
+        
         with open(ups_path, 'w') as ups_file:
             ups_config.write(ups_file)
         return {
