@@ -30,6 +30,7 @@ class UpsService(UpsServicer):
             interval=UPS.time_expired
         )
         for device in Config.getValue("ups_list", "ups").split(","):
+            print(f"DEBUG: Recupero stato UPS per dispositivo {device}")
             ups = UPS.status_for(device)
             response.devices.append(device)
             response.charts.append(
