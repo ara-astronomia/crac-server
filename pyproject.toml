@@ -1,10 +1,11 @@
 [project]
 # Questa è la sezione standard PEP 621, equivalente a [tool.poetry] name, version, description, e authors.
+# Questo project prevede la mmigrazione da poetry ad UV
 name = "crac-server"
 version = "0.1.0"
 description = "Server for controlling the Dome and the Telescope"
 authors = [
-    { name = "Alessio Caradossi", email = "alessio@theeyes.org" }
+    { name = "Raniero Albanesi", email = "raniero.albanesi@gmail.com" }
 ]
 license = { text = "GPL3" }
 requires-python = ">=3.9"
