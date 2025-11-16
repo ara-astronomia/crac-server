@@ -19,12 +19,13 @@ class Ups(UpsBase):
         """Metodo helper per creare e autenticare un client fresco."""
         # Recupera i dati passati dal super()
         client = PyNUTClient(
-            self.host,  # Assumendo che host sia salvato da super().__init__
+            self.hostname,  # Assumendo che host sia salvato da super().__init__
             login=self.login, # Assumendo che login sia salvato
             password=self.password, # Assumendo che password sia salvata
             timeout=self.time_expired
         )
         # La chiamata a list_ups autentica e stabilisce il socket per l'uso immediato
+        print (client)
         client.list_ups() 
         return client
 
