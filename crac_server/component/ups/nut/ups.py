@@ -20,15 +20,29 @@ class Ups(UpsBase):
             raise ConnectionError(f"Impossibile connettersi/autenticarsi con NUT: {e}")
 
     def status_for(self, device: str) -> dict[str,str]:
+        # Passo 1: Forza la riapertura della connessione e autenticazione
+        # Usiamo list_ups() che sappiamo funzionare per l'autenticazione.
+        try:
+            self.client.list_ups() 
+        except Exception as e:
+            raise ConnectionError(f"Errore di riconnessione/autenticazione per list_vars: {e}")
+
+        # Passo 2: Esegui la richiesta sullo stesso socket appena aperto/autenticato
         raw_data = self.client.list_vars(device)
 
-        # 2. Estrai solo i dati essenziali e rinomina le chiavi per coerenza
+        # Passo 3: Estrai i dati
         return {
             'input_voltage': raw_data.get('input.voltage', '0.0'),
             'battery_charge': raw_data.get('battery.charge', '0'),
             'ups_status': raw_data.get('ups.status', 'UNKNOWN')
         }
-        #return self.client.list_vars(device)
 
     def list_ups(self):
-        return self.client.list_ups()
+        # La logica di list_ups deve connettersi internamente.
+        # Se list_ups() non si connette autonomamente, potresti dover usare un workaround.
+        # Ma poiché l'hai usata per la prima autenticazione, dovrebbe gestirlo da sé.
+        try:
+            return self.client.list_ups()
+        except Exception as e:
+            # Cattura BrokenPipe se la connessione è stata chiusa.
+            raise ConnectionError(f"Errore nella chiamata list_ups: {e}")
