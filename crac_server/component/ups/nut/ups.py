@@ -4,12 +4,7 @@ from nut2 import PyNUTClient
 class Ups(UpsBase):
     def __init__(self, host: str, login: str, password: str, time_expired: int) -> None:
         super().__init__(host, login, password, time_expired)
-        self.client = PyNUTClient(
-            host,
-            login=login,
-            password=password,
-            timeout=time_expired
-            )
+        #self.client = PyNUTClient(host,login=login,password=password,timeout=time_expired)
         try:
             # list_ups è un comando semplice e dovrebbe essere il primo ad essere chiamato
             self.client.list_ups() 
@@ -19,18 +14,27 @@ class Ups(UpsBase):
             print(f"ERRORE NUT: Connessione o autenticazione fallita: {e}")
             raise ConnectionError(f"Impossibile connettersi/autenticarsi con NUT: {e}")
 
+    def _get_client(self):
+        """Metodo helper per creare e autenticare un client fresco."""
+        # Recupera i dati passati dal super()
+        client = PyNUTClient(
+            self.host,  # Assumendo che host sia salvato da super().__init__
+            login=self.login, # Assumendo che login sia salvato
+            password=self.password, # Assumendo che password sia salvata
+            timeout=self.time_expired
+        )
+        # La chiamata a list_ups autentica e stabilisce il socket per l'uso immediato
+        client.list_ups() 
+        return client
+
     def status_for(self, device: str) -> dict[str,str]:
-        # Passo 1: Forza la riapertura della connessione e autenticazione
-        # Usiamo list_ups() che sappiamo funzionare per l'autenticazione.
-        try:
-            self.client.list_ups() 
-        except Exception as e:
-            raise ConnectionError(f"Errore di riconnessione/autenticazione per list_vars: {e}")
+        # **1. CREA CLIENT FRESCO E AUTENTICA**
+        client = self._get_client()
 
-        # Passo 2: Esegui la richiesta sullo stesso socket appena aperto/autenticato
-        raw_data = self.client.list_vars(device)
+        # **2. Esegui la richiesta IMMEDIATAMENTE**
+        raw_data = client.list_vars(device)
 
-        # Passo 3: Estrai i dati
+        # 3. Estrai i dati...
         return {
             'input_voltage': raw_data.get('input.voltage', '0.0'),
             'battery_charge': raw_data.get('battery.charge', '0'),
@@ -38,11 +42,6 @@ class Ups(UpsBase):
         }
 
     def list_ups(self):
-        # La logica di list_ups deve connettersi internamente.
-        # Se list_ups() non si connette autonomamente, potresti dover usare un workaround.
-        # Ma poiché l'hai usata per la prima autenticazione, dovrebbe gestirlo da sé.
-        try:
-            return self.client.list_ups()
-        except Exception as e:
-            # Cattura BrokenPipe se la connessione è stata chiusa.
-            raise ConnectionError(f"Errore nella chiamata list_ups: {e}")
+        client = self._get_client()
+        # Non serve chiamare list_ups qui, è già stato fatto in _get_client()
+        return client.list_ups()
