@@ -43,6 +43,7 @@ class Ups(UpsBase):
 
         # **2. Esegui la richiesta IMMEDIATAMENTE**
         raw_data = client.list_vars(device)
+        print(f"DEBUG: Dati grezzi UPS per {device}: {raw_data}")
 
         # 3. Estrai i dati...
         return {
