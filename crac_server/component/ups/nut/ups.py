@@ -4,6 +4,10 @@ from nut2 import PyNUTClient
 class Ups(UpsBase):
     def __init__(self, host: str, login: str, password: str, time_expired: int) -> None:
         super().__init__(host, login, password, time_expired)
+        self.hostname = host  # Usa il nome corretto
+        self.login = login
+        self.password = password
+        self.time_expired = time_expired
         #self.client = PyNUTClient(host,login=login,password=password,timeout=time_expired)
         '''
         try:
@@ -17,17 +21,21 @@ class Ups(UpsBase):
         '''
     def _get_client(self):
         """Metodo helper per creare e autenticare un client fresco."""
-        # Recupera i dati passati dal super()
-        client = PyNUTClient(
-            self.hostname,  # Assumendo che host sia salvato da super().__init__
-            login=self.login, # Assumendo che login sia salvato
-            password=self.password, # Assumendo che password sia salvata
-            timeout=self.time_expired
-        )
-        # La chiamata a list_ups autentica e stabilisce il socket per l'uso immediato
-        print (client)
-        client.list_ups() 
-        return client
+        try:
+            client = PyNUTClient(
+                self.hostname, # <-- Ora usa l'attributo che hai salvato!
+                login=self.login,
+                password=self.password,
+                timeout=self.time_expired
+            )
+            # Forza l'autenticazione/connessione
+            client.list_ups() 
+            print("connected NUT client established and authenticated to {self.hostname}:3493.")
+            print(client)
+            return client
+        except Exception as e:
+            # Cattura BrokenPipe o EOFError e solleva un ConnectionError
+            raise ConnectionError(f"Impossibile connettersi o autenticarsi con NUT: {e}")
 
     def status_for(self, device: str) -> dict[str,str]:
         # **1. CREA CLIENT FRESCO E AUTENTICA**
