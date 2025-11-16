@@ -5,6 +5,7 @@ class Ups(UpsBase):
     def __init__(self, host: str, login: str, password: str, time_expired: int) -> None:
         super().__init__(host, login, password, time_expired)
         #self.client = PyNUTClient(host,login=login,password=password,timeout=time_expired)
+        '''
         try:
             # list_ups è un comando semplice e dovrebbe essere il primo ad essere chiamato
             self.client.list_ups() 
@@ -13,7 +14,7 @@ class Ups(UpsBase):
             # Cattura errori come Timeout, ConnectionRefused o BrokenPipe
             print(f"ERRORE NUT: Connessione o autenticazione fallita: {e}")
             raise ConnectionError(f"Impossibile connettersi/autenticarsi con NUT: {e}")
-
+        '''
     def _get_client(self):
         """Metodo helper per creare e autenticare un client fresco."""
         # Recupera i dati passati dal super()
