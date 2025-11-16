@@ -30,8 +30,8 @@ class Ups(UpsBase):
             )
             # Forza l'autenticazione/connessione
             client.list_ups() 
-            print("connected NUT client established and authenticated to {self.hostname}:3493.")
-            print(client)
+            print("connected NUT client established and authenticated to {client.hostname}:3493.")
+
             return client
         except Exception as e:
             # Cattura BrokenPipe o EOFError e solleva un ConnectionError

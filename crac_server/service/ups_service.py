@@ -33,10 +33,11 @@ class UpsService(UpsServicer):
             print(f"DEBUG: Recupero stato UPS per dispositivo {device}")
             ups = UPS.status_for(device)
             response.devices.append(device)
+            print (f"DEBUG :{response.devices}")
             response.charts.append(
                 UpsChart(
                     chart = build_chart(
-                        value=float(ups['battery.charge']),
+                        value=float(ups['battery_charge']),
                         title="Batteria",
                         urn=f"ups.{device}.chart.battery",
                         min=0,
@@ -60,7 +61,7 @@ class UpsService(UpsServicer):
             response.charts.append(
                 UpsChart(
                     chart = build_chart(
-                        value=float(ups['output.voltage']),
+                        value=float(ups['input_voltage']),
                         title="Batteria",
                         urn=f"ups.{device}.chart.voltage",
                         min=Config.getFloat("lower_bound", "voltage_danger_lower"),
