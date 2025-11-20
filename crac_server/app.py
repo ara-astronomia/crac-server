@@ -10,7 +10,7 @@ from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
 from crac_protobuf.curtains_pb2_grpc import add_CurtainServicer_to_server
 from crac_protobuf.button_pb2_grpc import add_ButtonServicer_to_server
-from crac_protobuf.geographic_pb2_grpc import add_GeographicServicer_to_server
+from crac_protobuf.geographic_pb2_grpc import add_GeographicServiceServicer_to_server
 from crac_protobuf.data_image_pb2_grpc import add_ImageConfigServicer_to_server
 from crac_server.service.weather_service import WeatherService
 from crac_server.service.telescope_service import TelescopeService
@@ -52,7 +52,7 @@ async def serve():
     add_UpsServicer_to_server(
         UpsService(), server
     )
-    add_GeographicServicer_to_server(
+    add_GeographicServiceServicer_to_server(
         GeographicServicer(), server
     )
     add_ImageConfigServicer_to_server(
