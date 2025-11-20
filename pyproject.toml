@@ -12,7 +12,7 @@ requires-python = ">=3.9"
 
 dependencies = [
     # Dipendenza Git: UV le gestisce direttamente se specificate così.
-    "crac-protobuf @ git+https://github.com/ara-astronomia/crac-protobuf@14-implement-contract-for-ups",
+    "crac-protobuf @ git+https://github.com/ara-astronomia/crac-protobuf@16-create-new-proto-geographic-and-data_image",
     
     # Dipendenze PyPI standard
     "grpcio-tools",
