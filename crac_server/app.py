@@ -11,7 +11,7 @@ from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
 from crac_protobuf.curtains_pb2_grpc import add_CurtainServicer_to_server
 from crac_protobuf.button_pb2_grpc import add_ButtonServicer_to_server
 from crac_protobuf.geographic_pb2_grpc import add_GeographicServiceServicer_to_server
-from crac_protobuf.data_image_pb2_grpc import add_ImageConfigServicer_to_server
+from crac_protobuf.data_image_pb2_grpc import add_ImageConfigServiceServicer_to_server
 from crac_server.service.weather_service import WeatherService
 from crac_server.service.telescope_service import TelescopeService
 from crac_server.service.roof_service import RoofService
@@ -55,7 +55,7 @@ async def serve():
     add_GeographicServiceServicer_to_server(
         GeographicServicer(), server
     )
-    add_ImageConfigServicer_to_server(
+    add_ImageConfigServiceServicer_to_server(
         ImageConfigServicer(), server
     )
     server.add_insecure_port(
