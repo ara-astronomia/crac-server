@@ -8,9 +8,9 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
     def GetGeographicInfo(self, request, context):
         # 1. Ottieni i dati dal config.ini
         geo_config = Config.get_section("geography")
-        lat=(geo_config.get("lat"))
-        lon=(geo_config.get("lon"))
-        elev=(geo_config.get("height"))
+        lat_str=(geo_config.get("lat"))
+        lon_str=(geo_config.get("lon"))
+        elev_str=(geo_config.get("height"))
 
         match_lat = re.search(r'(\d+)d([\d.]+)m', lat_str)
         if match_lat:
@@ -35,7 +35,7 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
 
         # 4. Conversione Elevazione
         try:
-            elev = float(elev)
+            elev = float(elev_str)
         except ValueError:
             print(f"ERRORE: Impossibile convertire Elevazione in float: {elev_str}")
             elev = 0.0
