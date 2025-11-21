@@ -15,11 +15,11 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
         match_lon = re.search(r'(\d+)d([\d.]+)m', lon)
         if match_lat and match_lon:
             # Estrai i gruppi e convertili in float
-            gradi_lat  = float(match_lat(1))   # 42.0
-            minuti_lat = float(match_lat(2))  # 13.76
+            gradi_lat  = float(match_lat.group(1))   # 42.0
+            minuti_lat = float(match_lat.group(2))  # 13.76
             lat = float(gradi_lat + (minuti_lat / 60.0))  
-            gradi_lon  = float(match_lon(1))   # 42.0
-            minuti_lon = float(match_lon(2))  # 13.76
+            gradi_lon  = float(match_lon.group(1))   # 42.0
+            minuti_lon = float(match_lon.group(2))  # 13.76
             lat = float(gradi_lon + (minuti_lon / 60.0))   
         elev = float(geo_config.get("height", 0.0))
 
