@@ -140,9 +140,10 @@ class Weather:
 
     def __convert_to_float(self, value: str):
         value = value.strip().replace(',', '.')
-        if value == 'N/A':
-            return value
-        else:
+        try:
             return float(value)
+        except ValueError:
+            logger.warning(f"Impossibile convertire '{value}' in float, restituisco 'N/A'")
+            return 'N/A'
         
         

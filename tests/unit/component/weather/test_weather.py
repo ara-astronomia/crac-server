@@ -139,3 +139,14 @@ class TestWeather(unittest.TestCase):
     def test_url(self):
         self.assertEqual(self.weather.url, self.url)
         self.assertEqual(self.weather.fallback_url, self.fallback_url)
+
+    def test_nd_value_conversion(self):
+        """Test that 'n.d.' string returns 'N/A' instead of raising ValueError."""
+        json_with_nd = {
+            "outTemp": {
+                "value": "n.d.",
+                "unit_of_measurement": "°C"
+            }
+        }
+        self.weather._retrieve_data = MagicMock(return_value=(json_with_nd, datetime.now().strftime(self.format)))
+        self.assertEqual("N/A", self.weather.temperature[0])
