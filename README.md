@@ -1,87 +1,56 @@
-# Use it on raspberry PI5
-* enable SSH by touch ssh on the root of the boot disk https://phoenixnap.com/kb/enable-ssh-raspberry-pi
-* enable wifi by creating wpa_supplicant on the root of the boot disk and putting this inside:
-    ```
-    country=<country_code>
-    ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-    update_config=1
+# CRAC Server
+Server for controlling the Dome and the Telescope of an astronomical observatory.
 
-    network={
-    scan_ssid=1
-    ssid="your_wifi_ssid"
-    psk="your_wifi_password"
-    }
-    ```
-* 
+## Setup on Raspberry Pi (Zero 2, 4, 5)
+* Enable SSH by touching `ssh` on the root of the boot disk.
+* Enable wifi by creating `wpa_supplicant.conf` on the root of the boot disk.
 
-
-# Pre-requisite
-
-```
-sudo apt install libopencv-dev python3-opencv
+## Pre-requisites
+Install system dependencies:
+```bash
+sudo apt update
+sudo apt install swig libopencv-dev python3-opencv libatlas3-base libgfortran5 libopenjp2-7 libavcodec-dev libavformat-dev libswscale-dev libgtk-3-dev
 ```
 
-# Install Dependencies and Configure environment
+## Install Dependencies (using uv)
+We use [uv](https://github.com/astral-sh/uv) for dependency management.
 
-We are using UV as a dependency management and packaging
-Requisite for poetry:
+```bash
+# Clone the repository
+git clone https://github.com/ara-astronomia/crac-server
+cd crac-server
 
-```
-sudo apt-get install python3-distutils
-sudo apt-get install python3-dev
-```
-pip install uv
-uv venv #crea l'ambiente virtuale
-uv pip sync -E dev #installa le dipendenze e le dev-dependencies
-uv pip add new-package #aggiunge nuove dipendenze 
-
-Before using this project, you should clone the crac-protobuf project 
-alongside this one so that the dependency expressed on pyprject.toml 
-can find the package to install.
-
-
-
-# Execute the service
-
-You can start the server with the following commands
-```
-cd crac_server
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Create virtual environment and sync dependencies
+# Use --extra hardware only on Raspberry Pi for GPIO support
+uv sync --extra hardware --extra dev
 ```
 
-Then you can test the connectivity by executing a python repl:
+Note: This project depends on `crac-protobuf`. The dependency is managed via git in `pyproject.toml`.
 
-```
-python
+## Execute the Service
+Start the gRPC server:
+```bash
+uv run python crac_server/app.py
 ```
 
-and inside it:
-
-```
-from crac_protobuf.roof_pb2 import *
-from crac_protobuf.roof_pb2_grpc import *
+### Testing Connectivity (Python REPL)
+```python
 import grpc
+from crac_protobuf.roof_pb2 import RoofRequest, RoofAction
+from crac_protobuf.roof_pb2_grpc import RoofStub
+
 channel = grpc.insecure_channel("localhost:50051")
 client = RoofStub(channel)
 request = RoofRequest(action=RoofAction.OPEN)
 client.SetAction(request)
 ```
 
-or you can clone the crac-client repository (https://github.com/ara-astronomia/crac-client) and start it
+Alternatively, use the [crac-client](https://github.com/ara-astronomia/crac-client) GUI.
 
-# Test
-
-## unit tests:
-
-run the unit tests:
-
-```
-coverage run -m unittest discover
-```
-
-produce the report for coverage:
-
-```
-coverage report -m -i
-coverage html -i
+## Tests
+Run unit tests and generate coverage report:
+```bash
+uv run coverage run -m unittest discover tests
+uv run coverage report -m
+uv run coverage html
 ```
