@@ -22,6 +22,10 @@ class Weather:
         self._time_format = time_format
         self._time_expired = time_expired
         self._retry_interval = retry_interval
+        
+        # Avvia il thread di background per il recupero dei dati
+        self.t = Thread(target=self._retrieve_async, daemon=True)
+        self.t.start()
 
     @property
     def url(self):
@@ -99,23 +103,31 @@ class Weather:
     
     def _retrieve_async(self):
         while True:
-            if self.is_expired():
+            if self.is_expired() and self.is_retriable():
                 try:
+                    logger.debug("Tentativo recupero dati meteo in background...")
                     self.json, self.updated_at = self._retrieve_data()
-                except:
-                    logger.error("url not reachable, switching to fallback url")
-                    self.json, self.updated_at = self._retrieve_fallback_data()
-            sleep(0)
+                    logger.info("Dati meteo aggiornati con successo.")
+                except Exception as e:
+                    logger.error(f"Errore recupero meteo (URL principale): {e}. Provo fallback...")
+                    try:
+                        self.json, self.updated_at = self._retrieve_fallback_data()
+                        logger.info("Dati meteo aggiornati tramite fallback.")
+                    except Exception as ef:
+                        logger.error(f"Errore recupero meteo (Fallback): {ef}")
+            
+            # Aspetta un po' prima del prossimo controllo per non saturare la CPU
+            sleep(10)
 
     def _retrieve_data(self):
-        with urllib.request.urlopen(self.url) as url:
+        with urllib.request.urlopen(self.url, timeout=10) as url:
             json_result = json.loads(url.read().decode())
         
         return json_result["current"], json_result["time"]
 
     def _retrieve_fallback_data(self):
         try:
-            with urllib.request.urlopen(self.fallback_url) as url:
+            with urllib.request.urlopen(self.fallback_url, timeout=10) as url:
                 json_result = json.loads(url.read().decode())
             
             return json_result["current"], json_result["time"]
@@ -126,14 +138,8 @@ class Weather:
 
 
     def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
-        if self.is_expired() and self.is_retriable():
-            try:
-                self.json, self.updated_at = self._retrieve_data()
-            except (HTTPError, URLError, TimeoutError) as error:
-                logger.error("url in error")
-                self.json, self.updated_at = self._retrieve_fallback_data()
-            if (datetime.now() - self.updated_at).seconds >= self._time_expired * 3:
-                    self.last_attempt_at = datetime.now()
+        if not self.json or name not in self.json:
+            return 'N/A', ''
         
         sensor = self.json[name]
         return self.__convert_to_float(sensor["value"]), html.unescape(sensor["unit_of_measurement"]).strip()
@@ -145,5 +151,3 @@ class Weather:
         except ValueError:
             logger.warning(f"Impossibile convertire '{value}' in float, restituisco 'N/A'")
             return 'N/A'
-        
-        
