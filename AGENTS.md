@@ -31,9 +31,10 @@ uv sync --extra dev
 ```
 
 ### Run the Server
+**CRITICAL**: The server MUST be run from the `crac_server/` directory to load `logging.conf` and `config.ini` correctly.
 ```bash
-# Start the gRPC server (defaults to port 50051 as per config.ini)
-uv run python crac_server/app.py
+cd crac_server
+uv run python app.py
 ```
 
 ### Run Tests

@@ -133,13 +133,17 @@ class Weather:
 
     def _retrieve_data(self):
         with urllib.request.urlopen(self.url, timeout=5) as url:
-            json_result = json.loads(url.read().decode())
+            raw_data = url.read().decode()
+            logger.debug(f"JSON ricevuto da URL principale: {raw_data}")
+            json_result = json.loads(raw_data)
         
         return json_result["current"], json_result["time"]
 
     def _retrieve_fallback_data(self):
         with urllib.request.urlopen(self.fallback_url, timeout=5) as url:
-            json_result = json.loads(url.read().decode())
+            raw_data = url.read().decode()
+            logger.debug(f"JSON ricevuto da URL fallback: {raw_data}")
+            json_result = json.loads(raw_data)
         
         return json_result["current"], json_result["time"]
 
