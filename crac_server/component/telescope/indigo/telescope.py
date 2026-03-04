@@ -186,7 +186,10 @@ class Telescope(TelescopeBase):
                                 }
                             }
                         )           
-        #print(root)
+        print(f"=== ROOT: {len(root)} elementi ===")
+        for i, item in enumerate(root):
+            print(f"  [{i}] keys: {list(item.keys())}")
+        print("=== FINE ROOT ===")
         eq_coords = self.__retrieve_eq_coords(root)   
         logger.debug(f"data received from json: {eq_coords}")  
         print(f"data received from json: {eq_coords}")   
