@@ -26,12 +26,16 @@ def build_chart(
         max=max,
         unit_of_measurement=unit_of_measurement
     )
-    for normal in range_normal:
+    
+    # Invertiamo l'ordine: aggiungiamo prima i pericoli, poi i warning, poi la norma.
+    # In questo modo il loop di controllo sotto troverà per primo lo stato più critico.
+    
+    for danger in range_danger:
         chart.thresholds.append(
             Threshold(
-                threshold_type=ThresholdType.THRESHOLD_TYPE_NORMAL,
-                upper_bound=normal["upper_bound"],
-                lower_bound=normal["lower_bound"],
+                threshold_type=ThresholdType.THRESHOLD_TYPE_DANGER,
+                upper_bound=danger["upper_bound"],
+                lower_bound=danger["lower_bound"],
             )
         )
     for warn in range_warn:
@@ -42,24 +46,24 @@ def build_chart(
                 lower_bound=warn["lower_bound"],
             )
         )
-    for danger in range_danger:
+    for normal in range_normal:
         chart.thresholds.append(
             Threshold(
-                threshold_type=ThresholdType.THRESHOLD_TYPE_DANGER,
-                upper_bound=danger["upper_bound"],
-                lower_bound=danger["lower_bound"],
+                threshold_type=ThresholdType.THRESHOLD_TYPE_NORMAL,
+                upper_bound=normal["upper_bound"],
+                lower_bound=normal["lower_bound"],
             )
         )
 
     chart.status = ChartStatus.CHART_STATUS_UNSPECIFIED
     for threashold in chart.thresholds:
         if threashold.lower_bound <= chart.value <= threashold.upper_bound:
-            if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
-                chart.status = ChartStatus.CHART_STATUS_NORMAL
+            if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_DANGER:
+                chart.status = ChartStatus.CHART_STATUS_DANGER
             elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_WARNING:
                 chart.status = ChartStatus.CHART_STATUS_WARNING
-            elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_DANGER:
-                chart.status = ChartStatus.CHART_STATUS_DANGER
+            elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
+                chart.status = ChartStatus.CHART_STATUS_NORMAL
             break
     
     return chart
