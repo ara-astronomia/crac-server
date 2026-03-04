@@ -104,37 +104,44 @@ class Weather:
     def _retrieve_async(self):
         while True:
             if self.is_expired() and self.is_retriable():
+                success = False
+                logger.debug("Tentativo recupero dati meteo in background...")
+                
+                # Tentativo 1: URL Principale
                 try:
-                    logger.debug("Tentativo recupero dati meteo in background...")
                     self.json, self.updated_at = self._retrieve_data()
-                    logger.info("Dati meteo aggiornati con successo.")
+                    logger.info("Dati meteo aggiornati con successo (URL principale).")
+                    success = True
                 except Exception as e:
-                    logger.error(f"Errore recupero meteo (URL principale): {e}. Provo fallback...")
+                    logger.warning(f"URL principale non raggiungibile: {e}. Provo fallback immediato...")
+                
+                # Tentativo 2: Fallback (solo se il primo è fallito)
+                if not success:
                     try:
                         self.json, self.updated_at = self._retrieve_fallback_data()
                         logger.info("Dati meteo aggiornati tramite fallback.")
+                        success = True
                     except Exception as ef:
-                        logger.error(f"Errore recupero meteo (Fallback): {ef}")
+                        logger.error(f"Errore critico: anche il fallback è fallito: {ef}")
+                
+                # Aggiorna il timestamp dell'ultimo tentativo solo se entrambi sono falliti
+                # oppure dopo un successo per far ripartire il timer del retry_interval
+                self.last_attempt_at = datetime.now()
             
-            # Aspetta un po' prima del prossimo controllo per non saturare la CPU
-            sleep(10)
+            # Controllo frequente dello stato (ogni 5 secondi il thread si sveglia)
+            sleep(5)
 
     def _retrieve_data(self):
-        with urllib.request.urlopen(self.url, timeout=10) as url:
+        with urllib.request.urlopen(self.url, timeout=5) as url:
             json_result = json.loads(url.read().decode())
         
         return json_result["current"], json_result["time"]
 
     def _retrieve_fallback_data(self):
-        try:
-            with urllib.request.urlopen(self.fallback_url, timeout=10) as url:
-                json_result = json.loads(url.read().decode())
-            
-            return json_result["current"], json_result["time"]
-        except (HTTPError, URLError, TimeoutError) as error:
-            logger.error("Fallback url in error")
-            self.last_attempt_at = datetime.now()
-            raise error
+        with urllib.request.urlopen(self.fallback_url, timeout=5) as url:
+            json_result = json.loads(url.read().decode())
+        
+        return json_result["current"], json_result["time"]
 
 
     def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
