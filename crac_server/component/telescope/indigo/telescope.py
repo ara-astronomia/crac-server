@@ -331,6 +331,7 @@ class Telescope(TelescopeBase):
 
         def send_and_receive(request):
             response=b"" 
+            print (f"Sending request: {request.decode('utf-8')}")   
             try:
                 self.s.sendall(request)
                 time.sleep(0.4)
