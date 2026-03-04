@@ -154,11 +154,15 @@ Example: `from crac_server.component.weather import WEATHER`.
 4. Register the new service in `crac_server/app.py`.
 5. Implement unit tests in `tests/unit/service/`.
 
-### Local Development with crac-protobuf
-To test changes in Protobuf definitions without pushing to GitHub:
-1. Update `pyproject.toml` in the server:
-   ```toml
-   [tool.uv.sources]
-   crac-protobuf = { path = "../crac-protobuf", editable = true }
-   ```
-2. Run `uv sync`.
+---
+
+## 7. Agent Autonomy & Safeguards
+
+To ensure efficiency and safety, the following rules apply to AI agents working on this project:
+
+- **Autonomy**: Once a high-level plan is approved by the user, the agent is authorized to proceed through **Plan -> Act -> Validate** cycles without per-step confirmation.
+- **Git User Email**: Always verify that `git config user.email` is set to `alkcxy@gmail.com` before making any commit.
+- **No Remote Push**: Agents are **strictly forbidden** from executing `git push`. This action is reserved for the human user.
+- **Mandatory Testing**: A commit can only be made if all relevant unit tests pass. 
+- **Autonomous Fixes**: If tests fail after a modification, the agent should attempt up to **3 iterations** of autonomous fixing before stopping to consult the user.
+- **Atomic Commits**: Prefer small, descriptive commits over large "catch-all" updates.
