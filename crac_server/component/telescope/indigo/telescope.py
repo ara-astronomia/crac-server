@@ -292,6 +292,7 @@ class Telescope(TelescopeBase):
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
+                            print(f"Found coordinate: {coord['name']} = {coord['value']}")
         if ra and dec:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
@@ -323,7 +324,7 @@ class Telescope(TelescopeBase):
         responses=[]
 
         def send_and_receive(request):
-            response=b""
+            response=b"" 
             try:
                 self.s.sendall(request)
                 time.sleep(0.4)
