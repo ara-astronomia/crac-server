@@ -186,23 +186,14 @@ class Telescope(TelescopeBase):
                                 }
                             }
                         )           
-        print(f"=== ROOT: {len(root)} elementi ===")
-        for i, item in enumerate(root):
-            print(f"  [{i}] keys: {list(item.keys())}")
-        print("=== FINE ROOT ===")
         eq_coords = self.__retrieve_eq_coords(root)   
         logger.debug(f"data received from json: {eq_coords}")  
-        print(f"data received from json: {eq_coords}")   
         speed = self.__retrieve_speed(root)
         logger.debug(f"data received from json: {speed}")
-        print(f"data received from json: {speed}")
-        #aa_coords = self._retrieve_aa_coords(eq_coords)
         aa_coords = self.__retrieve_aa_coords(root)
         logger.debug(f"data received from json: {aa_coords}")
-        print(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords, root)
         logger.debug(f"data received from json: {status}")
-        print(f"data received from json: {status}")
 
         return (eq_coords, aa_coords, speed, status)
     
@@ -330,8 +321,7 @@ class Telescope(TelescopeBase):
         responses=[]
 
         def send_and_receive(request):
-            response=b"" 
-            print (f"Sending request: {request.decode('utf-8')}")   
+            response=b""              
             try:
                 self.s.sendall(request)
                 time.sleep(0.4)
