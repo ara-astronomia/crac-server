@@ -29,11 +29,9 @@ class UpsService(UpsServicer):
             updated_at=self.timestamp_or_none(datetime.now()),
             interval=UPS.time_expired
         )
-        for device in Config.getValue("ups_list", "ups").split(","):
-            print(f"DEBUG: Recupero stato UPS per dispositivo {device}")
+        for device in Config.getValue("ups_list", "ups").split(","):            
             ups = UPS.status_for(device)
             response.devices.append(device)
-            print (f"DEBUG :{response.devices}")
             response.charts.append(
                 UpsChart(
                     chart = build_chart(

@@ -41,7 +41,6 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
             elev = 0.0
 
         # 2. Popola e restituisci il messaggio Protobuf
-        print("Geographic info requested: lat={}, lon={}, elev={}".format(lat, lon, elev))
         return geographic_pb2.GeographicData(
             latitude=lat,
             longitude=lon,

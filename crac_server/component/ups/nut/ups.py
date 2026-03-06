@@ -8,17 +8,7 @@ class Ups(UpsBase):
         self.login = login
         self.password = password
         self.time_expired = time_expired
-        #self.client = PyNUTClient(host,login=login,password=password,timeout=time_expired)
-        '''
-        try:
-            # list_ups è un comando semplice e dovrebbe essere il primo ad essere chiamato
-            self.client.list_ups() 
-            print(f"DEBUG: Connessione NUT stabilita e autenticata su {host}:3493.")
-        except Exception as e:
-            # Cattura errori come Timeout, ConnectionRefused o BrokenPipe
-            print(f"ERRORE NUT: Connessione o autenticazione fallita: {e}")
-            raise ConnectionError(f"Impossibile connettersi/autenticarsi con NUT: {e}")
-        '''
+
     def _get_client(self):
         """Metodo helper per creare e autenticare un client fresco."""
         try:
@@ -30,7 +20,6 @@ class Ups(UpsBase):
             )
             # Forza l'autenticazione/connessione
             client.list_ups() 
-            print("connected NUT client established and authenticated to {client.hostname}:3493.")
 
             return client
         except Exception as e:
@@ -43,7 +32,6 @@ class Ups(UpsBase):
 
         # **2. Esegui la richiesta IMMEDIATAMENTE**
         raw_data = client.list_vars(device)
-        print(f"DEBUG: Dati grezzi UPS per {device}: {raw_data}")
 
         # 3. Estrai i dati...
         return {
