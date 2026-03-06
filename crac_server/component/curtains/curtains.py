@@ -164,8 +164,10 @@ class Curtain:
             status = CurtainStatus.CURTAIN_DISABLING if self.to_disable else CurtainStatus.CURTAIN_CLOSING
         elif self.__is_open__():
             status = CurtainStatus.CURTAIN_OPENED
+            logger.info("Curtain: %s, curtain open is active: %s, curtain closed is active: %s, motor value: %s", self._orientation, self.curtain_open.is_active, self.curtain_closed.is_active, self.motor.value)
         elif self.__is_closed__():
             status = CurtainStatus.CURTAIN_CLOSED
+            logger.info("Curtain: %s, curtain closed is active: %s, curtain open is active: %s, motor value: %s", self._orientation, self.curtain_closed.is_active, self.curtain_open.is_active, self.motor.value)
         elif self.__is_stopped__():
             status = CurtainStatus.CURTAIN_STOPPED
 
@@ -221,10 +223,6 @@ class Curtain:
 
     def disable_motor(self):
 
-        """
-            disable motor
-        """
-        
         with self.lock:
             self.motor.enable_device.off()
             self.to_disable = False
