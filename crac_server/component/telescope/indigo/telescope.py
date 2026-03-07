@@ -290,7 +290,7 @@ class Telescope(TelescopeBase):
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
                             
-        if ra and dec:
+        if ra is not None and dec is not None:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
             raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
@@ -310,7 +310,8 @@ class Telescope(TelescopeBase):
                                 alt = round(float(coord['value']),5)
                             elif coord["name"] == "AZ":
                                 az = round(float(coord['value']),5)
-        if alt and az:
+                                
+        if alt is not None and az is not None:
             return AltazimutalCoords(alt=alt, az=az)
         else:
             raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
