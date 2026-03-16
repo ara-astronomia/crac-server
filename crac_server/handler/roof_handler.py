@@ -24,6 +24,7 @@ from crac_server.converter.roof_converter import (
 )
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
+from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
