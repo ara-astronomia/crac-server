@@ -24,6 +24,7 @@ from crac_server.handler.handler import AbstractHandler
 
 
 logger = logging.getLogger(__name__)
+block_on_unspecified = Config.getBoolean("block_on_unspecified", "weather")
 
 
 class AbstractCurtainsHandler(AbstractHandler):
@@ -59,8 +60,11 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
             logger.info(f"Weather status: {weather_response.status}")
             logger.info(f"Weather charts: {weather_response.charts}")
             logger.debug(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
-                logger.info(f"In status danger {weather_response.status}")
+            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
+                block_on_unspecified and 
+                weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
+                ):
+                logger.info(f"In status danger or unspecified {weather_response.status}")
                 mediator.is_disabled = True
                 self._next_handler = None
 
