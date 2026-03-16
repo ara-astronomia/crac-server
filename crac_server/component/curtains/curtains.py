@@ -153,7 +153,7 @@ class Curtain:
         """ Read the status of the curtain based on the pin of motor, encoder and switches """
 
         status = CurtainStatus.CURTAIN_ERROR
-
+        logger.info(f"Curtain: {self._orientation}, curtain_closed.is_active: {self.curtain_closed.is_active}, curtain_open.is_active: {self.curtain_open.is_active}, motor.value: {self.motor.value}")
         if self.__is_danger__():
             status = CurtainStatus.CURTAIN_DANGER
         elif self.__is_disabled__():
