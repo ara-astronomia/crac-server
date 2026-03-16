@@ -56,6 +56,8 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
             logger.debug(f"In turn on or check action {mediator.action}")
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
+            logger.info(f"Weather status: {weather_response.status}")
+            logger.info(f"Weather charts: {weather_response.charts}")
             logger.debug(f"In weather status {weather_response.status}")
             if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
                 logger.info(f"In status danger {weather_response.status}")
