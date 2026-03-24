@@ -18,7 +18,6 @@ class Curtain:
         self.motor = Motor(**motor)
         self.motor.enable_device.off()
         self.__event_detect__()
-        self.lock = threading.Lock()
         self.lock_rotation = threading.Lock()
         self.to_disable = False
         self._orientation = orientation
@@ -42,15 +41,15 @@ class Curtain:
         self.curtain_open.when_activated = None
 
     def __open__(self):
-        with self.lock:
+        with self.lock_rotation:
             self.motor.forward()
 
     def __close__(self):
-        with self.lock:
+        with self.lock_rotation:
             self.motor.backward()
 
     def __stop__(self):
-        with self.lock:
+        with self.lock_rotation:
             self.motor.stop()
     
     def __steps_inside_tolerance_area__(self):
@@ -225,6 +224,6 @@ class Curtain:
 
     def disable_motor(self):
 
-        with self.lock:
+        with self.lock_rotation:
             self.motor.enable_device.off()
             self.to_disable = False
