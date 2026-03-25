@@ -18,7 +18,7 @@ class Curtain:
         self.motor = Motor(**motor)
         self.motor.enable_device.off()
         self.__event_detect__()
-        self.lock_rotation = threading.Lock()
+        self.lock_rotation = threading.RLock()
         self.to_disable = False
         self._orientation = orientation
 
