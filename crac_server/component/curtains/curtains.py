@@ -71,22 +71,8 @@ class Curtain:
                 self.__stop__()
             logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
             self.target = None
-            if self.to_disable and self.curtain_closed.is_active:
-                logger.debug("Curtain: %s disable motor due curtain_closed active", self._orientation)
-                self.disable_motor()
-
-
-    def __reset_steps__(self, open_or_closed):
-        with self.lock_rotation:
-            self.target = None
-            self.__stop__()
-
-            if open_or_closed == self.curtain_open:
-                self.rotary_encoder.steps = self.__max_step__
-            elif open_or_closed == self.curtain_closed:
-                self.rotary_encoder.steps = self.__min_step__
-                if self.to_disable:
-                    logger.debug("Curtain: %s reached closed limit while disabling -> disable motor", self._orientation)
+                if self.to_disable and self.curtain_closed.is_active and not self.motor.value:
+                    logger.debug("Curtain: %s disable motor due curtain_closed active and motor already stopped", self._orientation)
                     self.disable_motor()
 
     def __is_danger__(self):
@@ -224,6 +210,14 @@ class Curtain:
         print("tende disattivate")
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
+
+        # Se il finecorsa chiuso è già attivo, disabilitiamo subito il motore
+        if self.curtain_closed.is_active:
+            logger.debug("Curtain: %s already closed when disable() called, disable motor immediately", self._orientation)
+            self.__stop__()
+            self.disable_motor()
+            return
+
         self.bring_down()
         logger.debug("Curtain: %s, curtain moved to 0 before disabling, to_disable is %s", self._orientation, self.to_disable)
 
