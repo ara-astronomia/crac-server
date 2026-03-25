@@ -71,9 +71,9 @@ class Curtain:
                 self.__stop__()
             logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
             self.target = None
-                if self.to_disable and self.curtain_closed.is_active and not self.motor.value:
-                    logger.debug("Curtain: %s disable motor due curtain_closed active and motor already stopped", self._orientation)
-                    self.disable_motor()
+            if self.to_disable and self.curtain_closed.is_active and not self.motor.value:
+                logger.debug("Curtain: %s disable motor due curtain_closed active and motor already stopped", self._orientation)
+                self.disable_motor()
 
     def __is_danger__(self):
         return (
