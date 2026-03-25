@@ -204,17 +204,24 @@ class Curtain:
             Bring down the curtain completely
             It's a shortcut to move()
         """
-
-        self.move(self.__min_step__)
-        if self.steps() == self.__min_step__:
-            self.disable_motor()
+        
+        with self.lock_rotation:
+            # Force set target to min_step even if curtain is already moving
+            self.target = self.__min_step__
+            
+            # Start movement if not already moving
+            if not self.motor.value:
+                # If already moving, the __check_and_stop__ callback will handle reaching the target
+                self.move(self.__min_step__)
+            else:
+                # If already moving, close the curtain to reach min_step
+                self.__close__()
 
     def disable(self):
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
-        if not self.__is_opening__() and not self.__is_closing__():
-            self.to_disable = True
-            self.bring_down()
-            logger.debug("Curtain: %s, self.to_disable after bring down is %s", self._orientation, self.to_disable)
+        self.to_disable = True
+        self.bring_down()
+        logger.debug("Curtain: %s, curtain moved to 0 before disabling, to_disable is %s", self._orientation, self.to_disable)
 
     def enable(self):
         logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)

@@ -140,8 +140,11 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
         if status in [TelescopeStatus.LOST, TelescopeStatus.ERROR]:
             steps["west"] = None
             steps["east"] = None
-
-        if TELESCOPE.is_below_curtains_area(aa_coords.alt):
+        elif status == TelescopeStatus.PARKED:
+            # When telescope is parked, bring curtains down to 0
+            steps["west"] = 0
+            steps["east"] = 0
+        elif TELESCOPE.is_below_curtains_area(aa_coords.alt):
             #   keep both curtains to 0
             steps["west"] = 0
             steps["east"] = 0
