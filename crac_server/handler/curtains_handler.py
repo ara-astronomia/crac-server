@@ -89,6 +89,9 @@ class CurtainsDisableHandler(AbstractCurtainsHandler):
             ):
                 mediator.button_east.disable()
                 mediator.button_west.disable()
+            # Una volta eseguito DISABLE, non eseguire oltre MOVE (evitiamo override del target=0)
+            self._next_handler = None
+            return super().handle(mediator)
         
         return super().handle(mediator)
     
