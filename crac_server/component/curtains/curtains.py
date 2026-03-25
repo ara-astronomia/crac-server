@@ -18,8 +18,7 @@ class Curtain:
         self.motor = Motor(**motor)
         self.motor.enable_device.off()
         self.__event_detect__()
-        self.lock = threading.Lock()
-        self.lock_rotation = threading.Lock()
+        self.lock_rotation = threading.RLock()
         self.to_disable = False
         self._orientation = orientation
 
@@ -42,15 +41,15 @@ class Curtain:
         self.curtain_open.when_activated = None
 
     def __open__(self):
-        with self.lock:
+        with self.lock_rotation:
             self.motor.forward()
 
     def __close__(self):
-        with self.lock:
+        with self.lock_rotation:
             self.motor.backward()
 
     def __stop__(self):
-        with self.lock:
+        with self.lock_rotation:
             self.motor.stop()
     
     def __steps_inside_tolerance_area__(self):
@@ -218,18 +217,20 @@ class Curtain:
                 self.__close__()
 
     def disable(self):
+        print("tende disattivate")
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
         self.bring_down()
         logger.debug("Curtain: %s, curtain moved to 0 before disabling, to_disable is %s", self._orientation, self.to_disable)
 
     def enable(self):
+        print("tende attivate")
         logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
         self.motor.enable_device.on()
         logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
 
     def disable_motor(self):
 
-        with self.lock:
+        with self.lock_rotation:
             self.motor.enable_device.off()
             self.to_disable = False
