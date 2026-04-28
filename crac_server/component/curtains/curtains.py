@@ -203,21 +203,19 @@ class Curtain:
     def bring_down(self):
 
         """
-            Bring down the curtain completely
-            It's a shortcut to move()
+            Bring down the curtain completely to the closed limit switch
+            Keeps motor running until the physical closed limit switch activates
         """
         
         with self.lock_rotation:
-            # Force set target to min_step even if curtain is already moving
-            self.target = self.__min_step__
+            # Se il finecorsa chiuso è già attivo, non fare nulla
+            if self.curtain_closed.is_active:
+                logger.debug("Curtain: %s already at closed limit", self._orientation)
+                return
             
-            # Start movement if not already moving
-            if not self.motor.value:
-                # If already moving, the __check_and_stop__ callback will handle reaching the target
-                self.move(self.__min_step__)
-            else:
-                # If already moving, close the curtain to reach min_step
-                self.__close__()
+            # Metti il motore in chiusura e lascialo correre fino allo switch
+            # Il callback __reset_steps__() fermerà il motore quando lo switch si attiva
+            self.__close__()
 
     def disable(self):
         print("tende disattivate")

@@ -90,6 +90,20 @@ class CurtainsDisableHandler(AbstractCurtainsHandler):
                 # Chiama disable() che ora forza lo stop e porta le tende a posizione chiusa
                 mediator.button_east.disable()
                 mediator.button_west.disable()
+                
+                # Aspetta che entrambe le tende raggiungano effettivamente step=0 e siano ferme
+                import time
+                max_wait = 10  # secondi
+                start_time = time.time()
+                while time.time() - start_time < max_wait:
+                    east_status = mediator.button_east.get_status()
+                    west_status = mediator.button_west.get_status()
+                    if (east_status == CurtainStatus.CURTAIN_CLOSED or east_status == CurtainStatus.CURTAIN_DISABLED) and \
+                       (west_status == CurtainStatus.CURTAIN_CLOSED or west_status == CurtainStatus.CURTAIN_DISABLED):
+                        logger.debug("Both curtains have successfully reached closed/disabled state")
+                        break
+                    time.sleep(0.1)
+                
             # Una volta eseguito DISABLE, non eseguire oltre MOVE (evitiamo override del target=0)
             self._next_handler = None
             return super().handle(mediator)
