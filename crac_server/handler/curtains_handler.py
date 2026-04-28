@@ -87,6 +87,7 @@ class CurtainsDisableHandler(AbstractCurtainsHandler):
                 mediator.status_east <= CurtainStatus.CURTAIN_OPENED and
                 mediator.status_west <= CurtainStatus.CURTAIN_OPENED
             ):
+                # Chiama disable() che ora forza lo stop e porta le tende a posizione chiusa
                 mediator.button_east.disable()
                 mediator.button_west.disable()
             # Una volta eseguito DISABLE, non eseguire oltre MOVE (evitiamo override del target=0)
@@ -119,7 +120,8 @@ class CurtainsCalibrationHandler(AbstractCurtainsHandler):
 class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
 
-        if TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
+        # Non eseguire movimenti se le tende sono disabilitate
+        if not mediator.is_disabled and TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
             steps = self.__calculate_curtains_steps()
             mediator.button_east.move(steps["east"])
             mediator.button_west.move(steps["west"])
