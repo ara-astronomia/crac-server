@@ -65,7 +65,7 @@ class Curtain:
                 self.target is None or
                 self.__steps_inside_tolerance_area__() or
                 self.steps() >= self.__security_step__ or
-                self.steps() <= self.__sub_min_step__ or
+                (self.steps() <= self.__sub_min_step__ and not self.to_disable) or
                 not self.motor.enable_device.value
             ):
                 self.__stop__()
