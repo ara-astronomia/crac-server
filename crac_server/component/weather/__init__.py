@@ -9,3 +9,5 @@ WEATHER = Weather(
     time_expired=Config.getInt("time_expired", "weather"),
     retry_interval=Config.getInt("retry_interval", "weather"),
 )
+
+#WEATHER.temperature # for warm up at start

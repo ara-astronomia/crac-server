@@ -1,4 +1,4 @@
-# Use it on raspberry PI Zero 2 or greater
+# Use it on raspberry PI5
 * enable SSH by touch ssh on the root of the boot disk https://phoenixnap.com/kb/enable-ssh-raspberry-pi
 * enable wifi by creating wpa_supplicant on the root of the boot disk and putting this inside:
     ```
@@ -23,32 +23,30 @@ sudo apt install libopencv-dev python3-opencv
 
 # Install Dependencies and Configure environment
 
-We are using Poetry as a dependency management and packaging
+We are using UV as a dependency management and packaging
 Requisite for poetry:
 
 ```
 sudo apt-get install python3-distutils
 sudo apt-get install python3-dev
 ```
-
-Go to https://python-poetry.org/ and install it
+pip install uv
+uv venv #crea l'ambiente virtuale
+uv pip sync -E dev #installa le dipendenze e le dev-dependencies
+uv pip add new-package #aggiunge nuove dipendenze 
 
 Before using this project, you should clone the crac-protobuf project 
 alongside this one so that the dependency expressed on pyprject.toml 
 can find the package to install.
 
-```
-sudo apt install libatlas3-base libgfortran5 libopenjp2-7 libavcodec-dev libavformat-dev libswscale-dev libgtk-3-dev python3.9-dev (if some dependencies need to be compiled)
-poetry shell
-poetry install
-```
+
 
 # Execute the service
 
 You can start the server with the following commands
 ```
 cd crac_server
-python app.py
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Then you can test the connectivity by executing a python repl:

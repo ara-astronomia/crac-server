@@ -24,10 +24,11 @@ from crac_server.converter.roof_converter import (
 )
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
+from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
-
+block_on_unspecified = Config.getBoolean("block_on_unspecified", "weather")
 
 class AbstractButtonHandler(AbstractHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
@@ -43,8 +44,11 @@ class RoofWeatherHandler(AbstractButtonHandler):
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
             logger.debug(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
-                logger.info(f"In status danger {weather_response.status}")
+            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
+                block_on_unspecified and 
+                weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
+            ):
+                logger.info(f"In status danger or unspecified {weather_response.status}")
                 mediator.is_disabled = True
                 self._next_handler = None
         return super().handle(mediator)
