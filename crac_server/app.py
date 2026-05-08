@@ -1,8 +1,10 @@
 import logging
 import logging.config
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_CONF_PATH = os.path.join(BASE_DIR, 'logging.conf')
+logging.config.fileConfig(LOG_CONF_PATH)
 
-
-logging.config.fileConfig('logging.conf')
 
 from crac_protobuf.ups_pb2_grpc import add_UpsServicer_to_server
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
