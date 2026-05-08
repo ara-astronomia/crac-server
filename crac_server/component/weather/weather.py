@@ -1,6 +1,8 @@
 from datetime import datetime
 import html
 import logging
+from threading import (Thread, Lock)
+from time import sleep
 from typing import Union
 from urllib.error import HTTPError, URLError
 import urllib.request
@@ -14,7 +16,7 @@ class Weather:
     def __init__(self, url: str, fallback_url: str, time_format: str, time_expired: int, retry_interval: int):
         self._url = url
         self._fallback_url = fallback_url
-        self._json : dict
+        self._json = {}
         self._updated_at : Union[datetime, None] = None
         self._last_attempt_at : Union[datetime, None] = None
         self._time_format = time_format
@@ -94,6 +96,16 @@ class Weather:
     @property
     def is_unavailable(self) -> bool:
         return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
+    
+    def _retrieve_async(self):
+        while True:
+            if self.is_expired():
+                try:
+                    self.json, self.updated_at = self._retrieve_data()
+                except:
+                    logger.error("url not reachable, switching to fallback url")
+                    self.json, self.updated_at = self._retrieve_fallback_data()
+            sleep(0)
 
     def _retrieve_data(self):
         with urllib.request.urlopen(self.url) as url:
@@ -128,9 +140,11 @@ class Weather:
 
     def __convert_to_float(self, value: str):
         value = value.strip().replace(',', '.')
-        if value == 'N/A':
-            return value
-        else:
+        if value in ('N/A', 'n.d.', 'n/a', '--', ''):
+            return 0.0
+        try:
             return float(value)
+        except ValueError:
+            return 0.0
         
         

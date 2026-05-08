@@ -24,6 +24,7 @@ from crac_server.handler.handler import AbstractHandler
 
 
 logger = logging.getLogger(__name__)
+block_on_unspecified = Config.getBoolean("block_on_unspecified", "weather")
 
 
 class AbstractCurtainsHandler(AbstractHandler):
@@ -56,9 +57,14 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
             logger.debug(f"In turn on or check action {mediator.action}")
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(WEATHER)
+            logger.info(f"Weather status: {weather_response.status}")
+            logger.info(f"Weather charts: {weather_response.charts}")
             logger.debug(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
-                logger.info(f"In status danger {weather_response.status}")
+            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
+                block_on_unspecified and 
+                weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
+                ):
+                logger.info(f"In status danger or unspecified {weather_response.status}")
                 mediator.is_disabled = True
                 self._next_handler = None
 
@@ -81,8 +87,14 @@ class CurtainsDisableHandler(AbstractCurtainsHandler):
                 mediator.status_east <= CurtainStatus.CURTAIN_OPENED and
                 mediator.status_west <= CurtainStatus.CURTAIN_OPENED
             ):
+                # Chiama disable() su entrambe le tende in modo indipendente
+                # Ogni tenda si disabiliterà da sola quando il finecorsa si attiva
                 mediator.button_east.disable()
                 mediator.button_west.disable()
+            
+            # Una volta eseguito DISABLE, non eseguire oltre MOVE (evitiamo override del target=0)
+            self._next_handler = None
+            return super().handle(mediator)
         
         return super().handle(mediator)
     
@@ -110,7 +122,8 @@ class CurtainsCalibrationHandler(AbstractCurtainsHandler):
 class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
 
-        if TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
+        # Non eseguire movimenti se le tende sono disabilitate
+        if not mediator.is_disabled and TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
             steps = self.__calculate_curtains_steps()
             mediator.button_east.move(steps["east"])
             mediator.button_west.move(steps["west"])
@@ -134,8 +147,11 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
         if status in [TelescopeStatus.LOST, TelescopeStatus.ERROR]:
             steps["west"] = None
             steps["east"] = None
-
-        if TELESCOPE.is_below_curtains_area(aa_coords.alt):
+        elif status == TelescopeStatus.PARKED:
+            # When telescope is parked, bring curtains down to 0
+            steps["west"] = 0
+            steps["east"] = 0
+        elif TELESCOPE.is_below_curtains_area(aa_coords.alt):
             #   keep both curtains to 0
             steps["west"] = 0
             steps["east"] = 0

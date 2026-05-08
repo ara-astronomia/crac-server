@@ -35,26 +35,26 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
         for chart in response.charts:
             if chart.urn == "weather.chart.wind":
                 wind_chart = chart
+                self.assertEqual((wind_chart.value, wind_chart.unit_of_measurement), WEATHER.wind_speed)  # type: ignore
             if chart.urn == "weather.chart.wind_gust":
                 wind_gust_chart = chart
+                self.assertEqual((wind_gust_chart.value, wind_gust_chart.unit_of_measurement), WEATHER.wind_gust_speed)  # type: ignore
             if chart.urn == "weather.chart.humidity":
                 humidity_chart = chart
+                self.assertEqual((humidity_chart.value, humidity_chart.unit_of_measurement), WEATHER.humidity)  # type: ignore
             if chart.urn == "weather.chart.temperature":
                 temperature_chart = chart
+                self.assertEqual((temperature_chart.value, temperature_chart.unit_of_measurement), WEATHER.temperature)  # type: ignore
             if chart.urn == "weather.chart.rain_rate":
                 rain_rate_chart = chart
+                self.assertEqual((rain_rate_chart.value, rain_rate_chart.unit_of_measurement), WEATHER.rain_rate)  # type: ignore
             if chart.urn == "weather.chart.barometer":
                 barometer_chart = chart
+                self.assertEqual((barometer_chart.value, barometer_chart.unit_of_measurement), WEATHER.barometer)  # type: ignore            
             if chart.urn == "weather.chart.barometer_trend":
                 barometer_trend_chart = chart
+                self.assertEqual((barometer_trend_chart.value, barometer_trend_chart.unit_of_measurement), WEATHER.barometer_trend)  # type: ignore
 
-        self.assertEqual((wind_chart.value, wind_chart.unit_of_measurement), WEATHER.wind_speed)  # type: ignore
-        self.assertEqual((wind_gust_chart.value, wind_gust_chart.unit_of_measurement), WEATHER.wind_gust_speed)  # type: ignore
-        self.assertEqual((humidity_chart.value, humidity_chart.unit_of_measurement), WEATHER.humidity)  # type: ignore
-        self.assertEqual((temperature_chart.value, temperature_chart.unit_of_measurement), WEATHER.temperature)  # type: ignore
-        self.assertEqual((rain_rate_chart.value, rain_rate_chart.unit_of_measurement), WEATHER.rain_rate)  # type: ignore
-        self.assertEqual((barometer_chart.value, barometer_chart.unit_of_measurement), WEATHER.barometer)  # type: ignore            
-        self.assertEqual((barometer_trend_chart.value, barometer_trend_chart.unit_of_measurement), WEATHER.barometer_trend)  # type: ignore
 
     async def test_retriever_raise_exception(self):
         self.weather_service.weather_converter.convert = MagicMock(side_effect=Exception())

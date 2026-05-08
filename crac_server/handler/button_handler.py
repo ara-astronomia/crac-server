@@ -46,7 +46,7 @@ class ButtonWeatherHandler(AbstractButtonHandler):
             logger.debug(f"In weather status {weather_response.status}")
             if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
                 logger.info(f"In status danger {weather_response.status}")
-                mediator.is_disabled = True
+                mediator.is_disabled = False #True
                 self._next_handler = None
 
         return super().handle(mediator)

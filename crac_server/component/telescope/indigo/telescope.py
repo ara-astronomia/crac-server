@@ -185,14 +185,11 @@ class Telescope(TelescopeBase):
                                     "device": self._name
                                 }
                             }
-                        )
-           
-        #print(root)
+                        )           
         eq_coords = self.__retrieve_eq_coords(root)   
-        logger.debug(f"data received from json: {eq_coords}")     
+        logger.debug(f"data received from json: {eq_coords}")  
         speed = self.__retrieve_speed(root)
         logger.debug(f"data received from json: {speed}")
-        #aa_coords = self._retrieve_aa_coords(eq_coords)
         aa_coords = self.__retrieve_aa_coords(root)
         logger.debug(f"data received from json: {aa_coords}")
         status = self._retrieve_status(aa_coords, root)
@@ -292,7 +289,8 @@ class Telescope(TelescopeBase):
                                 ra = round(float(coord['value']),5)
                             elif coord["name"] == "DEC":
                                 dec = round(float(coord['value']),5)
-        if ra and dec:
+                            
+        if ra is not None and dec is not None:
             return EquatorialCoords(ra=ra, dec=dec)
         else:
             raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
@@ -312,7 +310,8 @@ class Telescope(TelescopeBase):
                                 alt = round(float(coord['value']),5)
                             elif coord["name"] == "AZ":
                                 az = round(float(coord['value']),5)
-        if alt and az:
+                                
+        if alt is not None and az is not None:
             return AltazimutalCoords(alt=alt, az=az)
         else:
             raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
@@ -323,10 +322,10 @@ class Telescope(TelescopeBase):
         responses=[]
 
         def send_and_receive(request):
-            response=b""
+            response=b""              
             try:
                 self.s.sendall(request)
-                time.sleep(5)
+                time.sleep(0.4)
                 while True:
                     try:
                         part = self.s.recv(2500000)
