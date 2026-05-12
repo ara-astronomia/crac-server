@@ -11,12 +11,18 @@ from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
 from crac_protobuf.curtains_pb2_grpc import add_CurtainServicer_to_server
 from crac_protobuf.button_pb2_grpc import add_ButtonServicer_to_server
 from crac_protobuf.cover_mirror_pb2_grpc import add_CoverMirrorServicer_to_server
+from crac_protobuf.data_image_pb2_grpc import add_ImageConfigServiceServicer_to_server
+from crac_protobuf.geographic_pb2_grpc import add_GeographicServiceServicer_to_server
+from crac_protobuf.ups_pb2_grpc import add_UpsServicer_to_server
 from crac_server.service.weather_service import WeatherService
 from crac_server.service.telescope_service import TelescopeService
 from crac_server.service.roof_service import RoofService
 from crac_server.service.curtains_service import CurtainsService
 from crac_server.service.button_service import ButtonService
 from crac_server.service.cover_mirror_service import CoverMirrorService
+from crac_server.service.geographic_service import GeographicServicer
+from crac_server.service.image_config_service import ImageConfigServicer
+from crac_server.service.ups_service import UpsService
 from crac_server.config import Config
 import asyncio
 import grpc
@@ -44,6 +50,15 @@ async def serve():
     )
     add_CoverMirrorServicer_to_server(
         CoverMirrorService(), server
+    )
+    add_UpsServicer_to_server(
+        UpsService(), server
+    )
+    add_GeographicServiceServicer_to_server(
+        GeographicServicer(), server
+    )
+    add_ImageConfigServiceServicer_to_server(
+        ImageConfigServicer(), server
     )
     server.add_insecure_port(
         f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')

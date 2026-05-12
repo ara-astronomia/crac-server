@@ -218,7 +218,6 @@ class Curtain:
             self.__close__()
 
     def disable(self):
-        print("tende disattivate")
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
 
@@ -233,7 +232,6 @@ class Curtain:
         logger.debug("Curtain: %s, curtain moved to 0 before disabling, to_disable is %s", self._orientation, self.to_disable)
 
     def enable(self):
-        print("tende attivate")
         logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
         self.motor.enable_device.on()
         logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
