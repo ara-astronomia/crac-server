@@ -334,13 +334,13 @@ class Telescope(TelescopeBase):
                         response +=part
 
                     except socket.timeout:
-                        print("Socket timeout, stopping reception.")
+                        logger.debug("Socket timeout, stopping reception.")
                         break
 
                     return response        
             except Exception as e:
                 if isinstance(e, socket.error) and e.errno == errno.EPIPE:
-                    print(f"Si è verificato un errore: {e}")
+                    logger.error(f"Si è verificato un errore: {e}")
             
         response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
         if response_with_newline:
@@ -365,6 +365,6 @@ class Telescope(TelescopeBase):
                 json_obj = json.loads(json_str)
                 response_objects.append(json_obj)
             except json.JSONDecodeError as e:
-                print(f"Errore nella decodifica del JSON: {e}")
+                logger.error(f"Errore nella decodifica del JSON: {e}")
        
         return response_objects

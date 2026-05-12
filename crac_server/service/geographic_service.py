@@ -1,8 +1,11 @@
 # crac_server/service/geographic_service.py
 from crac_protobuf import geographic_pb2
 from crac_protobuf import geographic_pb2_grpc
+import logging
 from crac_server.config import Config # Supponendo che esista
 import re
+
+logger = logging.getLogger(__name__)
 
 class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
     def GetGeographicInfo(self, request, context):
@@ -20,7 +23,7 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
                 # Calcolo sessagesimale
                 lat = gradi_lat + (minuti_lat / 60.0)
             except ValueError:
-                print(f"ERRORE: Impossibile convertire Latitudine in float: {lat_str}")
+                logger.error(f"ERRORE: Impossibile convertire Latitudine in float: {lat_str}")
 
         # 3. Conversione Longitudine
         match_lon = re.search(r'(\d+)d([\d.]+)m', lon_str)
@@ -31,15 +34,15 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
                 # Calcolo sessagesimale
                 lon = gradi_lon + (minuti_lon / 60.0)
             except ValueError:
-                print(f"ERRORE: Impossibile convertire Longitudine in float: {lon_str}")
+                logger.error(f"ERRORE: Impossibile convertire Longitudine in float: {lon_str}")
 
         # 4. Conversione Elevazione
         try:
             elev = float(elev_str)
         except ValueError:
-            print(f"ERRORE: Impossibile convertire Elevazione in float: {elev_str}")
+            logger.error(f"ERRORE: Impossibile convertire Elevazione in float: {elev_str}")
             elev = 0.0
-
+        logger.debug(f"Geographic info - Lat: {lat}, Lon: {lon}, Elev: {elev}")
         # 2. Popola e restituisci il messaggio Protobuf
         return geographic_pb2.GeographicData(
             latitude=lat,
