@@ -96,25 +96,16 @@ class CoverMirrorControl():
                 logger.error("[CoverMirror] Empty response from INDIGO")
                 return CoverMirrorStatus.COVER_MIRROR_ERROR
 
-            switch, state = self.__retrieve_status_cover(root)
-            logger.debug(f"Cover mirror switch={switch}, state={state}")
+            status = self.__retrieve_status_cover(root)
+            logger.debug(f"Cover mirror status is {status}")
 
-            # INDIGO sets the AUX_COVER vector state to "Busy" while the
-            # firmware reports ST_BUSY, i.e. the cover is moving.
-            moving = bool(state) and state.lower() == "busy"
-
-            if switch == "OPEN":
+            if status == "OPEN":
                 logger.debug("COVER APERTO")
-                return (
-                    CoverMirrorStatus.COVER_MIRROR_OPENING if moving
-                    else CoverMirrorStatus.COVER_MIRROR_OPENED
-                )
-            elif switch == "CLOSE":
+                return CoverMirrorStatus.COVER_MIRROR_OPENED
+
+            elif status == "CLOSE":
                 logger.debug("COVER CHIUSO")
-                return (
-                    CoverMirrorStatus.COVER_MIRROR_CLOSING if moving
-                    else CoverMirrorStatus.COVER_MIRROR_CLOSED
-                )
+                return CoverMirrorStatus.COVER_MIRROR_CLOSED
             return CoverMirrorStatus.COVER_MIRROR_ERROR
 
         except Exception as e:
@@ -124,20 +115,18 @@ class CoverMirrorControl():
     def __retrieve_status_cover(self, root):
         if not root:
             logger.error("[CoverMirror] Empty response from INDIGO")
-            return "UNKNOWN", None
+            return "UNKNOWN"
 
         for item in root:
-            # During a move INDIGO pushes setSwitchVector updates rather than
-            # the initial defSwitchVector, so look at both.
-            vector = item.get("defSwitchVector") or item.get("setSwitchVector")
-            if not vector or vector.get("name") != "AUX_COVER":
+            if "defSwitchVector" not in item:
                 continue
-            state = vector.get("state")  # Idle | Ok | Busy | Alert
+            vector = item["defSwitchVector"]
+            if vector.get("name") != "AUX_COVER":
+                continue
             for switch in vector.get("items", []):
                 if switch.get("value") is True:
-                    return switch.get("name", "UNKNOWN"), state
-            return "UNKNOWN", state
-        return "UNKNOWN", None
+                    return switch.get("name", "UNKNOWN")
+        return "UNKNOWN"
 
     def __call(self, script):
             if not self.connected:
