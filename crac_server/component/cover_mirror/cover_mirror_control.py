@@ -16,35 +16,31 @@ class CoverMirrorControl():
     def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
 
         self._name = config.Config.getValue("device", "cover_mirror")
+        self._hostname = hostname
+        self._port = port
         self.s = None
         self.connected = False
+        self.__connect()
 
+    def __connect(self):
         logger.debug(
-            f"[CoverMirror] Initializing: "
-            f"device={self._name}, host={hostname}, port={port}"
+            f"[CoverMirror] Connecting: "
+            f"device={self._name}, host={self._hostname}, port={self._port}"
         )
-
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-            logger.debug("[CoverMirror] Socket created")
-
-            self.s.connect((hostname, port))
-
+            self.s.connect((self._hostname, self._port))
             self.connected = True
-
             logger.debug(
                 f"[CoverMirror] Connected successfully "
-                f"to {hostname}:{port}"
+                f"to {self._hostname}:{self._port}"
             )
-
         except Exception as e:
-
             logger.error(
                 f"[CoverMirror] Connection failed: "
                 f"{type(e).__name__}: {e}"
             )
-
+            self.s = None
             self.connected = False
 
     async def open(self):
@@ -133,9 +129,11 @@ class CoverMirrorControl():
         return "UNKNOWN"
 
     def __call(self, script):
+            if not self.connected:
+                self.__connect()
             if self.s is None:
                 logger.error("[CoverMirror] Socket is not initialized")
-                return []   
+                return []
             request_json = json.dumps(script)
             self.s.settimeout(1)
             responses = []
@@ -157,6 +155,7 @@ class CoverMirrorControl():
                     return response
                 except Exception as e:
                     logger.error(f"[CoverMirror] Socket communication error: {e}")
+                    self.connected = False
                     return []
 
             response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')

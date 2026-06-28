@@ -13,6 +13,16 @@ from crac_server.handler.handler import AbstractHandler
 
 logger = logging.getLogger(__name__)
 
+# Keep strong references so fire-and-forget tasks are not garbage-collected
+# while still pending (see https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task)
+_background_tasks: set = set()
+
+
+def _spawn(coro):
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
 
 class AbstractCoverMirrorHandler(AbstractHandler):
     def handle(self, mediator: CoverMirrorMediator) -> CoverMirrorResponse:
@@ -27,10 +37,8 @@ class CoverMirrorHandler(AbstractCoverMirrorHandler):
             self._next_handler = None
             mediator.is_disabled = True
         elif mediator.action is CoverMirrorAction.OPEN_COVER_MIRROR:
-            loop = asyncio.get_event_loop()
-            loop.create_task(mediator.button.open())
+            _spawn(mediator.button.open())
         elif mediator.action is CoverMirrorAction.CLOSE_COVER_MIRROR:
-            loop = asyncio.get_event_loop()
-            loop.create_task(mediator.button.close())
+            _spawn(mediator.button.close())
 
         return super().handle(mediator)
