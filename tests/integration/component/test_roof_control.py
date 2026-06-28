@@ -7,7 +7,11 @@ from crac_server.component.roof.simulator.roof_control import MockRoofControl
 
 
 class TestRoofControl(unittest.IsolatedAsyncioTestCase):
-    
+
+    def setUp(self):
+        from gpiozero import Device
+        Device.pin_factory.reset()
+
     def test_status_is_opening(self):
         roof_control = MockRoofControl()
         roof_control.roof_open_switch.pin.drive_high()
