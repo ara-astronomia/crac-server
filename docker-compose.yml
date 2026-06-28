@@ -1,0 +1,11 @@
+services:
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./htmlcov:/app/htmlcov
+    command: >
+      sh -c "uv run coverage run run_tests.py
+             && uv run coverage report -m
+             && uv run coverage html"
