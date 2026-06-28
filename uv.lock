@@ -336,7 +336,7 @@ wheels = [
 [[package]]
 name = "crac-protobuf"
 version = "0.1.21.0"
-source = { directory = "../crac-protobuf" }
+source = { git = "https://github.com/ara-astronomia/crac-protobuf?rev=cover-mirror#5ed9366511cbcbfd09077a33df5aac4c7c3d5b30" }
 
 [[package]]
 name = "crac-server"
@@ -370,7 +370,7 @@ requires-dist = [
     { name = "astropy", specifier = ">=6.0.0" },
     { name = "autopep8", marker = "extra == 'dev'", specifier = "~=1.6.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = "~=6.3.2" },
-    { name = "crac-protobuf", directory = "../crac-protobuf" },
+    { name = "crac-protobuf", git = "https://github.com/ara-astronomia/crac-protobuf?rev=cover-mirror" },
     { name = "gpiozero", specifier = "~=2.0.1" },
     { name = "grpcio-tools" },
     { name = "lgpio", specifier = "~=0.2.2.0" },
