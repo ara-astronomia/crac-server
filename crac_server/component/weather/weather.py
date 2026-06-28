@@ -14,7 +14,7 @@ class Weather:
     def __init__(self, url: str, fallback_url: str, time_format: str, time_expired: int, retry_interval: int):
         self._url = url
         self._fallback_url = fallback_url
-        self._json : dict
+        self._json = {}
         self._updated_at : Union[datetime, None] = None
         self._last_attempt_at : Union[datetime, None] = None
         self._time_format = time_format
@@ -128,9 +128,11 @@ class Weather:
 
     def __convert_to_float(self, value: str):
         value = value.strip().replace(',', '.')
-        if value in ('N/A', 'n.d.', ''):
+        if value in ('N/A', 'n.d.', 'n/a', '--', ''):
             return 0.0
-        else:
+        try:
             return float(value)
+        except ValueError:
+            return 0.0
         
         

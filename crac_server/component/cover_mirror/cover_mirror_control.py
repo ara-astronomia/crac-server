@@ -46,19 +46,6 @@ class CoverMirrorControl():
             )
 
             self.connected = False
-    
-    async def poll_status(self):
-        """Polling continuo dello stato ogni 5 secondi"""
-        import asyncio
-        while True:
-            try:
-                logger.debug("[CoverMirror] Polling status...")
-                status = self.get_status()
-                logger.debug(f"[CoverMirror] Polled status: {status}")
-                await asyncio.sleep(5)
-            except Exception as e:
-                logger.error(f"[CoverMirror] Polling error: {e}")
-                await asyncio.sleep(5)
 
     async def open(self):
         try:
