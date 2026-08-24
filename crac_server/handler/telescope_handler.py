@@ -77,22 +77,31 @@ class TelescopeParkHandler(AbstractTelescopeHandler):
     def handle(self,  mediator: TelescopeMediator) -> TelescopeResponse:
         if mediator.action is TelescopeAction.PARK_POSITION:
             mediator.button.queue_park()
-        
+
         return super().handle(mediator)
 
 
 class TelescopeFlatHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if mediator.action is TelescopeAction.FLAT_POSITION:
-            mediator.button.queue_flat()
-        
+            mediator.button.queue_flat(keep_tracking=SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.ON)
+
         return super().handle(mediator)
 
 
 class TelescopeFlatterHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
+        # crac-cloud fa polling dello stato con SetAction(CHECK_TELESCOPE),
+        # quindi questo handler gira ad ogni ciclio di polling (ogni pochi
+        # secondi), non solo sui click espliciti. Senza il controllo su
+        # mediator.speed, finché lo stato resta FLATTER e la luce flat è
+        # accesa viene accodato un nuovo set_speed(TRACKING) ad ogni singolo
+        # polling: la coda (self._jobs, senza deduplica) si riempie di job
+        # ridondanti, e qualunque Park/Flat cliccato nel frattempo finisce
+        # in fondo a quella coda, ritardato di job_in_coda * polling_interval.
         if (
-                mediator.status is TelescopeStatus.FLATTER and 
+                mediator.status is TelescopeStatus.FLATTER and
+                mediator.speed is not TelescopeSpeed.SPEED_TRACKING and
                 SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.ON
             ):
             mediator.button.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
