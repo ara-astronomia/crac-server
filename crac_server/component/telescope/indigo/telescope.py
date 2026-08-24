@@ -24,7 +24,9 @@ class Telescope(TelescopeBase):
         super().__init__(hostname=hostname, port=port)
         self._name = config.Config.getValue("name", "indigo")
         self._client = get_indigo_client(hostname, port)
-        self._client.connect_device(self._name)
+        # Niente connect_device() qui: la connessione al mount va stabilita
+        # dall'operatore dal pannello INDIGO (mount.html/ctrl.html) prima
+        # che crac la usi, non forzata da crac stesso - vedi retrieve().
         self._geo_synced = False
         self.__sync_geographic_coordinates()
         self._park_position_synced = False
@@ -317,6 +319,14 @@ class Telescope(TelescopeBase):
         logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
 
     def retrieve(self) -> tuple:
+        # In produzione l'osservatore usa il pannello INDIGO direttamente e
+        # deve ricordarsi di collegare il telescopio li' prima che crac lo
+        # usi: crac non forza piu' la connessione da solo (vedi __init__),
+        # quindi va rifiutata finche' il device non risulta gia' connesso
+        # lato INDIGO, con uno stato chiaro invece di un falso "connesso".
+        if not self._client.is_device_connected(self._name):
+            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+
         # connect_device() è idempotente (no-op se già connesso su questa
         # connessione fisica) ma va richiamato ad ogni ciclo, non solo in
         # __init__: se il client si riconnette, la cache viene svuotata e

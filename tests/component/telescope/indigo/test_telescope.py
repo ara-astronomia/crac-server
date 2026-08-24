@@ -20,8 +20,10 @@ class TestIndigoTelescope(unittest.TestCase):
             return props.get(name)
         self.mock_client.get_property.side_effect = get_property
 
-    def test_init_connects_device_and_skips_raw_socket_polling(self):
-        self.mock_client.connect_device.assert_called_once_with(self.telescope._name)
+    def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
+        # la connessione va stabilita dall'operatore dal pannello INDIGO
+        # prima che crac la usi, non forzata da crac stesso in __init__.
+        self.mock_client.connect_device.assert_not_called()
         self.assertFalse(self.telescope._uses_raw_socket)
 
     def test_init_syncs_geographic_coordinates(self):
@@ -75,7 +77,20 @@ class TestIndigoTelescope(unittest.TestCase):
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
         })
         self.telescope.retrieve()
-        self.assertEqual(self.mock_client.connect_device.call_count, 2)  # __init__ + retrieve
+        self.telescope.retrieve()
+        self.assertEqual(self.mock_client.connect_device.call_count, 2)
+
+    def test_retrieve_refuses_when_device_not_connected_on_indigo(self):
+        # in produzione l'operatore deve collegare il telescopio dal
+        # pannello INDIGO prima che crac lo usi - crac non deve forzare la
+        # connessione da solo, ne' fingere di essere connesso.
+        self.mock_client.is_device_connected.return_value = False
+        eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        self.assertIsNone(eq_coords)
+        self.assertIsNone(aa_coords)
+        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
+        self.assertEqual(status, TelescopeStatus.LOST)
+        self.mock_client.connect_device.assert_not_called()
 
     def test_retrieve_reads_coordinates_and_speed_from_cache(self):
         self._stub_properties({

@@ -187,6 +187,20 @@ class IndigoClient:
                 self._connected_devices.add(device)
         return sent
 
+    def is_device_connected(self, device: str, timeout: float = 3.0) -> bool:
+        """Verifica se il device risulta gia' connesso lato INDIGO, senza
+        mai forzarne la connessione (a differenza di connect_device()): usata
+        dal telescopio, dove la connessione va stabilita dall'operatore dal
+        pannello INDIGO prima che crac la usi, non innescata da crac stesso."""
+        self.send({"getProperties": {"version": 512, "device": device, "name": "CONNECTION"}})
+        prop = self.get_property(device, "CONNECTION", timeout=timeout)
+        if not prop:
+            return False
+        for item in prop.get("items", []):
+            if item.get("name") == "CONNECTED":
+                return bool(item.get("value"))
+        return False
+
     def get_property(self, device: str, name: str, timeout: float = 2.0) -> dict | None:
         """Legge una proprietà dalla cache, attendendo brevemente se non è
         ancora arrivata (es. subito dopo connect_device())."""
