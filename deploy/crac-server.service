@@ -1,0 +1,19 @@
+# Copiato 1:1 da quello gia' in produzione su crac.server.ara.local
+# (/etc/systemd/system/crac-server.service), messo qui solo per tenerlo
+# in versione insieme al codice.
+[Unit]
+Description=Avvio automatico CRaC Server (VENV)
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/crac-server
+ExecStart=/home/pi/crac-server/.venv/bin/python crac_server/app.py
+TimeoutStartSec=300
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PATH=/home/pi/crac-server/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[Install]
+WantedBy=multi-user.target
