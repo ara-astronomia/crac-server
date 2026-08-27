@@ -51,7 +51,7 @@ jobs:
             set -e
             cd /home/pi/crac-server
             git fetch origin ${{ inputs.ref }}
-            git checkout ${{ inputs.ref }}
+            git checkout -f ${{ inputs.ref }}
             git reset --hard origin/${{ inputs.ref }} 2>/dev/null || git reset --hard ${{ inputs.ref }}
             uv sync --no-dev
             if ! sudo cmp -s deploy/crac-server.service /etc/systemd/system/crac-server.service; then
