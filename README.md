@@ -69,6 +69,52 @@ client.SetAction(request)
 
 or you can clone the crac-client repository (https://github.com/ara-astronomia/crac-client) and start it
 
+# Deploy in produzione (Pi4)
+
+Setup una tantum sul Pi:
+
+```bash
+# 1. clona il repo in /home/pi/crac-server e installa le dipendenze
+git clone <url> /home/pi/crac-server
+cd /home/pi/crac-server && uv sync --no-dev
+
+# 2. installa il servizio systemd
+sudo cp deploy/crac-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now crac-server
+
+# 3. permetti all'utente pi di riavviare il servizio senza password (serve al deploy da SSH)
+echo 'pi ALL=(root) NOPASSWD: /usr/bin/systemctl restart crac-server' | sudo tee /etc/sudoers.d/crac-server
+```
+
+Il deploy gira interamente su GitHub Actions (runner ospitato da GitHub, non
+sul Pi): usa un `ProxyJump` SSH attraverso `cloud.ara`, che fa da bastion
+verso `crac.server.ara.local` (rete privata dell'osservatorio, non
+raggiungibile da fuori) - stesso pattern di `alkcxy/home`. Servono due
+chiavi dedicate al deploy (generate apposta, non riusano quelle personali
+ne' quelle gia' presenti sul bastion), autorizzate una per hop e salvate
+come secret nel repo GitHub:
+
+- `CLOUD_ARA_SSH_KEY`: autorizzata in `~/.ssh/authorized_keys` di `indigo`
+  su cloud.ara (primo salto).
+- `CRAC_SERVER_SSH_KEY`: autorizzata in `~/.ssh/authorized_keys` di `pi`
+  su crac.server.ara.local (secondo salto, via ProxyJump).
+
+Per i deploy successivi: tab "Actions" → workflow "Deploy su Pi4" → "Run workflow",
+scegliendo branch/tag/commit da mettere in produzione. Aggiorna il repo gia'
+clonato sul Pi, gira `uv sync`, ricopia `deploy/crac-server.service` in
+`/etc/systemd/system/` solo se e' cambiato (con `daemon-reload`), e riavvia
+il servizio - nessun accesso manuale.
+
+`config.ini` e `.env` non vengono mai toccati dal deploy (`git reset --hard`
+sovrascrive solo file tracciati che sono effettivamente cambiati; `.env` e'
+untracked e git non lo tocca mai). I valori che devono differire dal
+default committato in `config.ini` vanno messi in `.env` (override via
+`{SEZIONE}_{CHIAVE}`, vedi `crac_server/config.py`), non editati a mano in
+`config.ini` sul Pi.
+
+Log del servizio: `journalctl -u crac-server -f`.
+
 # Test
 
 ## unit tests:
