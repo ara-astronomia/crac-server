@@ -69,7 +69,7 @@ client.SetAction(request)
 
 or you can clone the crac-client repository (https://github.com/ara-astronomia/crac-client) and start it
 
-# Deploy in produzione (Pi4)
+# Deploy in produzione (Pi5)
 
 Setup una tantum sul Pi:
 
@@ -100,7 +100,7 @@ come secret nel repo GitHub:
 - `CRAC_SERVER_SSH_KEY`: autorizzata in `~/.ssh/authorized_keys` di `pi`
   su crac.server.ara.local (secondo salto, via ProxyJump).
 
-Per i deploy successivi: tab "Actions" → workflow "Deploy su Pi4" → "Run workflow",
+Per i deploy successivi: tab "Actions" → workflow "Deploy su Pi5" → "Run workflow",
 scegliendo branch/tag/commit da mettere in produzione. Aggiorna il repo gia'
 clonato sul Pi, gira `uv sync`, ricopia `deploy/crac-server.service` in
 `/etc/systemd/system/` solo se e' cambiato (con `daemon-reload`), e riavvia

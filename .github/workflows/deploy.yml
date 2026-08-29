@@ -1,4 +1,4 @@
-name: Deploy su Pi4
+name: Deploy su Pi5
 
 on:
   workflow_dispatch:
