@@ -57,11 +57,23 @@ tests/                      # rispecchia la struttura di crac_server/
   di rete. Il polling che *sembra* esserci (`polling_interval` nel
   telescopio) è solo la frequenza con cui il thread interno ricalcola lo
   stato dalla cache già aggiornata in tempo reale.
-- **Park nativo INDIGO**: il park (`MOUNT_PARK`) usa `MOUNT_PARK_POSITION`
-  (HA/DEC, non alt/az - le uniche coordinate time-invariant per un punto
-  fisso), sincronizzata una tantum e persistita via `CONFIG_SAVE`/ricaricata
-  via `CONFIG_LOAD` alla riconnessione - un mount reale non ricarica mai la
-  config da solo.
+- **Park nativo INDIGO**: `park()` manda *solo* `MOUNT_PARK` - mai un
+  `UNPARK` prima. `indigo_mount_lx200` (TeenAstro) scarta il park finché il
+  mount risulta `parked`/`parking`/`homing`, ma echeggia comunque
+  `PARKED=true` (`indigo_property_copy_values` gira prima di quella
+  guardia): l'unpark è asincrono, quindi un park mandato subito dopo
+  finiva sempre scartato e crac passava a PARKED con il telescopio fermo
+  dov'era.
+- **`MOUNT_PARK_POSITION` è roba da simulatore**: la scriviamo (HA/DEC, non
+  alt/az - le uniche coordinate time-invariant per un punto fisso) solo se
+  il driver la espone davvero e solo a mount sparcheggiato (da parcheggiato
+  la scrittura viene rifiutata). Su un mount reale la posizione di park vive
+  nel mount e quella proprietà non esiste nemmeno. Nessun
+  `CONFIG_SAVE`/`CONFIG_LOAD`: alla riconnessione `_park_position_synced`
+  si azzera e la posizione viene rimandata al primo park utile.
+- **Dopo il park non si tocca `MOUNT_TRACKING`**: parcheggiare spegne già
+  il tracking da solo, e il comando arriverebbe a mount parcheggiato (dove
+  viene rifiutato) o in pieno park.
 - **Coda comandi telescopio** (`Telescope._jobs`): va sempre deduplicata
   (vedi `queue_set_speed`) - senza dedup, un client che pollasse più spesso
   del ciclo interno di retrieve() farebbe crescere la coda senza limite,

@@ -146,6 +146,78 @@ class TestIndigoTelescope(unittest.TestCase):
         items = {i["name"]: i["value"] for i in sent["newSwitchVector"]["items"]}
         self.assertEqual(items, {"PARKED": True, "UNPARKED": False})
 
+    def _stub_park_properties(self, extra: dict | None = None):
+        # lo slew di park termina subito: Busy al primo giro (comando preso
+        # in carico), poi Ok - altrimenti __wait_for_slew_completion
+        # aspetterebbe il timeout.
+        states = iter([{"state": "Busy"}, {"state": "Ok"}])
+        props = dict(extra or {})
+
+        def get_property(device, name, timeout=2.0):
+            if name == "MOUNT_EQUATORIAL_COORDINATES":
+                return next(states, {"state": "Ok"})
+            return props.get(name)
+
+        self.mock_client.get_property.side_effect = get_property
+        sent_calls = []
+        self.mock_client.send.side_effect = lambda script: sent_calls.append(script) or True
+        return sent_calls
+
+    def test_park_does_not_unpark_first(self):
+        # regressione: indigo_mount_lx200 (TeenAstro) scarta MOUNT_PARK
+        # finché il mount risulta parked/parking/homing, ma echeggia
+        # comunque PARKED=true (indigo_property_copy_values gira prima
+        # della guardia). Mandare UNPARK e subito dopo PARK cadeva sempre in
+        # quel caso - l'unpark è asincrono - lasciando crac in stato PARKED
+        # con il telescopio fermo dov'era.
+        sent_calls = self._stub_park_properties()
+        self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+        parks = [
+            {i["name"]: i["value"] for i in s["newSwitchVector"]["items"]}
+            for s in sent_calls if s.get("newSwitchVector", {}).get("name") == "MOUNT_PARK"
+        ]
+        self.assertEqual(parks, [{"PARKED": True, "UNPARKED": False}])
+
+    def test_park_does_not_send_tracking_off(self):
+        # parcheggiare spegne gia' il tracking (simulatore e mount reale):
+        # il MOUNT_TRACKING OFF mandato dopo arrivava a mount parcheggiato,
+        # dove viene rifiutato (property in Alert) o - peggio - raggiunge
+        # l'hardware nel mezzo del park.
+        sent_calls = self._stub_park_properties()
+        self.telescope.park(TelescopeSpeed.SPEED_NOT_TRACKING)
+        names = [next(iter(s.values())).get("name") for s in sent_calls]
+        self.assertNotIn("MOUNT_TRACKING", names)
+
+    def test_park_does_not_write_park_position_when_mount_has_none(self):
+        # su un mount reale MOUNT_PARK_POSITION non esiste (la posizione di
+        # park vive nel mount): non va scritta, sarebbe solo rumore.
+        sent_calls = self._stub_park_properties()
+        self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+        names = [next(iter(s.values())).get("name") for s in sent_calls]
+        self.assertNotIn("MOUNT_PARK_POSITION", names)
+
+    def test_park_syncs_park_position_before_parking_when_supported(self):
+        # il Mount Simulator espone MOUNT_PARK_POSITION e parte da una
+        # posizione di park sua: va allineata alle park_alt/park_az di crac
+        # prima del park, e solo a mount sparcheggiato (da parcheggiato il
+        # driver rifiuta la scrittura).
+        sent_calls = self._stub_park_properties({
+            "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
+            "MOUNT_PARK": {"items": [{"name": "PARKED", "value": False}]},
+        })
+        self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+        names = [next(iter(s.values())).get("name") for s in sent_calls]
+        self.assertLess(names.index("MOUNT_PARK_POSITION"), names.index("MOUNT_PARK"))
+
+    def test_park_skips_park_position_sync_when_already_parked(self):
+        sent_calls = self._stub_park_properties({
+            "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
+            "MOUNT_PARK": {"items": [{"name": "PARKED", "value": True}]},
+        })
+        self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+        names = [next(iter(s.values())).get("name") for s in sent_calls]
+        self.assertNotIn("MOUNT_PARK_POSITION", names)
+
     def test_set_speed_sends_on_coordinates_set_as_switch_vector_even_when_not_tracking(self):
         # regressione: MOUNT_ON_COORDINATES_SET è una proprietà switch, non
         # number - mandata come newNumberVector il driver la ignora e lo

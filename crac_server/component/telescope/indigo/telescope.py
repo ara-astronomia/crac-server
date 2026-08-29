@@ -68,14 +68,24 @@ class Telescope(TelescopeBase):
         # lat): a parità di HA/dec il punto resta sempre allo stesso alt/az,
         # qualunque sia l'ora - a differenza di RA, che va ricalcolata ad
         # ogni istante). Sincronizzata una sola volta (da park(), mai in modo
-        # eager da __init__/retrieve(): indigo_mount_simulator.c rifiuta le
-        # scritture su MOUNT_PARK_POSITION mentre il mount è nativamente
-        # parcheggiato, come già capita per MOUNT_EQUATORIAL_COORDINATES -
-        # e il mount simulator parte parcheggiato di default). park() chiama
-        # sempre prima __unpark() così questa può scrivere. Dopo il primo
-        # successo il park nativo la userà da solo ad ogni richiesta, senza
-        # bisogno che crac-server gliela reinvii ogni volta.
+        # eager da __init__/retrieve()). Dopo il primo successo il park
+        # nativo la userà da solo ad ogni richiesta, senza bisogno che
+        # crac-server gliela reinvii ogni volta.
         if self._park_position_synced:
+            return
+        # Solo per i driver che espongono davvero una posizione di park
+        # scrivibile (il Mount Simulator): su un mount reale
+        # (indigo_mount_lx200 / TeenAstro) MOUNT_PARK_POSITION non esiste -
+        # la posizione di park vive nel mount ed è INDIGO a mandarcelo lì -
+        # e scriverci sopra sarebbe solo rumore verso l'hardware.
+        if not self._client.get_property(self._name, "MOUNT_PARK_POSITION", timeout=0):
+            return
+        # indigo_mount_simulator.c rifiuta le scritture su
+        # MOUNT_PARK_POSITION mentre il mount è parcheggiato (come già
+        # capita per MOUNT_EQUATORIAL_COORDINATES) e il simulatore parte
+        # parcheggiato: si sincronizza al primo park utile, cioè quando il
+        # telescopio è stato sparcheggiato e mosso davvero.
+        if self.__retrieve_status_park():
             return
         obstime = datetime.utcnow()
         aa_coords = AltazimutalCoords(
@@ -100,24 +110,10 @@ class Telescope(TelescopeBase):
                         }
                     }
                     )
-        if self._park_position_synced:
-            # senza CONFIG_SAVE la property resta solo in RAM nel processo
-            # indigo_server: un riavvio del solo server INDIGO (senza
-            # riavviare crac-server) la perderebbe silenziosamente, tornando
-            # ai default hardcoded nel driver - il reset di
-            # _park_position_synced su riconnessione (vedi retrieve()) copre
-            # comunque questo caso ri-sincronizzando, ma salvarla la rende
-            # persistente anche across restart di indigo stesso.
-            self.__call(
-                        {"newSwitchVector":
-                            {
-                                "device": self._name, "name": "CONFIG", "items":
-                                [
-                                    { "name": "SAVE", "value": True}
-                                ]
-                            }
-                        }
-                        )
+        # Niente CONFIG_SAVE: se il solo indigo_server viene riavviato, la
+        # riconnessione azzera _park_position_synced (vedi retrieve()) e la
+        # posizione viene rimandata al primo park utile - persisterla su
+        # disco non aggiungerebbe nulla.
 
     def sync(self, started_at: datetime):
         # NOTA: questi tre __call originariamente inviavano stringhe XML
@@ -205,10 +201,14 @@ class Telescope(TelescopeBase):
 
 
     def park(self, speed: TelescopeSpeed):
-        # Il park nativo di INDIGO (switch MOUNT_PARK) usa internamente
-        # MOUNT_PARK_POSITION: va sparcheggiato prima di poterla scrivere,
-        # poi sincronizzata (una tantum) con le nostre park_alt/park_az.
-        self.__unpark()
+        # Nessun unpark preventivo qui: su un mount reale
+        # (indigo_mount_lx200, es. TeenAstro) il driver scarta MOUNT_PARK se
+        # il mount risulta ancora parked/parking/homing, ma il valore
+        # PARKED=true viene comunque echeggiato indietro
+        # (indigo_property_copy_values gira *prima* di quella guardia).
+        # Mandare UNPARK e subito dopo PARK cadeva sempre in quel caso -
+        # l'unpark è asincrono, `parked` resta true per un attimo - quindi
+        # il telescopio non si muoveva mentre crac passava a PARKED.
         self.__sync_park_position()
         self.__call(
                         {"newSwitchVector":
@@ -222,21 +222,12 @@ class Telescope(TelescopeBase):
                         }
                     )
 
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            self.__wait_for_slew_completion()
-            self.__call(
-                            {"newSwitchVector":
-                                {
-                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items":
-                                    [
-                                        { "name": "ON", "value": False},
-                                        { "name": "OFF", "value": True}
-                                    ]
-                                }
-                            }
-                        )
-        else:
-            self.__wait_for_slew_completion()
+        # Niente MOUNT_TRACKING OFF dopo il park (`speed` resta solo per
+        # rispettare la firma): parcheggiare spegne gia' il tracking, sia
+        # nel simulatore che su un mount reale, e il comando arrivava a
+        # mount gia' parcheggiato - dove viene rifiutato (property in
+        # Alert), o peggio raggiunge l'hardware nel bel mezzo del park.
+        self.__wait_for_slew_completion()
 
     def __retrieve_status_park(self) -> bool:
         prop = self._client.get_property(self._name, "MOUNT_PARK", timeout=0)
@@ -339,21 +330,6 @@ class Telescope(TelescopeBase):
         if self._client.connect_device(self._name):
             self._geo_synced = False
             self._park_position_synced = False
-            # indigo_mount_simulator.c non ricarica mai da solo la config
-            # salvata (CONFIG_SAVE) - lo fa solo su richiesta esplicita del
-            # client (CONFIG_LOAD), altrimenti riparte sempre dai default
-            # hardcoded nel driver anche se un file di config esiste già su
-            # disco. Innocuo se non c'è nessun config salvato (no-op).
-            self.__call(
-                        {"newSwitchVector":
-                            {
-                                "device": self._name, "name": "CONFIG", "items":
-                                [
-                                    { "name": "LOAD", "value": True}
-                                ]
-                            }
-                        }
-                        )
         self.__sync_geographic_coordinates()
         eq_coords = self.__retrieve_eq_coords()
         logger.debug(f"data received from cache: {eq_coords}")
