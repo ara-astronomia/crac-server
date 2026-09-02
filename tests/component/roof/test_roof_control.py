@@ -1,13 +1,28 @@
 # test open roof
 import unittest
 from unittest.mock import patch
+from gpiozero import Device
 from crac_server.component.roof.roof_control import RoofControl
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.roof.simulator.roof_control import MockRoofControl
 
 
 class TestRoofControl(unittest.IsolatedAsyncioTestCase):
-    
+
+    @classmethod
+    def setUpClass(cls):
+        # Importare questo modulo attiva crac_server.component.roof.__init__,
+        # che crea il singleton ROOF riservando già il pin GPIO del tetto
+        # (switch_roof) prima ancora che parta il primo test: va rilasciato
+        # qui, altrimenti pure il primissimo test fallisce con GPIOPinInUse.
+        Device.pin_factory.reset()
+
+    def tearDown(self):
+        # Ogni test riserva lo stesso pin su una nuova istanza di
+        # RoofControl/MockRoofControl - va rilasciato anche tra un test e
+        # l'altro, non solo prima del primo.
+        Device.pin_factory.reset()
+
     def test_status_is_opening(self):
         roof_control = MockRoofControl()
         roof_control.roof_open_switch.pin.drive_high()

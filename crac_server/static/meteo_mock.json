@@ -1,0 +1,14 @@
+{
+    "title": "Current Values",
+    "location": "Osservatorio Astronomico",
+    "time": "2026-05-11 10:20:00",
+    "current": {
+        "outTemp": { "value": "15,0", "unit_of_measurement": "°C" },
+        "humidity": { "value": "60,0", "unit_of_measurement": "%" },
+        "barometer": { "value": "1013,0", "unit_of_measurement": " mbar" },
+        "barometerTrend": { "value": "0,0", "unit_of_measurement": " mbar" },
+        "windSpeed": { "value": "0,0", "unit_of_measurement": " m/s" },
+        "windGust": { "value": "0,0", "unit_of_measurement": " m/s" },
+        "rainRate": { "value": "0,0", "unit_of_measurement": " mm/h" }
+    }
+}
