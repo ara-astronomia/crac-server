@@ -1,8 +1,6 @@
 from datetime import datetime
 import html
 import logging
-from threading import (Thread, Lock)
-from time import sleep
 from typing import Union
 from urllib.error import HTTPError, URLError
 import urllib.request
@@ -96,16 +94,6 @@ class Weather:
     @property
     def is_unavailable(self) -> bool:
         return self.updated_at != None and (datetime.now() - self.updated_at).seconds >= self._time_expired * 3
-    
-    def _retrieve_async(self):
-        while True:
-            if self.is_expired():
-                try:
-                    self.json, self.updated_at = self._retrieve_data()
-                except:
-                    logger.error("url not reachable, switching to fallback url")
-                    self.json, self.updated_at = self._retrieve_fallback_data()
-            sleep(0)
 
     def _retrieve_data(self):
         with urllib.request.urlopen(self.url) as url:

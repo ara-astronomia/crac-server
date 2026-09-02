@@ -218,7 +218,6 @@ class Curtain:
             self.__close__()
 
     def disable(self):
-        print("tende disattivate")
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
 
@@ -233,8 +232,14 @@ class Curtain:
         logger.debug("Curtain: %s, curtain moved to 0 before disabling, to_disable is %s", self._orientation, self.to_disable)
 
     def enable(self):
-        print("tende attivate")
         logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
+        # Annulla un eventuale disable() ancora in corso (tenda non ancora
+        # arrivata al finecorsa chiuso): senza questo, to_disable resta a
+        # True e verrà letto come intento di disabilitazione ancora valido
+        # dal prossimo __check_and_stop__/__reset_steps__, ri-disabilitando
+        # il motore a sorpresa alla prossima chiusura completa.
+        with self.lock_rotation:
+            self.to_disable = False
         self.motor.enable_device.on()
         logger.debug("Curtain: %s, motor after enabling is %s", self.to_disable, self.motor.enable_device.value)
 

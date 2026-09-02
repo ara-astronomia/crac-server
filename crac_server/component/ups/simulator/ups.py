@@ -29,7 +29,8 @@ class Ups(UpsBase):
             'ups.mfr': 'American Power Conversion', 
             'ups.timer.shutdown': '-1', 
             'battery.mfr.date': '2009/09/16', 
-            'output.voltage': ups_config.get(device, "output.voltage", fallback='0'), 
+            'output_voltage': ups_config.get(device, "output.voltage", fallback='220'), 
+            'input_voltage': ups_config.get(device, "input.voltage", fallback='220'),
             'driver.parameter.pollfreq': '30', 
             'battery.type': 'PbAc', 
             'ups.productid': '0002', 
@@ -55,7 +56,7 @@ class Ups(UpsBase):
             'device.mfr': 'American Power Conversion', 
             'ups.timer.reboot': '-1', 
             'output.current': '0.00', 
-            'battery.charge': ups_config.get(device, "battery.charge", fallback='0'),
+            'battery_charge': ups_config.get(device, "battery.charge", fallback='0'),
             'input.voltage': '217.4', 
             'ups.firmware.aux': '7.4', 
             'device.serial': 'JS0938004696', 
@@ -71,5 +72,5 @@ class Ups(UpsBase):
             'battery.charge.low': "10", 
             'ups.mfr.date': '2009/09/16', 
             'ups.serial': 'JS0938004696', 
-            'ups.status': ups_config.get(device, "ups.status", fallback='OL')
+            'ups_status': ups_config.get(device, "ups.status", fallback='OL')
         }
