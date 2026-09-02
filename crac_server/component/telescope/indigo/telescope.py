@@ -1,5 +1,9 @@
 from datetime import datetime
 from typing import Any
+import time
+from astropy import units as u
+from astropy.coordinates import EarthLocation
+from astropy.time import Time
 from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,
     AltazimutalCoords,
@@ -8,14 +12,8 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
+from crac_server.component.indigo_client import get_indigo_client
 import logging
-import json
-import re
-import os
-import time
-import socket
-import sys, errno
-import xml.etree.ElementTree as ET
 logger = logging.getLogger(__name__)
 
 
@@ -25,8 +23,103 @@ class Telescope(TelescopeBase):
     def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
         super().__init__(hostname=hostname, port=port)
         self._name = config.Config.getValue("name", "indigo")
-    
+        self._client = get_indigo_client(hostname, port)
+        # Niente connect_device() qui: la connessione al mount va stabilita
+        # dall'operatore dal pannello INDIGO (mount.html/ctrl.html) prima
+        # che crac la usi, non forzata da crac stesso - vedi retrieve().
+        self._geo_synced = False
+        self.__sync_geographic_coordinates()
+        self._park_position_synced = False
+        self._uses_raw_socket = False
+
+    def __sync_geographic_coordinates(self):
+        # Mount Simulator parte a lat/lon 0°,0° ("null island") finché non
+        # gliela mandiamo esplicitamente: la stessa coppia RA/DEC risulta a
+        # un'altitudine completamente diversa a 0° di quella vista dal
+        # nostro calcolo (fatto sulla posizione reale dell'osservatorio),
+        # facendo atterrare qualunque slew (es. flat) in un punto sbagliato.
+        # Va ritentata (non solo in __init__, vedi retrieve()) perché il
+        # send() qui è fire-and-forget: se il socket del client condiviso
+        # non è ancora pronto al primo tentativo, fallirebbe in silenzio e
+        # non verrebbe mai più rimandata.
+        if self._geo_synced:
+            return
+        location = EarthLocation(
+            lat=config.Config.getValue("lat", "geography"),
+            lon=config.Config.getValue("lon", "geography"),
+            height=config.Config.getInt("height", "geography") * u.m,
+        )
+        self._geo_synced = self.__call(
+                    {"newNumberVector":
+                        {
+                            "device": self._name, "name": "GEOGRAPHIC_COORDINATES", "items":
+                            [
+                                { "name": "LATITUDE", "value": location.lat.deg},
+                                { "name": "LONGITUDE", "value": location.lon.deg % 360},
+                                { "name": "ELEVATION", "value": location.height.value}
+                            ]
+                        }
+                    }
+                    )
+
+    def __sync_park_position(self):
+        # HA/DEC (non alt/az) perché per un punto ad alt/az fissi sono le
+        # uniche coordinate equatoriali time-invariant (alt/az = f(HA, dec,
+        # lat): a parità di HA/dec il punto resta sempre allo stesso alt/az,
+        # qualunque sia l'ora - a differenza di RA, che va ricalcolata ad
+        # ogni istante). Sincronizzata una sola volta (da park(), mai in modo
+        # eager da __init__/retrieve()). Dopo il primo successo il park
+        # nativo la userà da solo ad ogni richiesta, senza bisogno che
+        # crac-server gliela reinvii ogni volta.
+        if self._park_position_synced:
+            return
+        # Solo per i driver che espongono davvero una posizione di park
+        # scrivibile (il Mount Simulator): su un mount reale
+        # (indigo_mount_lx200 / TeenAstro) MOUNT_PARK_POSITION non esiste -
+        # la posizione di park vive nel mount ed è INDIGO a mandarcelo lì -
+        # e scriverci sopra sarebbe solo rumore verso l'hardware.
+        if not self._client.get_property(self._name, "MOUNT_PARK_POSITION", timeout=0):
+            return
+        # indigo_mount_simulator.c rifiuta le scritture su
+        # MOUNT_PARK_POSITION mentre il mount è parcheggiato (come già
+        # capita per MOUNT_EQUATORIAL_COORDINATES) e il simulatore parte
+        # parcheggiato: si sincronizza al primo park utile, cioè quando il
+        # telescopio è stato sparcheggiato e mosso davvero.
+        if self.__retrieve_status_park():
+            return
+        obstime = datetime.utcnow()
+        aa_coords = AltazimutalCoords(
+            alt=config.Config.getFloat("park_alt", "telescope"),
+            az=config.Config.getFloat("park_az", "telescope"),
+        )
+        eq_coords = self._altaz2radec(aa_coords, obstime=obstime)
+        lat = config.Config.getValue("lat", "geography")
+        lon = config.Config.getValue("lon", "geography")
+        lst = Time(obstime).sidereal_time("apparent", longitude=lon)
+        ha = (lst.hour - eq_coords.ra) % 24
+        if ha > 12:
+            ha -= 24
+        self._park_position_synced = self.__call(
+                    {"newNumberVector":
+                        {
+                            "device": self._name, "name": "MOUNT_PARK_POSITION", "items":
+                            [
+                                { "name": "HA", "value": ha},
+                                { "name": "DEC", "value": eq_coords.dec}
+                            ]
+                        }
+                    }
+                    )
+        # Niente CONFIG_SAVE: se il solo indigo_server viene riavviato, la
+        # riconnessione azzera _park_position_synced (vedi retrieve()) e la
+        # posizione viene rimandata al primo park utile - persisterla su
+        # disco non aggiungerebbe nulla.
+
     def sync(self, started_at: datetime):
+        # NOTA: questi tre __call originariamente inviavano stringhe XML
+        # (residuo del driver "indi" da cui è stato copiato), non JSON valido
+        # per il protocollo INDIGO - comportamento preesistente, non toccato
+        # qui perché fuori dallo scope di questo refactor.
         self.__call(
             f"""
                 <setNumberVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
@@ -72,90 +165,100 @@ class Telescope(TelescopeBase):
         )
 
     def set_speed(self, speed: TelescopeSpeed):
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            self.__call(
-                        {"newSwitchVector": 
-                                { 
-                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items": 
-                                    [
-                                        { "name": "ON", "value": False}, 
-                                        { "name": "OFF", "value": True} 
-                                    ] 
-                                } 
+        tracking_on = speed is not TelescopeSpeed.SPEED_NOT_TRACKING
+        self.__call(
+                    {"newSwitchVector":
+                            {
+                                "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items":
+                                [
+                                    { "name": "ON", "value": tracking_on},
+                                    { "name": "OFF", "value": not tracking_on}
+                                ]
                             }
-                        )
-        else:
-            self.__call(
-                        {"newSwitchVector": 
-                                { 
-                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items": 
-                                    [
-                                        { "name": "ON", "value": True}, 
-                                        { "name": "OFF", "value": False} 
-                                    ] 
-                                } 
-                            }
-                        )
-            
-            if speed == TelescopeSpeed.SPEED_TRACKING:
-                self.__call(
-                            {"newNumberVector": 
-                                { 
-                                    "device": self._name, "name": "MOUNT_ON_COORDINATES_SET", "state": "Ok", "items": 
-                                    [
-                                        { "name": "SLEW", "value": True},
-                                        { "name": "TRACK", "value": True}
-                                    ] 
-                                } 
-                            }
-                        )
-            else:
-                self.__call(
-                            {"newNumberVector": 
-                                { 
-                                    "device": self._name, "name": "MOUNT_ON_COORDINATES_SET", "state": "Ok", "items": 
-                                    [
-                                        { "name": "SLEW", "value": False},
-                                        { "name": "TRACK", "value": False},
-                                        { "name": "SYNC", "value": False}
+                        }
+                    )
 
-                                    ] 
-                                } 
-                            }
-                        )
+        # MOUNT_ON_COORDINATES_SET è una proprietà switch (TRACK/SYNC/SLEW),
+        # non number: il driver la ignora silenziosamente se mandata come
+        # newNumberVector, e la logica di slew di MOUNT_EQUATORIAL_COORDINATES
+        # non scatta mai. indigo_mount_simulator.c implementa solo i rami
+        # TRACK e SYNC per il movimento (SLEW non è gestito e non muove
+        # nulla): va sempre selezionato TRACK per ottenere lo slew, che sia
+        # o meno richiesto il tracking continuo dopo l'arrivo (governato a
+        # parte da MOUNT_TRACKING sopra).
+        self.__call(
+                    {"newSwitchVector":
+                        {
+                            "device": self._name, "name": "MOUNT_ON_COORDINATES_SET", "state": "Ok", "items":
+                            [
+                                { "name": "SLEW", "value": False},
+                                { "name": "TRACK", "value": True},
+                                { "name": "SYNC", "value": False}
+                            ]
+                        }
+                    }
+                )
 
 
     def park(self, speed: TelescopeSpeed):
+        # Nessun unpark preventivo qui: su un mount reale
+        # (indigo_mount_lx200, es. TeenAstro) il driver scarta MOUNT_PARK se
+        # il mount risulta ancora parked/parking/homing, ma il valore
+        # PARKED=true viene comunque echeggiato indietro
+        # (indigo_property_copy_values gira *prima* di quella guardia).
+        # Mandare UNPARK e subito dopo PARK cadeva sempre in quel caso -
+        # l'unpark è asincrono, `parked` resta true per un attimo - quindi
+        # il telescopio non si muoveva mentre crac passava a PARKED.
+        self.__sync_park_position()
         self.__call(
-                        {"newSwitchVector": 
-                            { 
-                                "device": self._name, "name": "MOUNT_PARK", "state": "Ok", "items": 
+                        {"newSwitchVector":
+                            {
+                                "device": self._name, "name": "MOUNT_PARK", "state": "Ok", "items":
                                     [
                                         { "name": "PARKED", "value": True},
                                         { "name": "UNPARKED", "value": False}
-                                    ] 
-                            } 
+                                    ]
+                            }
                         }
                     )
-                    
-    def __retrieve_status_park(self, root):
-        seen = set()
-        
-        for item in root:
-            if "defSwitchVector" in item:
-                vector = item["defSwitchVector"]
-                if vector["name"] == "MOUNT_PARK":
-                    for park in vector["items"]:
-                        key = (vector["name"], vector['state'], park["name"], park["value"])
-                        if key not in seen:
-                            seen.add(key)
-                            if park['name'] == "PARKED":
-                                return park["value"] 
 
+        # Niente MOUNT_TRACKING OFF dopo il park (`speed` resta solo per
+        # rispettare la firma): parcheggiare spegne gia' il tracking, sia
+        # nel simulatore che su un mount reale, e il comando arrivava a
+        # mount gia' parcheggiato - dove viene rifiutato (property in
+        # Alert), o peggio raggiunge l'hardware nel bel mezzo del park.
+        self.__wait_for_slew_completion()
+
+    def __retrieve_status_park(self) -> bool:
+        prop = self._client.get_property(self._name, "MOUNT_PARK", timeout=0)
+        if not prop:
+            return False
+        for park in prop.get("items", []):
+            if park.get("name") == "PARKED":
+                return bool(park.get("value"))
         return False
-                           
+
+    def __unpark(self):
+        # un mount parcheggiato rifiuta qualunque comando di movimento
+        # (indigo_mount_simulator.c: MOUNT_PARK_PARKED_ITEM->sw.value mette
+        # MOUNT_EQUATORIAL_COORDINATES in stato ALERT "Mount is parked") -
+        # va sempre sparcheggiato esplicitamente prima di uno slew, come
+        # fanno già gli altri driver (vedi ascom_hub._unpark_and_track).
+        self.__call(
+                        {"newSwitchVector":
+                            {
+                                "device": self._name, "name": "MOUNT_PARK", "state": "Ok", "items":
+                                    [
+                                        { "name": "PARKED", "value": False},
+                                        { "name": "UNPARKED", "value": True}
+                                    ]
+                            }
+                        }
+                    )
+
     def flat(self, speed: TelescopeSpeed):
-        speed=speed        
+        speed=speed
+        self.__unpark()
         self.__move(
                     aa_coords=AltazimutalCoords(
                         alt=config.Config.getFloat("flat_alt", "telescope"),
@@ -163,44 +266,86 @@ class Telescope(TelescopeBase):
                     ),
                 speed=speed
                 )
-           
+
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
+            # indigo_mount_simulator.c riaccende il tracking in automatico
+            # non appena lo slew termina (se era spento quando lo slew è
+            # stato avviato): un OFF mandato subito, prima che lo slew sia
+            # concluso, verrebbe quindi sovrascritto dal driver stesso.
+            # Bisogna aspettare l'arrivo e solo allora spegnerlo di nuovo.
+            self.__wait_for_slew_completion()
             self.__call(
-                            {"newSwitchVector": 
-                                { 
-                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items": 
+                            {"newSwitchVector":
+                                {
+                                    "device": self._name, "name": "MOUNT_TRACKING", "state": "Ok", "items":
                                     [
                                         { "name": "ON", "value": False},
                                         { "name": "OFF", "value": True}
-                                    ] 
-                                } 
+                                    ]
+                                }
                             }
                         )
 
+    def __wait_for_slew_completion(self, timeout: float = 60.0):
+        deadline = time.monotonic() + timeout
+        # prima aspetta che INDIGO segnali di aver effettivamente preso in
+        # carico il comando (stato Busy): senza questo passo, la primissima
+        # lettura rischia di leggere ancora la cache con lo stato "Ok" di
+        # prima dell'invio, dato che il broadcast di INDIGO non è ancora
+        # arrivato (misurato: bastava meno di 1ms per leggere lo stato
+        # sbagliato). Se non diventa mai Busy (slew banale/nullo), si
+        # procede comunque oltre il timeout breve.
+        busy_deadline = min(deadline, time.monotonic() + 5.0)
+        while time.monotonic() < busy_deadline:
+            coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
+            if coords and coords.get("state") == "Busy":
+                break
+            time.sleep(0.1)
+
+        while time.monotonic() < deadline:
+            coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
+            if coords and coords.get("state") != "Busy":
+                return
+            time.sleep(0.3)
+        logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
+
     def retrieve(self) -> tuple:
-        root = self.__call(
-                            {"getProperties": 
-                                {
-                                    "version": 512,
-                                    "device": self._name
-                                }
-                            }
-                        )           
-        eq_coords = self.__retrieve_eq_coords(root)   
-        logger.debug(f"data received from json: {eq_coords}")  
-        speed = self.__retrieve_speed(root)
-        logger.debug(f"data received from json: {speed}")
-        aa_coords = self.__retrieve_aa_coords(root)
-        logger.debug(f"data received from json: {aa_coords}")
-        status = self._retrieve_status(aa_coords, root)
-        logger.debug(f"data received from json: {status}")
+        # In produzione l'osservatore usa il pannello INDIGO direttamente e
+        # deve ricordarsi di collegare il telescopio li' prima che crac lo
+        # usi: crac non forza piu' la connessione da solo (vedi __init__),
+        # quindi va rifiutata finche' il device non risulta gia' connesso
+        # lato INDIGO, con uno stato chiaro invece di un falso "connesso".
+        if not self._client.is_device_connected(self._name):
+            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+
+        # connect_device() è idempotente (no-op se già connesso su questa
+        # connessione fisica) ma va richiamato ad ogni ciclo, non solo in
+        # __init__: se il client si riconnette, la cache viene svuotata e
+        # senza questa richiamata qui il device non verrebbe più ri-connesso
+        # né le sue proprietà più richieste, restando bloccato per sempre.
+        # Il suo esito (True = riconnessione reale avvenuta) segnala anche
+        # che lo stato del device è stato perso lato indigo (es. il solo
+        # server INDIGO è stato riavviato mentre crac-server restava attivo)
+        # - le sincronizzazioni one-shot vanno quindi ripetute.
+        if self._client.connect_device(self._name):
+            self._geo_synced = False
+            self._park_position_synced = False
+        self.__sync_geographic_coordinates()
+        eq_coords = self.__retrieve_eq_coords()
+        logger.debug(f"data received from cache: {eq_coords}")
+        speed = self.__retrieve_speed()
+        logger.debug(f"data received from cache: {speed}")
+        aa_coords = self.__retrieve_aa_coords()
+        logger.debug(f"data received from cache: {aa_coords}")
+        status = self._retrieve_status(aa_coords)
+        logger.debug(f"data received from cache: {status}")
 
         return (eq_coords, aa_coords, speed, status)
-    
-    def _retrieve_status(self, aa_coords: AltazimutalCoords, root: Any) -> TelescopeStatus:
+
+    def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
         if not self._polling:
             return TelescopeStatus.DISCONNECTED
-        elif self.__retrieve_status_park(root):
+        elif self.__retrieve_status_park():
             return TelescopeStatus.PARKED
         elif self.__within_flat_alt_range(aa_coords.alt) and self.__within_flat_az_range(aa_coords.az):
             return TelescopeStatus.FLATTER
@@ -225,146 +370,75 @@ class Telescope(TelescopeBase):
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug(aa_coords)
         logger.debug(eq_coords)
-        self.queue_set_speed(speed)
+        # set_speed() va chiamato subito, non accodato con queue_set_speed():
+        # il driver controlla MOUNT_ON_COORDINATES_SET.TRACK nello stesso
+        # istante in cui riceve il nuovo MOUNT_EQUATORIAL_COORDINATES, non al
+        # prossimo ciclo di polling (fino a 5s dopo, troppo tardi).
+        self.set_speed(speed)
         self.__call(
-                    {"newNumberVector": 
-                        { 
-                            "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items": 
+                    {"newNumberVector":
+                        {
+                            "device": self._name, "name": "MOUNT_EQUATORIAL_COORDINATES", "state": "Ok", "items":
                             [
-                                { "name": "DEC", "value": eq_coords.dec}, 
-                                { "name": "RA", "value": eq_coords.ra} 
-                            ] 
-                        } 
+                                { "name": "DEC", "value": eq_coords.dec},
+                                { "name": "RA", "value": eq_coords.ra}
+                            ]
+                        }
                     }
-                    )  
-    def __retrieve_speed(self, root):
-        seen = set()    
-        #status_mount_speed=[]    
-        #status_mount_track=[]
-        for item in root:
-            if "defSwitchVector" in item:
-                vector = item["defSwitchVector"]
-                if vector["name"] == "MOUNT_TRACKING":
-                    for track in vector["items"]:
-                        key = (vector["name"], vector['state'], track["name"], track["value"])
-                        if key not in seen:
-                            seen.add(key)
-                            if track['name'] == "ON":
-                                if track["value"] == True:
-                                    status_mount_track = 'ON'
-                                else:
-                                    status_mount_track = 'OFF'    
-                                
-            if "defNumberVector" in item:
-                vector = item["defNumberVector"]
-                if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
-                    for coord in vector["items"]:
-                        key = (vector["name"], vector['state'], coord["name"], coord["value"])
-                        if key not in seen:
-                            seen.add(key)
-                            status_mount_speed= vector['state']
-                                                        
-        if status_mount_speed == "Ok" and status_mount_track == 'ON':
+                    )
+
+    def __retrieve_speed(self) -> TelescopeSpeed:
+        tracking = self._client.get_property(self._name, "MOUNT_TRACKING", timeout=0)
+        coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
+
+        status_mount_track = None
+        if tracking:
+            for track in tracking.get("items", []):
+                if track.get("name") == "ON":
+                    status_mount_track = "ON" if track.get("value") else "OFF"
+
+        status_mount_speed = coords.get("state") if coords else None
+
+        if status_mount_speed == "Ok" and status_mount_track == "ON":
             return TelescopeSpeed.SPEED_TRACKING
-        if status_mount_speed == "Idle" and status_mount_track == 'OFF':
+        # indigo_mount_simulator.c non usa mai lo stato "Idle" per
+        # MOUNT_EQUATORIAL_COORDINATES (solo "Ok"/"Busy"/"Alert"): a riposo
+        # con tracking spento risulta comunque "Ok", non "Idle" - con quel
+        # confronto SPEED_NOT_TRACKING non veniva mai rilevata, cadendo
+        # sempre su SPEED_ERROR.
+        if status_mount_speed == "Ok" and status_mount_track == "OFF":
             return TelescopeSpeed.SPEED_NOT_TRACKING
         if status_mount_speed == "Busy":
             return TelescopeSpeed.SPEED_SLEWING
-        else:
-            return TelescopeSpeed.SPEED_ERROR
+        return TelescopeSpeed.SPEED_ERROR
 
-                           
-    def __retrieve_eq_coords(self, root):
+    def __retrieve_eq_coords(self) -> EquatorialCoords:
+        prop = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES")
         ra, dec = None, None
-        seen = set()
-        for item in root:            
-            if "defNumberVector" in item:
-                vector = item["defNumberVector"]
-                if vector["name"] == "MOUNT_EQUATORIAL_COORDINATES":
-                    for coord in vector["items"]:
-                        key = (vector["name"], vector['state'], coord["name"], coord["value"])
-                        if key not in seen:
-                            seen.add(key)
-                            if coord["name"] == "RA":
-                                ra = round(float(coord['value']),5)
-                            elif coord["name"] == "DEC":
-                                dec = round(float(coord['value']),5)
-                            
+        if prop:
+            for coord in prop.get("items", []):
+                if coord.get("name") == "RA":
+                    ra = round(float(coord["value"]), 5)
+                elif coord.get("name") == "DEC":
+                    dec = round(float(coord["value"]), 5)
+
         if ra is not None and dec is not None:
             return EquatorialCoords(ra=ra, dec=dec)
-        else:
-            raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
+        raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
-    def __retrieve_aa_coords(self, root):
-        ra, dec = None, None
-        seen = set()
-        for item in root:            
-            if "defNumberVector" in item:
-                vector = item["defNumberVector"]
-                if vector["name"] == "MOUNT_HORIZONTAL_COORDINATES":
-                    for coord in vector["items"]:
-                        key = (vector["name"], vector['state'], coord["name"], coord["value"])
-                        if key not in seen:
-                            seen.add(key)
-                            if coord["name"] == "ALT":
-                                alt = round(float(coord['value']),5)
-                            elif coord["name"] == "AZ":
-                                az = round(float(coord['value']),5)
-                                
+    def __retrieve_aa_coords(self) -> AltazimutalCoords:
+        prop = self._client.get_property(self._name, "MOUNT_HORIZONTAL_COORDINATES")
+        alt, az = None, None
+        if prop:
+            for coord in prop.get("items", []):
+                if coord.get("name") == "ALT":
+                    alt = round(float(coord["value"]), 5)
+                elif coord.get("name") == "AZ":
+                    az = round(float(coord["value"]), 5)
+
         if alt is not None and az is not None:
             return AltazimutalCoords(alt=alt, az=az)
-        else:
-            raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
- 
-    def __call(self, script):
-        request_json = json.dumps(script)
-        self.s.settimeout(1)  # Set a timeout for the socket  
-        responses=[]
+        raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
 
-        def send_and_receive(request):
-            response=b""              
-            try:
-                self.s.sendall(request)
-                time.sleep(0.4)
-                while True:
-                    try:
-                        part = self.s.recv(2500000)
-                        if not part:
-                            break
-                        response +=part
-
-                    except socket.timeout:
-                        logger.debug("Socket timeout, stopping reception.")
-                        break
-
-                    return response        
-            except Exception as e:
-                if isinstance(e, socket.error) and e.errno == errno.EPIPE:
-                    logger.error(f"Si è verificato un errore: {e}")
-            
-        response_with_newline = send_and_receive(request_json.encode('utf-8') + b'\n')
-        if response_with_newline:
-            responses.append(response_with_newline.decode('utf-8'))
-
-
-        # Send request without newline
-        response_without_newline = send_and_receive(request_json.encode('utf-8'))
-        if response_without_newline:
-            responses.append(response_without_newline.decode('utf-8'))
-
-        # Combine responses and process them
-        combined_response = "\n".join(responses)  
-
-        # Use a regex to find and separate all complete JSON objects in the combined response
-        json_strings = re.findall(r'\{.*?\}(?=\{|\Z)', combined_response)
-
-        # Convert each JSON string to a Python object
-        response_objects = []
-        for json_str in json_strings:
-            try:
-                json_obj = json.loads(json_str)
-                response_objects.append(json_obj)
-            except json.JSONDecodeError as e:
-                logger.error(f"Errore nella decodifica del JSON: {e}")
-       
-        return response_objects
+    def __call(self, script) -> bool:
+        return self._client.send(script)

@@ -102,7 +102,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/f4/14/33067650d3be98987
 [[package]]
 name = "crac-protobuf"
 version = "0.1.21.0"
-source = { git = "https://github.com/ara-astronomia/crac-protobuf?rev=cover-mirror#5ed9366511cbcbfd09077a33df5aac4c7c3d5b30" }
+source = { git = "https://github.com/ara-astronomia/crac-protobuf?rev=main#c6465a5bb20e868a2c56c35747be7dfe5b101201" }
 
 [[package]]
 name = "crac-server"
@@ -132,7 +132,7 @@ requires-dist = [
     { name = "astropy", specifier = ">=6.0.0" },
     { name = "autopep8", marker = "extra == 'dev'", specifier = "~=1.6.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = "~=6.3.2" },
-    { name = "crac-protobuf", git = "https://github.com/ara-astronomia/crac-protobuf?rev=cover-mirror" },
+    { name = "crac-protobuf", git = "https://github.com/ara-astronomia/crac-protobuf?rev=main" },
     { name = "gpiozero", specifier = "~=2.0.1" },
     { name = "grpcio-tools" },
     { name = "lgpio", marker = "sys_platform == 'linux'", specifier = "~=0.2.2.0" },

@@ -1,0 +1,62 @@
+name: Deploy su Pi5
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag o commit da mettere in produzione"
+        required: true
+        default: "main"
+
+jobs:
+  deploy:
+    # Runner ospitato da GitHub: raggiunge il Pi con un ProxyJump attraverso
+    # cloud.ara (crac.server.ara.local e' su rete privata, non raggiungibile
+    # da fuori). Stesso pattern di alkcxy/home/.github/workflows/deploy.yml:
+    # due chiavi dedicate come secret, nessuna riusata dal bastion stesso.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Valida il ref (finisce in un comando shell remoto)
+        run: |
+          ref="${{ inputs.ref }}"
+          [[ "$ref" =~ ^[A-Za-z0-9_./-]+$ ]] || { echo "ref non valido: $ref"; exit 1; }
+
+      - name: Setup SSH (ProxyJump cloud.ara -> crac.server.ara.local)
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.CLOUD_ARA_SSH_KEY }}" > ~/.ssh/cloud_ara
+          printf '%s\n' "${{ secrets.CRAC_SERVER_SSH_KEY }}" > ~/.ssh/crac_server
+          chmod 600 ~/.ssh/cloud_ara ~/.ssh/crac_server
+          cat > ~/.ssh/config <<'EOF'
+          Host cloud.ara
+            HostName 185.78.18.95
+            User indigo
+            IdentityFile ~/.ssh/cloud_ara
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+
+          Host crac.server.ara.local
+            HostName 192.168.178.22
+            User pi
+            IdentityFile ~/.ssh/crac_server
+            ProxyJump cloud.ara
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+          EOF
+
+      - name: Deploy (git checkout + uv sync + unit file + restart)
+        run: |
+          ssh crac.server.ara.local "
+            set -e
+            cd /home/pi/crac-server
+            git fetch origin ${{ inputs.ref }}
+            git checkout -f ${{ inputs.ref }}
+            git reset --hard origin/${{ inputs.ref }} 2>/dev/null || git reset --hard ${{ inputs.ref }}
+            /home/pi/.local/bin/uv sync --no-dev
+            if ! sudo cmp -s deploy/crac-server.service /etc/systemd/system/crac-server.service; then
+              sudo cp deploy/crac-server.service /etc/systemd/system/crac-server.service
+              sudo systemctl daemon-reload
+            fi
+            sudo systemctl restart crac-server
+          "

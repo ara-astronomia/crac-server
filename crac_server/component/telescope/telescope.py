@@ -29,6 +29,11 @@ class Telescope(ABC):
     def __init__(self, hostname: str = None, port: int = None) -> None:  # type: ignore
         self._hostname = hostname
         self._port = port
+        # I driver che parlano con un client condiviso a connessione
+        # persistente (es. quello indigo, vedi indigo_client.py) non hanno
+        # bisogno che il ciclo di polling apra/chiuda un socket grezzo ad
+        # ogni giro.
+        self._uses_raw_socket = True
         self._polling = False
         self._jobs = deque()
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
@@ -76,14 +81,24 @@ class Telescope(ABC):
     def queue_set_speed(self, speed: TelescopeSpeed):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
             speed = TelescopeSpeed.SPEED_TRACKING
+        # crac-cloud fa polling con SetAction(CHECK_TELESCOPE) più spesso del
+        # ciclo interno di polling del telescopio: senza deduplica, ogni
+        # richiesta che vede ancora lo speed "vecchio" (non ancora
+        # aggiornato dal job precedente, non ancora eseguito) accoda un
+        # altro job identico, facendo crescere la coda senza limite.
+        if any(job.get("action") == self.set_speed and job.get("speed") == speed for job in self._jobs):
+            return
         self._jobs.append({"action": self.set_speed, "speed": speed})
     
     def queue_park(self):
+        # Park ignora sempre la luce flat: un mount nativamente parcheggiato
+        # rifiuta comunque qualunque cambio di tracking (vedi indigo driver),
+        # quindi tenere il tracking acceso in park non è nemmeno ottenibile.
         speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
         self._jobs.append({"action": self.park, "speed": speed})
 
-    def queue_flat(self):
-        speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
+    def queue_flat(self, keep_tracking: bool = False):
+        speed = TelescopeSpeed.SPEED_TRACKING if keep_tracking or not self.has_tracking_off_capability else TelescopeSpeed.SPEED_NOT_TRACKING
         self._jobs.append({"action": self.flat, "speed": speed})
     
     @property
@@ -138,7 +153,7 @@ class Telescope(ABC):
         """
 
         while self._polling:
-            if not self.__open_connection():
+            if self._uses_raw_socket and not self.__open_connection():
                 self.status = TelescopeStatus.LOST
                 continue
 
@@ -155,11 +170,13 @@ class Telescope(ABC):
                 self.status = TelescopeStatus.ERROR
                 continue
             finally:
-                self.__disconnect()
+                if self._uses_raw_socket:
+                    self.__disconnect()
                 sleep(config.Config.getFloat("polling_interval", "telescope"))
         else:
             self._reset()
-            self.__disconnect()
+            if self._uses_raw_socket:
+                self.__disconnect()
 
     def _reset(self):
         self.status = TelescopeStatus.DISCONNECTED
