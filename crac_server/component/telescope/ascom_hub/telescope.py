@@ -50,8 +50,7 @@ class Telescope(TelescopeBase):
         speed = self._retrieve_speed()
         status = self._retrieve_status(aa_coords)
         indicators = (eq_coords, aa_coords, speed, status)
-        logger.debug("those are the indicators")
-        logger.debug(indicators)
+        logger.debug("indicators: %s", indicators)
         return indicators
 
     def _unpark_and_track(self):

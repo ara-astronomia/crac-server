@@ -368,8 +368,8 @@ class Telescope(TelescopeBase):
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
 
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
-        logger.debug(aa_coords)
-        logger.debug(eq_coords)
+        logger.debug("aa_coords: %s", aa_coords)
+        logger.debug("eq_coords: %s", eq_coords)
         # set_speed() va chiamato subito, non accodato con queue_set_speed():
         # il driver controlla MOUNT_ON_COORDINATES_SET.TRACK nello stesso
         # istante in cui riceve il nuovo MOUNT_EQUATORIAL_COORDINATES, non al
