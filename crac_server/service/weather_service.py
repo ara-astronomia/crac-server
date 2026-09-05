@@ -39,7 +39,8 @@ class WeatherService(WeatherServicer):
     async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         try:
             response = self.weather_converter.convert(WEATHER)
-        except:
+        except Exception:
+            logger.error("Lettura del meteo fallita: stato riportato come UNSPECIFIED", exc_info=1)
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)
         logger.debug("weather response")
         logger.debug(response)
