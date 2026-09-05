@@ -1,9 +1,12 @@
 import logging
 import logging.config
 import os
+from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_CONF_PATH = os.path.join(BASE_DIR, 'logging.conf')
+load_dotenv()
 logging.config.fileConfig(LOG_CONF_PATH)
+logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
