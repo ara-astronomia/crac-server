@@ -24,8 +24,8 @@ class RoofControl():
         if self.is_blocked:
             await self.close()
             logger.error(
-                "Apertura del tetto bloccata dopo %s secondi: motore=%s, "
-                "finecorsa aperto=%s, finecorsa chiuso=%s",
+                "Roof opening blocked after %s seconds: motor=%s, "
+                "open limit switch=%s, closed limit switch=%s",
                 self.timeout, self.motor.value,
                 self.roof_open_switch.is_active, self.roof_closed_switch.is_active
             )
@@ -37,8 +37,8 @@ class RoofControl():
             self.is_blocked = not self.roof_closed_switch.wait_for_active(self.timeout)
             if self.is_blocked:
                 logger.error(
-                    "Chiusura del tetto bloccata dopo %s secondi: motore=%s, "
-                    "finecorsa chiuso=%s, finecorsa aperto=%s",
+                    "Roof closing blocked after %s seconds: motor=%s, "
+                    "closed limit switch=%s, open limit switch=%s",
                     self.timeout, self.motor.value,
                     self.roof_closed_switch.is_active, self.roof_open_switch.is_active
                 )

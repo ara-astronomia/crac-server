@@ -133,7 +133,7 @@ class Weather:
         try:
             return float(value)
         except ValueError:
-            logger.warning("Valore meteo non convertibile in float: %r, uso 0.0", value)
+            logger.warning("Weather value not convertible to float: %r, falling back to 0.0", value)
             return 0.0
         
         
