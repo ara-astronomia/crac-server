@@ -80,7 +80,7 @@ class UpsService(UpsServicer):
                 )
             )
         response.status = self.calculate_status(UPS, response.charts)
-        logger.info(f"ups response is {response}")
+        logger.debug(f"ups response is {response}")
         return response
 
     def timestamp_or_none(self, updated_at: Union[datetime, None]) -> int:
@@ -101,6 +101,6 @@ class UpsService(UpsServicer):
                 status = UpsStatus.UPS_STATUS_WARNING
             if status < UpsStatus.UPS_STATUS_DANGER and chart.chart.status == ChartStatus.CHART_STATUS_DANGER:
                 status = UpsStatus.UPS_STATUS_DANGER
-            logger.info(f"now ups status is: {status}")
+            logger.debug(f"now ups status is: {status}")
         
         return status

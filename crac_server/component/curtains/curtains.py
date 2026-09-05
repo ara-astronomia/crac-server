@@ -155,7 +155,7 @@ class Curtain:
         """ Read the status of the curtain based on the pin of motor, encoder and switches """
 
         status = CurtainStatus.CURTAIN_ERROR
-        logger.info(f"Curtain: {self._orientation}, curtain_closed.is_active: {self.curtain_closed.is_active}, curtain_open.is_active: {self.curtain_open.is_active}, motor.value: {self.motor.value}")
+        logger.debug(f"Curtain: {self._orientation}, curtain_closed.is_active: {self.curtain_closed.is_active}, curtain_open.is_active: {self.curtain_open.is_active}, motor.value: {self.motor.value}")
         if self.__is_danger__():
             status = CurtainStatus.CURTAIN_DANGER
         elif self.__is_disabled__():
@@ -166,10 +166,10 @@ class Curtain:
             status = CurtainStatus.CURTAIN_DISABLING if self.to_disable else CurtainStatus.CURTAIN_CLOSING
         elif self.__is_open__():
             status = CurtainStatus.CURTAIN_OPENED
-            logger.info("Curtain: %s, curtain open is active: %s, curtain closed is active: %s, motor value: %s", self._orientation, self.curtain_open.is_active, self.curtain_closed.is_active, self.motor.value)
+            logger.debug("Curtain: %s, curtain open is active: %s, curtain closed is active: %s, motor value: %s", self._orientation, self.curtain_open.is_active, self.curtain_closed.is_active, self.motor.value)
         elif self.__is_closed__():
             status = CurtainStatus.CURTAIN_CLOSED
-            logger.info("Curtain: %s, curtain closed is active: %s, curtain open is active: %s, motor value: %s", self._orientation, self.curtain_closed.is_active, self.curtain_open.is_active, self.motor.value)
+            logger.debug("Curtain: %s, curtain closed is active: %s, curtain open is active: %s, motor value: %s", self._orientation, self.curtain_closed.is_active, self.curtain_open.is_active, self.motor.value)
         elif self.__is_stopped__():
             status = CurtainStatus.CURTAIN_STOPPED
 

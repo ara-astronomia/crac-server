@@ -15,7 +15,7 @@ class CoverMirrorControl():
         self._client.connect_device(self._name)
 
     async def open(self):
-        logger.debug(f"Opening mirror cover: {self._name}")
+        logger.info(f"Opening mirror cover: {self._name}")
         return self._client.send({
             "newSwitchVector": {
                 "device": self._name,
@@ -28,7 +28,7 @@ class CoverMirrorControl():
         })
 
     async def close(self):
-        logger.debug(f"Closing mirror cover: {self._name}")
+        logger.info(f"Closing mirror cover: {self._name}")
         return self._client.send({
             "newSwitchVector": {
                 "device": self._name,

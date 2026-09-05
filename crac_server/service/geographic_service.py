@@ -23,7 +23,7 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
                 # Calcolo sessagesimale
                 lat = gradi_lat + (minuti_lat / 60.0)
             except ValueError:
-                logger.error(f"ERRORE: Impossibile convertire Latitudine in float: {lat_str}")
+                logger.error(f"Error: cannot convert latitude to float: {lat_str}")
 
         # 3. Conversione Longitudine
         match_lon = re.search(r'(\d+)d([\d.]+)m', lon_str)
@@ -34,13 +34,13 @@ class GeographicServicer(geographic_pb2_grpc.GeographicServiceServicer):
                 # Calcolo sessagesimale
                 lon = gradi_lon + (minuti_lon / 60.0)
             except ValueError:
-                logger.error(f"ERRORE: Impossibile convertire Longitudine in float: {lon_str}")
+                logger.error(f"Error: cannot convert longitude to float: {lon_str}")
 
         # 4. Conversione Elevazione
         try:
             elev = float(elev_str)
         except ValueError:
-            logger.error(f"ERRORE: Impossibile convertire Elevazione in float: {elev_str}")
+            logger.error(f"Error: cannot convert elevation to float: {elev_str}")
             elev = 0.0
         logger.debug(f"Geographic info - Lat: {lat}, Lon: {lon}, Elev: {elev}")
         # 2. Popola e restituisci il messaggio Protobuf

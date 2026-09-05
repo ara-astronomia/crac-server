@@ -164,8 +164,8 @@ class Telescope(TelescopeBase):
             """
         )
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
-        logger.debug(aa_coords)
-        logger.debug(eq_coords)
+        logger.debug("aa_coords: %s", aa_coords)
+        logger.debug("eq_coords: %s", eq_coords)
         self.queue_set_speed(speed)
         self.__call(
             f"""
