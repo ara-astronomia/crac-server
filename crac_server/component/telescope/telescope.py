@@ -161,6 +161,7 @@ class Telescope(ABC):
                 if len(self._jobs) > 0:
                     logger.debug(f"there are {len(self._jobs)} jobs: {self._jobs}")
                     job = self._jobs.popleft()
+                    logger.info("Running job %s on the telescope", job['action'].__name__)
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 

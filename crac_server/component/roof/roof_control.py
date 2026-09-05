@@ -23,15 +23,25 @@ class RoofControl():
             self.is_blocked = not self.roof_open_switch.wait_for_active(self.timeout)
         if self.is_blocked:
             await self.close()
-            logger.info(self.motor.value)
-            logger.info(self.roof_open_switch.is_active)
-            logger.info(self.roof_closed_switch.is_active)
+            logger.error(
+                "Roof opening blocked after %s seconds: motor=%s, "
+                "open limit switch=%s, closed limit switch=%s",
+                self.timeout, self.motor.value,
+                self.roof_open_switch.is_active, self.roof_closed_switch.is_active
+            )
         return not self.is_blocked
 
     async def close(self):
         async with self.lock:
             self.motor.off()
             self.is_blocked = not self.roof_closed_switch.wait_for_active(self.timeout)
+            if self.is_blocked:
+                logger.error(
+                    "Roof closing blocked after %s seconds: motor=%s, "
+                    "closed limit switch=%s, open limit switch=%s",
+                    self.timeout, self.motor.value,
+                    self.roof_closed_switch.is_active, self.roof_open_switch.is_active
+                )
             return not self.is_blocked
 
     def get_status(self) -> RoofStatus:
