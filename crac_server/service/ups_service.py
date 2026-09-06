@@ -29,8 +29,12 @@ class UpsService(UpsServicer):
             updated_at=self.timestamp_or_none(datetime.now()),
             interval=UPS.time_expired
         )
-        for device in Config.getValue("ups_list", "ups").split(","):            
-            ups = UPS.status_for(device)
+        for device in Config.getValue("ups_list", "ups").split(","):
+            try:
+                ups = UPS.status_for(device)
+            except Exception as e:
+                logger.error(f"Impossibile leggere l'UPS {device}: {e}")
+                continue
             response.devices.append(device)
             response.charts.append(
                 UpsChart(
