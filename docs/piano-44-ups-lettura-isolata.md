@@ -70,9 +70,10 @@ stack `crac-test-stack` per implementare né per validare via unit test.
   fisso di device/chart. Nessuna modifica richiesta per il bug fix; un
   eventuale indicatore esplicito "UPS offline" in UI sarebbe una feature a
   parte, fuori dallo scope di questa issue.
-- **crac-test-stack**: nessuna modifica al `docker-compose.yml` — vedi punto 3
-  per il limite del simulatore (non testabile manualmente end-to-end, non
-  bloccante perché la verifica passa da unit test).
+- **crac-test-stack**: nessuna modifica al `docker-compose.yml`. Aggiunto però
+  un flag `fail = true` per device in `ups.ini` del simulatore (vedi punto 6),
+  che rende possibile la verifica manuale end-to-end nello stack senza
+  toccare hardware reale — ripensato rispetto alla valutazione iniziale.
 
 ## 6. Strategia di test
 
@@ -89,4 +90,26 @@ stesso pattern (mock di `UPS` con `unittest.mock`), casi:
 4. Tutti i device falliscono → `response.devices` vuoto, `response.charts`
    vuoto, `status == UPS_STATUS_UNSPECIFIED`.
 
-Nessun test manuale nello stack Docker necessario (vedi punto 3).
+Inoltre, `crac_server/component/ups/simulator/ups.py::status_for` ora solleva
+`ConnectionError` per un device se la sua sezione in `ups.ini` ha
+`fail = true` — coperto da `tests/component/ups/simulator/test_ups.py` e
+usato per il test manuale end-to-end.
+
+### Test plan manuale (eseguito su crac-test-stack, branch fix/44-ups-read-isolation)
+
+1. Setup: `docker compose build crac-server && docker compose up -d` in
+   `crac-test-stack` (build da sorgente locale del branch del fix).
+2. Azione: `curl http://localhost:8000/ups/status`.
+   Atteso: entrambi i device (`apc-3000`, `cyberpower`) presenti, 4 chart,
+   `status: UPS_STATUS_NORMAL`. ✅ verificato.
+3. Azione: nel container `crac-server`, settare `fail = true` nella sezione
+   `[apc-3000]` di `/app/crac_server/component/ups/simulator/ups.ini`, poi
+   ripetere `curl http://localhost:8000/ups/status`.
+   Atteso: `devices` contiene solo `cyberpower`, 2 chart (solo cyberpower),
+   `status` resta `UPS_STATUS_NORMAL` (non un errore/500), log di
+   `crac-server` contiene una riga `ERROR ... Impossibile leggere l'UPS
+   apc-3000: ...`. ✅ verificato.
+4. Azione: rimuovere `ups.ini` dal container e ripetere il curl.
+   Atteso: entrambi i device tornano presenti (il simulatore rigenera i
+   default). ✅ verificato, stack fermato con `docker compose down` a fine
+   test.
