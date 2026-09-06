@@ -35,9 +35,9 @@ class Ups(UpsBase):
 
         # 3. Estrai i dati...
         return {
-            'input_voltage': raw_data.get('input.voltage', '0.0'),
-            'battery_charge': raw_data.get('battery.charge', '0'),
-            'ups_status': raw_data.get('ups.status', 'UNKNOWN'),
+            'input_voltage': raw_data.get('input.voltage'),
+            'battery_charge': raw_data.get('battery.charge'),
+            'ups_status': raw_data.get('ups.status'),
             'output_current': raw_data.get('output.current')
         }
 

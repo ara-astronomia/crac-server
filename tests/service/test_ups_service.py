@@ -61,3 +61,31 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual([], list(response.devices))
         self.assertEqual(0, len(response.charts))
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+
+    def test_get_status_skips_battery_chart_when_metric_unavailable(self):
+        UPS.status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None, "ups_status": "OL"})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+        urns = [chart.chart.urn for chart in response.charts]
+        self.assertTrue(all("battery" not in urn for urn in urns))
+        self.assertEqual(2, len(response.charts))
+
+    def test_get_status_skips_voltage_chart_when_metric_unavailable(self):
+        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80", "ups_status": "OL"})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+        urns = [chart.chart.urn for chart in response.charts]
+        self.assertTrue(all("voltage" not in urn for urn in urns))
+        self.assertEqual(2, len(response.charts))
+
+    def test_get_status_device_present_with_no_charts_when_all_metrics_unavailable(self):
+        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "ups_status": None})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+        self.assertEqual(0, len(response.charts))

@@ -36,53 +36,55 @@ class UpsService(UpsServicer):
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
                 continue
             response.devices.append(device)
-            response.charts.append(
-                UpsChart(
-                    chart = build_chart(
-                        value=float(ups['battery_charge']),
-                        title="Batteria",
-                        urn=f"ups.{device}.chart.battery",
-                        min=0,
-                        max=100,
-                        unit_of_measurement="%",
-                        range_normal=({
-                            "upper_bound": Config.getFloat("upper_bound", "battery_ok"),
-                            "lower_bound": Config.getFloat("lower_bound", "battery_ok"),
-                        },),
-                        range_warn=({
-                            "upper_bound": Config.getFloat("upper_bound", "battery_warning"),
-                            "lower_bound": Config.getFloat("lower_bound", "battery_warning"),
-                        },),
-                        range_danger=({
-                            "upper_bound": Config.getFloat("upper_bound", "battery_danger"),
-                            "lower_bound": Config.getFloat("lower_bound", "battery_danger"),
-                        },)
+            if ups['battery_charge'] is not None:
+                response.charts.append(
+                    UpsChart(
+                        chart = build_chart(
+                            value=float(ups['battery_charge']),
+                            title="Batteria",
+                            urn=f"ups.{device}.chart.battery",
+                            min=0,
+                            max=100,
+                            unit_of_measurement="%",
+                            range_normal=({
+                                "upper_bound": Config.getFloat("upper_bound", "battery_ok"),
+                                "lower_bound": Config.getFloat("lower_bound", "battery_ok"),
+                            },),
+                            range_warn=({
+                                "upper_bound": Config.getFloat("upper_bound", "battery_warning"),
+                                "lower_bound": Config.getFloat("lower_bound", "battery_warning"),
+                            },),
+                            range_danger=({
+                                "upper_bound": Config.getFloat("upper_bound", "battery_danger"),
+                                "lower_bound": Config.getFloat("lower_bound", "battery_danger"),
+                            },)
+                        )
                     )
                 )
-            )
-            response.charts.append(
-                UpsChart(
-                    chart = build_chart(
-                        value=float(ups['input_voltage']),
-                        title="Batteria",
-                        urn=f"ups.{device}.chart.voltage",
-                        min=Config.getFloat("lower_bound", "voltage_danger_lower"),
-                        max=Config.getFloat("upper_bound", "voltage_danger_upper"),
-                        unit_of_measurement="V",
-                        range_normal=({
-                            "upper_bound": Config.getFloat("upper_bound", "voltage_ok"),
-                            "lower_bound": Config.getFloat("lower_bound", "voltage_ok"),
-                        },),
-                        range_danger=({
-                            "upper_bound": Config.getFloat("upper_bound", "voltage_danger_upper"),
-                            "lower_bound": Config.getFloat("lower_bound", "voltage_danger_upper"),
-                        }, {
-                            "upper_bound": Config.getFloat("upper_bound", "voltage_danger_lower"),
-                            "lower_bound": Config.getFloat("lower_bound", "voltage_danger_lower"),
-                        },)
+            if ups['input_voltage'] is not None:
+                response.charts.append(
+                    UpsChart(
+                        chart = build_chart(
+                            value=float(ups['input_voltage']),
+                            title="Batteria",
+                            urn=f"ups.{device}.chart.voltage",
+                            min=Config.getFloat("lower_bound", "voltage_danger_lower"),
+                            max=Config.getFloat("upper_bound", "voltage_danger_upper"),
+                            unit_of_measurement="V",
+                            range_normal=({
+                                "upper_bound": Config.getFloat("upper_bound", "voltage_ok"),
+                                "lower_bound": Config.getFloat("lower_bound", "voltage_ok"),
+                            },),
+                            range_danger=({
+                                "upper_bound": Config.getFloat("upper_bound", "voltage_danger_upper"),
+                                "lower_bound": Config.getFloat("lower_bound", "voltage_danger_upper"),
+                            }, {
+                                "upper_bound": Config.getFloat("upper_bound", "voltage_danger_lower"),
+                                "lower_bound": Config.getFloat("lower_bound", "voltage_danger_lower"),
+                            },)
+                        )
                     )
                 )
-            )
         response.status = self.calculate_status(UPS, response.charts)
         logger.debug(f"ups response is {response}")
         return response
