@@ -26,6 +26,10 @@ class TestSimulatorUps(unittest.TestCase):
         result = self.ups.status_for("apc-3000")
         self.assertEqual("OL", result["ups_status"])
 
+    def test_status_for_includes_output_current(self):
+        result = self.ups.status_for("apc-3000")
+        self.assertIn("output_current", result)
+
     def test_status_for_raises_when_fail_flag_set(self):
         config = ConfigParser()
         config.read(self.ups_path)

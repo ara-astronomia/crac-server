@@ -37,7 +37,8 @@ class Ups(UpsBase):
         return {
             'input_voltage': raw_data.get('input.voltage', '0.0'),
             'battery_charge': raw_data.get('battery.charge', '0'),
-            'ups_status': raw_data.get('ups.status', 'UNKNOWN')
+            'ups_status': raw_data.get('ups.status', 'UNKNOWN'),
+            'output_current': raw_data.get('output.current')
         }
 
     def list_ups(self):

@@ -16,10 +16,12 @@ class Ups(UpsBase):
         voltage = ups_config.get(device, "input.voltage", fallback='220')
         battery = ups_config.get(device, "battery.charge", fallback='100')
         ups_status = ups_config.get(device, "ups.status", fallback='OL')
+        current = ups_config.get(device, "output.current", fallback='0.00')
         ups_config[device] = {
             "input.voltage": voltage,
             "battery.charge": battery,
-            "ups.status": ups_status
+            "ups.status": ups_status,
+            "output.current": current
         }
         
         with open(ups_path, 'w') as ups_file:
@@ -73,6 +75,7 @@ class Ups(UpsBase):
             'battery.voltage.nominal': '48.0', 
             'battery.charge.low': "10", 
             'ups.mfr.date': '2009/09/16', 
-            'ups.serial': 'JS0938004696', 
-            'ups_status': ups_config.get(device, "ups.status", fallback='OL')
+            'ups.serial': 'JS0938004696',
+            'ups_status': ups_config.get(device, "ups.status", fallback='OL'),
+            'output_current': current
         }
