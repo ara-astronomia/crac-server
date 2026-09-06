@@ -19,7 +19,7 @@ class TestNutUps(unittest.TestCase):
         }
         PyNUTClientMock.return_value = client
 
-        result = self.ups.status_for("apc-3000")
+        result = self.ups._read("apc-3000")
 
         self.assertEqual("220.0", result["input_voltage"])
         self.assertEqual("90", result["battery_charge"])
@@ -32,7 +32,7 @@ class TestNutUps(unittest.TestCase):
         client.list_vars.return_value = {}
         PyNUTClientMock.return_value = client
 
-        result = self.ups.status_for("apc-3000")
+        result = self.ups._read("apc-3000")
 
         self.assertIsNone(result["input_voltage"])
         self.assertIsNone(result["battery_charge"])

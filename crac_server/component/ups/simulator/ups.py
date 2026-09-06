@@ -7,7 +7,7 @@ class Ups(UpsBase):
     def __init__(self, host: str, login: str, password: str, time_expired: int) -> None:
         super().__init__(host, login, password, time_expired)
     
-    def status_for(self, device: str) -> dict[str,str]:
+    def _read(self, device: str) -> dict[str,str]:
         ups_path = os.path.join(os.path.dirname(__file__), "ups.ini")
         ups_config = ConfigParser()
         ups_config.read(ups_path)

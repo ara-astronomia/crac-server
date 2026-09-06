@@ -1,4 +1,3 @@
-import os
 import unittest
 from unittest.mock import MagicMock
 from crac_protobuf.ups_pb2 import UpsStatus
@@ -14,7 +13,6 @@ class TestUpsService(unittest.TestCase):
 
     def tearDown(self):
         UPS.status_for = self._original_status_for
-        os.environ.pop("UPS_DISABLED_METRICS", None)
 
     def _ok_reading(self):
         return {"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": "3"}
@@ -101,13 +99,3 @@ class TestUpsService(unittest.TestCase):
 
         self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
         self.assertEqual(0, len(response.charts))
-
-    def test_get_status_respects_disabled_metrics_config(self):
-        os.environ["UPS_DISABLED_METRICS"] = "ampere,battery"
-        UPS.status_for = MagicMock(side_effect=lambda device: self._ok_reading())
-
-        response = self.ups_service.GetStatus(None, None)
-
-        urns = [chart.chart.urn for chart in response.charts]
-        self.assertTrue(all("chart.current" not in urn and "chart.battery" not in urn for urn in urns))
-        self.assertEqual(2, len(response.charts))

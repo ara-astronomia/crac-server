@@ -22,15 +22,15 @@ class TestSimulatorUps(unittest.TestCase):
         elif os.path.exists(self.ups_path):
             os.remove(self.ups_path)
 
-    def test_status_for_returns_defaults_when_no_fail_flag(self):
-        result = self.ups.status_for("apc-3000")
+    def test_read_returns_defaults_when_no_fail_flag(self):
+        result = self.ups._read("apc-3000")
         self.assertEqual("OL", result["ups_status"])
 
-    def test_status_for_includes_output_current(self):
-        result = self.ups.status_for("apc-3000")
+    def test_read_includes_output_current(self):
+        result = self.ups._read("apc-3000")
         self.assertIn("output_current", result)
 
-    def test_status_for_raises_when_fail_flag_set(self):
+    def test_read_raises_when_fail_flag_set(self):
         config = ConfigParser()
         config.read(self.ups_path)
         if not config.has_section("apc-3000"):
@@ -40,4 +40,4 @@ class TestSimulatorUps(unittest.TestCase):
             config.write(f)
 
         with self.assertRaises(ConnectionError):
-            self.ups.status_for("apc-3000")
+            self.ups._read("apc-3000")

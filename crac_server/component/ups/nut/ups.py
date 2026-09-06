@@ -26,7 +26,7 @@ class Ups(UpsBase):
             # Cattura BrokenPipe o EOFError e solleva un ConnectionError
             raise ConnectionError(f"Impossibile connettersi o autenticarsi con NUT: {e}")
 
-    def status_for(self, device: str) -> dict[str,str]:
+    def _read(self, device: str) -> dict[str,str]:
         # **1. CREA CLIENT FRESCO E AUTENTICA**
         client = self._get_client()
 
