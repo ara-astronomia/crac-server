@@ -11,6 +11,11 @@ class Ups(UpsBase):
         ups_path = os.path.join(os.path.dirname(__file__), "ups.ini")
         ups_config = ConfigParser()
         ups_config.read(ups_path)
+        # ponytail: flag manuale per test end-to-end del path di errore isolato
+        # per device (story #44) - settare "fail = true" nella sezione del
+        # device in ups.ini per simulare un UPS irraggiungibile.
+        if ups_config.getboolean(device, "fail", fallback=False):
+            raise ConnectionError(f"UPS simulato {device}: fail=true in ups.ini")
         voltage = ups_config.get(device, "input.voltage", fallback='220')
         battery = ups_config.get(device, "battery.charge", fallback='100')
         ups_status = ups_config.get(device, "ups.status", fallback='OL')
