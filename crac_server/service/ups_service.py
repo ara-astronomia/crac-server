@@ -29,6 +29,7 @@ class UpsService(UpsServicer):
             updated_at=self.timestamp_or_none(datetime.now()),
             interval=UPS.time_expired
         )
+        disabled_metrics = Config.getValue("disabled_metrics", "ups").split(",")
         for device in Config.getValue("ups_list", "ups").split(","):
             try:
                 ups = UPS.status_for(device)
@@ -36,7 +37,7 @@ class UpsService(UpsServicer):
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
                 continue
             response.devices.append(device)
-            if ups['battery_charge'] is not None:
+            if ups['battery_charge'] is not None and "battery" not in disabled_metrics:
                 response.charts.append(
                     UpsChart(
                         chart = build_chart(
@@ -61,7 +62,7 @@ class UpsService(UpsServicer):
                         )
                     )
                 )
-            if ups['input_voltage'] is not None:
+            if ups['input_voltage'] is not None and "voltage" not in disabled_metrics:
                 response.charts.append(
                     UpsChart(
                         chart = build_chart(
@@ -81,6 +82,27 @@ class UpsService(UpsServicer):
                             }, {
                                 "upper_bound": Config.getFloat("upper_bound", "voltage_danger_lower"),
                                 "lower_bound": Config.getFloat("lower_bound", "voltage_danger_lower"),
+                            },)
+                        )
+                    )
+                )
+            if ups['output_current'] is not None and "ampere" not in disabled_metrics:
+                response.charts.append(
+                    UpsChart(
+                        chart = build_chart(
+                            value=float(ups['output_current']),
+                            title="Corrente",
+                            urn=f"ups.{device}.chart.current",
+                            min=Config.getFloat("lower_bound", "ampere_ok"),
+                            max=Config.getFloat("upper_bound", "ampere_danger"),
+                            unit_of_measurement="A",
+                            range_normal=({
+                                "upper_bound": Config.getFloat("upper_bound", "ampere_ok"),
+                                "lower_bound": Config.getFloat("lower_bound", "ampere_ok"),
+                            },),
+                            range_danger=({
+                                "upper_bound": Config.getFloat("upper_bound", "ampere_danger"),
+                                "lower_bound": Config.getFloat("lower_bound", "ampere_danger"),
                             },)
                         )
                     )
