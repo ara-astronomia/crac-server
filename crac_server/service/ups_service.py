@@ -30,14 +30,37 @@ class UpsService(UpsServicer):
 
     def _validate_metrics(self):
         """
-        Validate [ups_metrics] and its thresholds at startup. A broken
-        configuration found while polling would discard every device on every
-        call, blaming the UPS for a mistake of ours.
+        Validate the configuration at startup. A broken one found while polling
+        would discard every device on every call, blaming the UPS for a mistake
+        of ours.
         """
-        enabled = Config.get_section("ups_metrics")
+        self._configured_devices()
+        try:
+            enabled = Config.get_section("ups_metrics")
+        except KeyError:
+            raise RuntimeError(
+                "[ups_metrics] mancante in config.ini: e' la sezione che elenca "
+                "le metriche da leggere, nella forma 'nome_nostro = nome_NUT'"
+            )
         self._reject_metrics_left_without_a_value(enabled)
         self._reject_metrics_that_produce_no_chart(enabled)
         self._read_thresholds_of(enabled)
+
+    def _configured_devices(self):
+        """
+        Names are written by hand: a stray space would build an urn no client
+        can match, and an empty entry a device that can never be read, pinning
+        the overall status to UNSPECIFIED forever.
+        """
+        devices = [name.strip() for name in Config.getValue("ups_list", "ups").split(",")]
+        if not any(devices):
+            raise RuntimeError("ups_list e' vuota: nessun UPS da sorvegliare")
+        if not all(devices):
+            raise RuntimeError(f"ups_list contiene nomi vuoti, controllare le virgole: {Config.getValue('ups_list', 'ups')!r}")
+        duplicated = {name for name in devices if devices.count(name) > 1}
+        if duplicated:
+            raise RuntimeError(f"ups_list contiene device ripetuti: {sorted(duplicated)}")
+        return devices
 
     def _reject_metrics_left_without_a_value(self, enabled):
         """An emptied key is dropped by get_section, silently unmonitoring it."""
@@ -131,7 +154,7 @@ class UpsService(UpsServicer):
             interval=UPS.time_expired
         )
         unreadable = []
-        for device in Config.getValue("ups_list", "ups").split(","):
+        for device in self._configured_devices():
             try:
                 ups = UPS.status_for(device)
                 charts = self._build_charts(device, ups)

@@ -63,6 +63,12 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
                 UpsService()
         self.assertIn("input_voltage", str(ctx.exception))
 
+    def test_init_explains_that_the_section_is_missing(self):
+        with patch("crac_server.service.ups_service.Config.get_section", side_effect=KeyError("ups_metrics")):
+            with self.assertRaises(RuntimeError) as ctx:
+                UpsService()
+        self.assertIn("ups_metrics", str(ctx.exception))
+
     def test_init_ignores_thresholds_of_metrics_not_enabled(self):
         def missing_current_config(key, section):
             if section.startswith("output_current"):
@@ -73,6 +79,37 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
              patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]), \
              patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=missing_current_config):
             UpsService()  # non deve sollevare: output_current non e' abilitata
+
+
+class TestUpsListValidation(unittest.TestCase):
+    """ups_list e' scritta a mano: va normalizzata e verificata all'avvio."""
+
+    def _build_with(self, ups_list):
+        def get_value(key, section='automazione'):
+            return ups_list if (key, section) == ("ups_list", "ups") else "apc-3000,cyberpower"
+
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=get_value):
+            return UpsService()._configured_devices()
+
+    def test_strips_the_spaces_around_names(self):
+        # uno spazio dopo la virgola produrrebbe un nome che NUT non conosce e
+        # un urn con lo spazio dentro, che il frontend non farebbe mai combaciare
+        self.assertEqual(["apc-3000", "cyberpower"], self._build_with("apc-3000, cyberpower"))
+
+    def test_raises_on_an_empty_entry(self):
+        with self.assertRaises(RuntimeError):
+            self._build_with("apc-3000,")
+
+    def test_raises_on_duplicated_devices(self):
+        with self.assertRaises(RuntimeError):
+            self._build_with("apc-3000,apc-3000")
+
+    def test_raises_when_no_device_is_configured(self):
+        with self.assertRaises(RuntimeError):
+            self._build_with("")
 
 
 class TestUpsService(unittest.TestCase):
