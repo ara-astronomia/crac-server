@@ -5,7 +5,7 @@ from crac_server.config import Config
 METRICS = (
     ("battery_charge", "battery"),
     ("input_voltage", "voltage"),
-    ("output_current", "ampere"),
+    ("output_current", "current"),
 )
 
 

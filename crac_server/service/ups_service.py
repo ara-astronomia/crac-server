@@ -58,15 +58,15 @@ class UpsService(UpsServicer):
                 },),
             )),
             ("output_current", "current", "Corrente", "A", dict(
-                min=Config.getFloat("lower_bound", "ampere_ok"),
-                max=Config.getFloat("upper_bound", "ampere_danger"),
+                min=Config.getFloat("lower_bound", "current_ok"),
+                max=Config.getFloat("upper_bound", "current_danger"),
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "ampere_ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "ampere_ok"),
+                    "upper_bound": Config.getFloat("upper_bound", "current_ok"),
+                    "lower_bound": Config.getFloat("lower_bound", "current_ok"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "ampere_danger"),
-                    "lower_bound": Config.getFloat("lower_bound", "ampere_danger"),
+                    "upper_bound": Config.getFloat("upper_bound", "current_danger"),
+                    "lower_bound": Config.getFloat("lower_bound", "current_danger"),
                 },),
             )),
         )

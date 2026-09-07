@@ -50,6 +50,14 @@ class TestUps(unittest.TestCase):
 
         self.assertNotIn("input_voltage", result)
 
+    def test_status_for_omits_excluded_current_metric(self):
+        os.environ["UPS_DISABLED_METRICS"] = "current"
+        ups = FakeUps({"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": None})
+
+        result = ups.status_for("apc-3000")
+
+        self.assertNotIn("output_current", result)
+
     def test_status_for_ups_status_is_never_gated_by_disabled_metrics(self):
         ups = FakeUps({"input_voltage": "220", "battery_charge": "80", "ups_status": None, "output_current": "3"})
 
