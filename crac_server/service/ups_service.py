@@ -9,6 +9,7 @@ from crac_protobuf.ups_pb2 import (
     UpsResponse,
     UpsStatus,
     UpsChart,
+    UpsDevice,
 )
 from crac_server.component.ups import UPS
 from crac_server.config import Config
@@ -115,9 +116,15 @@ class UpsService(UpsServicer):
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
                 unreadable.append(device)
+                response.device_states.append(
+                    UpsDevice(name=device, status=UpsStatus.UPS_STATUS_UNSPECIFIED)
+                )
                 continue
             response.devices.append(device)
             response.charts.extend(charts)
+            response.device_states.append(
+                UpsDevice(name=device, status=self.calculate_status(UPS, charts))
+            )
         response.status = self.calculate_status(UPS, response.charts)
         if unreadable and response.status != UpsStatus.UPS_STATUS_DANGER:
             # su un UPS che non risponde non sappiamo nulla: riportare NORMAL

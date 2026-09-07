@@ -167,6 +167,52 @@ class TestUpsService(unittest.TestCase):
         self.assertTrue(all("chart.current" not in urn for urn in urns))
         self.assertEqual(4, len(response.charts))
 
+    def test_get_status_reports_a_state_for_every_configured_device(self):
+        UPS.status_for = MagicMock(side_effect=lambda device: self._ok_reading())
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(
+            [("apc-3000", UpsStatus.UPS_STATUS_NORMAL), ("cyberpower", UpsStatus.UPS_STATUS_NORMAL)],
+            [(d.name, d.status) for d in response.device_states],
+        )
+
+    def test_get_status_keeps_an_unreadable_device_in_device_states(self):
+        # a differenza di "devices", un device muto non deve sparire: resta
+        # elencato come esplicitamente ignoto
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return self._ok_reading()
+
+        UPS.status_for = MagicMock(side_effect=side_effect)
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["cyberpower"], list(response.devices))
+        self.assertEqual(
+            [("apc-3000", UpsStatus.UPS_STATUS_UNSPECIFIED), ("cyberpower", UpsStatus.UPS_STATUS_NORMAL)],
+            [(d.name, d.status) for d in response.device_states],
+        )
+
+    def test_get_status_device_state_is_per_device_not_the_aggregate(self):
+        # l'aggregato e' DANGER per colpa di apc-3000, ma cyberpower sta bene:
+        # il dettaglio per device non deve essere appiattito
+        def side_effect(device):
+            if device == "apc-3000":
+                return {**self._ok_reading(), "battery_charge": "10"}
+            return self._ok_reading()
+
+        UPS.status_for = MagicMock(side_effect=side_effect)
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+        self.assertEqual(
+            [("apc-3000", UpsStatus.UPS_STATUS_DANGER), ("cyberpower", UpsStatus.UPS_STATUS_NORMAL)],
+            [(d.name, d.status) for d in response.device_states],
+        )
+
     def test_get_status_reports_unspecified_when_a_device_is_unreachable(self):
         # un UPS morto non deve poter essere spacciato per NORMAL solo perche'
         # l'altro sta bene: sul device perso non sappiamo nulla
