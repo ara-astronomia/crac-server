@@ -21,20 +21,48 @@ def getfloat_side_effect(key, section):
     return THRESHOLDS[section][key]
 
 
+class TestUpsServiceStartupValidation(unittest.TestCase):
+    """La config delle soglie va validata all'avvio, non ad ogni poll."""
+
+    def test_init_raises_when_an_enabled_metric_has_a_broken_threshold(self):
+        def broken(key, section):
+            if section.startswith("battery_charge"):
+                raise ValueError(f"{section}.{key} non impostata in config.ini")
+            return getfloat_side_effect(key, section)
+
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=broken):
+            with self.assertRaises(ValueError):
+                UpsService()
+
+    def test_init_ignores_thresholds_of_metrics_not_enabled(self):
+        def missing_current_config(key, section):
+            if section.startswith("output_current"):
+                raise KeyError(section)
+            return getfloat_side_effect(key, section)
+
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=missing_current_config):
+            UpsService()  # non deve sollevare: output_current non e' abilitata
+
+
 class TestUpsService(unittest.TestCase):
 
     def setUp(self):
-        self.ups_service = UpsService()
         self._original_status_for = UPS.status_for
-        self._getfloat_patch = patch("crac_server.service.ups_service.Config.getFloat", side_effect=getfloat_side_effect)
+        self._getfloat_patch = patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect)
         self._getvalue_patch = patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000,cyberpower")
+        self._getsection_patch = patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage", "ups_status": "ups.status"})
         self._getfloat_patch.start()
         self._getvalue_patch.start()
+        self._getsection_patch.start()
+        self.ups_service = UpsService()
 
     def tearDown(self):
         UPS.status_for = self._original_status_for
         self._getfloat_patch.stop()
         self._getvalue_patch.stop()
+        self._getsection_patch.stop()
 
     def _ok_reading(self):
         return {"input_voltage": "220", "battery_charge": "80", "ups_status": "OL"}
@@ -131,7 +159,7 @@ class TestUpsService(unittest.TestCase):
                 raise KeyError(section)
             return getfloat_side_effect(key, section)
 
-        with patch("crac_server.service.ups_service.Config.getFloat", side_effect=missing_current_config):
+        with patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=missing_current_config):
             response = self.ups_service.GetStatus(None, None)
 
         self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))

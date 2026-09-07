@@ -34,6 +34,19 @@ class Config:
         return 0
 
     @staticmethod
+    def getRequiredFloat(key, section='automazione'):
+        """
+        Come getFloat ma senza fallback: solleva se la chiave manca, e' vuota
+        o non e' numerica, invece di tornare 0 in silenzio. Da usare per i
+        valori su cui si prendono decisioni di sicurezza, dove uno 0 inventato
+        e' indistinguibile da una soglia reale.
+        """
+        value = Config.getValue(key, section)
+        if not value:
+            raise ValueError(f"{section}.{key} non impostata in config.ini")
+        return float(value)
+
+    @staticmethod
     def getInt(key, section='automazione'):
         config = Config()
         env_value = Config.__check_environ__(key, section=section)

@@ -23,6 +23,19 @@ class UpsService(UpsServicer):
 
     def __init__(self) -> None:
         super().__init__()
+        self._validate_thresholds()
+
+    def _validate_thresholds(self):
+        """
+        Le soglie delle metriche abilitate devono esistere ed essere numeriche
+        gia' all'avvio: una config rotta scoperta durante il polling scarta
+        ogni device ad ogni chiamata, con un messaggio che incolpa l'UPS
+        invece della configurazione.
+        """
+        enabled = Config.get_section("ups_metrics")
+        for key, _, _, _, chart_kwargs_fn in self._chart_specs():
+            if key in enabled:
+                chart_kwargs_fn()
 
     def _chart_specs(self):
         return (
@@ -30,43 +43,43 @@ class UpsService(UpsServicer):
                 min=0,
                 max=100,
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "battery_charge.ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "battery_charge.ok"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "battery_charge.ok"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "battery_charge.ok"),
                 },),
                 range_warn=({
-                    "upper_bound": Config.getFloat("upper_bound", "battery_charge.warning"),
-                    "lower_bound": Config.getFloat("lower_bound", "battery_charge.warning"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "battery_charge.warning"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "battery_charge.warning"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "battery_charge.danger"),
-                    "lower_bound": Config.getFloat("lower_bound", "battery_charge.danger"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "battery_charge.danger"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "battery_charge.danger"),
                 },),
             )),
             ("input_voltage", "voltage", "Batteria", "V", lambda: dict(
-                min=Config.getFloat("lower_bound", "input_voltage.danger_lower"),
-                max=Config.getFloat("upper_bound", "input_voltage.danger_upper"),
+                min=Config.getRequiredFloat("lower_bound", "input_voltage.danger_lower"),
+                max=Config.getRequiredFloat("upper_bound", "input_voltage.danger_upper"),
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "input_voltage.ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "input_voltage.ok"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "input_voltage.ok"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "input_voltage.ok"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "input_voltage.danger_upper"),
-                    "lower_bound": Config.getFloat("lower_bound", "input_voltage.danger_upper"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "input_voltage.danger_upper"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "input_voltage.danger_upper"),
                 }, {
-                    "upper_bound": Config.getFloat("upper_bound", "input_voltage.danger_lower"),
-                    "lower_bound": Config.getFloat("lower_bound", "input_voltage.danger_lower"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "input_voltage.danger_lower"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "input_voltage.danger_lower"),
                 },),
             )),
             ("output_current", "current", "Corrente", "A", lambda: dict(
-                min=Config.getFloat("lower_bound", "output_current.ok"),
-                max=Config.getFloat("upper_bound", "output_current.danger"),
+                min=Config.getRequiredFloat("lower_bound", "output_current.ok"),
+                max=Config.getRequiredFloat("upper_bound", "output_current.danger"),
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "output_current.ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "output_current.ok"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "output_current.ok"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "output_current.ok"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "output_current.danger"),
-                    "lower_bound": Config.getFloat("lower_bound", "output_current.danger"),
+                    "upper_bound": Config.getRequiredFloat("upper_bound", "output_current.danger"),
+                    "lower_bound": Config.getRequiredFloat("lower_bound", "output_current.danger"),
                 },),
             )),
         )
