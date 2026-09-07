@@ -26,7 +26,7 @@ class UpsService(UpsServicer):
 
     def _chart_specs(self):
         return (
-            ("battery_charge", "battery", "Batteria", "%", dict(
+            ("battery_charge", "battery", "Batteria", "%", lambda: dict(
                 min=0,
                 max=100,
                 range_normal=({
@@ -42,7 +42,7 @@ class UpsService(UpsServicer):
                     "lower_bound": Config.getFloat("lower_bound", "battery_charge.danger"),
                 },),
             )),
-            ("input_voltage", "voltage", "Batteria", "V", dict(
+            ("input_voltage", "voltage", "Batteria", "V", lambda: dict(
                 min=Config.getFloat("lower_bound", "input_voltage.danger_lower"),
                 max=Config.getFloat("upper_bound", "input_voltage.danger_upper"),
                 range_normal=({
@@ -57,7 +57,7 @@ class UpsService(UpsServicer):
                     "lower_bound": Config.getFloat("lower_bound", "input_voltage.danger_lower"),
                 },),
             )),
-            ("output_current", "current", "Corrente", "A", dict(
+            ("output_current", "current", "Corrente", "A", lambda: dict(
                 min=Config.getFloat("lower_bound", "output_current.ok"),
                 max=Config.getFloat("upper_bound", "output_current.danger"),
                 range_normal=({
@@ -83,7 +83,7 @@ class UpsService(UpsServicer):
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
                 continue
             response.devices.append(device)
-            for key, urn_suffix, title, unit, chart_kwargs in self._chart_specs():
+            for key, urn_suffix, title, unit, chart_kwargs_fn in self._chart_specs():
                 if ups.get(key) is None:
                     continue
                 response.charts.append(
@@ -93,7 +93,7 @@ class UpsService(UpsServicer):
                             title=title,
                             urn=f"ups.{device}.chart.{urn_suffix}",
                             unit_of_measurement=unit,
-                            **chart_kwargs
+                            **chart_kwargs_fn()
                         )
                     )
                 )

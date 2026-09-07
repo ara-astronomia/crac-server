@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from crac_protobuf.ups_pb2 import UpsStatus
 from crac_server.component.ups import UPS
 from crac_server.service.ups_service import UpsService
@@ -86,6 +86,22 @@ class TestUpsService(unittest.TestCase):
         UPS.status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": None})
 
         response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+        urns = [chart.chart.urn for chart in response.charts]
+        self.assertTrue(all("chart.current" not in urn for urn in urns))
+        self.assertEqual(4, len(response.charts))
+
+    def test_get_status_does_not_read_config_for_excluded_metric(self):
+        UPS.status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": "80", "ups_status": "OL"})
+
+        def getfloat_side_effect(key, section):
+            if section.startswith("output_current"):
+                raise KeyError(section)
+            return {"upper_bound": 300.0, "lower_bound": 0.0}[key]
+
+        with patch("crac_server.service.ups_service.Config.getFloat", side_effect=getfloat_side_effect):
+            response = self.ups_service.GetStatus(None, None)
 
         self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
         urns = [chart.chart.urn for chart in response.charts]
