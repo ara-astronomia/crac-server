@@ -1,4 +1,4 @@
-from crac_server.component.ups.ups import Ups as UpsBase
+from crac_server.component.ups.ups import Ups as UpsBase, METRICS
 from nut2 import PyNUTClient
 
 class Ups(UpsBase):
@@ -27,19 +27,9 @@ class Ups(UpsBase):
             raise ConnectionError(f"Impossibile connettersi o autenticarsi con NUT: {e}")
 
     def _read(self, device: str) -> dict[str,str]:
-        # **1. CREA CLIENT FRESCO E AUTENTICA**
         client = self._get_client()
-
-        # **2. Esegui la richiesta IMMEDIATAMENTE**
         raw_data = client.list_vars(device)
-
-        # 3. Estrai i dati...
-        return {
-            'input_voltage': raw_data.get('input.voltage'),
-            'battery_charge': raw_data.get('battery.charge'),
-            'ups_status': raw_data.get('ups.status'),
-            'output_current': raw_data.get('output.current')
-        }
+        return {key: raw_data.get(source) for key, source in METRICS}
 
     def list_ups(self):
         client = self._get_client()
