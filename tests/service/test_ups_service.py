@@ -46,13 +46,6 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
                 UpsService()
         self.assertIn("battery_voltage", str(ctx.exception))
 
-    def test_init_accepts_ups_status_even_without_a_chart(self):
-        # ups_status e' letto di proposito senza produrre un chart: serve a #22
-        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "ups_status": "ups.status"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "ups_status"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect):
-            UpsService()
-
     def test_init_raises_on_a_metric_left_empty(self):
         # get_section scarta le chiavi vuote: senza questo controllo una
         # metrica svuotata per sbaglio smette di essere letta in silenzio
@@ -118,8 +111,8 @@ class TestUpsService(unittest.TestCase):
         self._original_status_for = UPS.status_for
         self._getfloat_patch = patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect)
         self._getvalue_patch = patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000,cyberpower")
-        self._getsection_patch = patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage", "ups_status": "ups.status"})
-        self._getkeys_patch = patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage", "ups_status"])
+        self._getsection_patch = patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"})
+        self._getkeys_patch = patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"])
         self._getfloat_patch.start()
         self._getvalue_patch.start()
         self._getsection_patch.start()
@@ -134,7 +127,7 @@ class TestUpsService(unittest.TestCase):
         self._getkeys_patch.stop()
 
     def _ok_reading(self):
-        return {"input_voltage": "220", "battery_charge": "80", "ups_status": "OL"}
+        return {"input_voltage": "220", "battery_charge": "80"}
 
     def test_get_status_all_devices_ok(self):
         UPS.status_for = MagicMock(side_effect=lambda device: self._ok_reading())
@@ -191,7 +184,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_skips_battery_chart_when_metric_unavailable(self):
-        UPS.status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None, "ups_status": "OL"})
+        UPS.status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -201,7 +194,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(2, len(response.charts))
 
     def test_get_status_skips_voltage_chart_when_metric_unavailable(self):
-        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80", "ups_status": "OL"})
+        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80"})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -346,7 +339,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_device_present_with_no_charts_when_all_metrics_unavailable(self):
-        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "ups_status": None, "output_current": None})
+        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "output_current": None})
 
         response = self.ups_service.GetStatus(None, None)
 

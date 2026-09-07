@@ -19,8 +19,6 @@ from typing import Union
 
 logger = logging.getLogger(__name__)
 
-METRICS_READ_BUT_NOT_CHARTED = {"ups_status"}
-
 
 class UpsService(UpsServicer):
 
@@ -74,7 +72,7 @@ class UpsService(UpsServicer):
         is missing: all of the risk, none of the benefit.
         """
         chartable = {key for key, _, _, _, _ in self._chart_specs()}
-        unknown = set(enabled) - chartable - METRICS_READ_BUT_NOT_CHARTED
+        unknown = set(enabled) - chartable
         if unknown:
             raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
 
