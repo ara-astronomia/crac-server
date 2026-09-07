@@ -1,5 +1,5 @@
-import os
 import unittest
+from unittest.mock import patch
 from crac_server.component.ups.ups import Ups
 
 
@@ -14,13 +14,13 @@ class FakeUps(Ups):
 
 class TestUps(unittest.TestCase):
 
-    def tearDown(self):
-        os.environ.pop("UPS_DISABLED_METRICS", None)
+    def _status_for(self, raw, disabled_metrics=""):
+        ups = FakeUps(raw)
+        with patch("crac_server.component.ups.ups.Config.getValue", return_value=disabled_metrics):
+            return ups.status_for("apc-3000")
 
     def test_status_for_returns_all_metrics_when_present(self):
-        ups = FakeUps({"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": "3"})
-
-        result = ups.status_for("apc-3000")
+        result = self._status_for({"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": "3"})
 
         self.assertEqual("220", result["input_voltage"])
         self.assertEqual("80", result["battery_charge"])
@@ -28,39 +28,35 @@ class TestUps(unittest.TestCase):
         self.assertEqual("3", result["output_current"])
 
     def test_status_for_raises_when_non_excluded_metric_missing(self):
-        ups = FakeUps({"input_voltage": "220", "battery_charge": None, "ups_status": "OL", "output_current": "3"})
-
         with self.assertRaises(Exception):
-            ups.status_for("apc-3000")
+            self._status_for({"input_voltage": "220", "battery_charge": None, "ups_status": "OL", "output_current": "3"})
 
     def test_status_for_omits_excluded_metric_even_if_missing(self):
-        os.environ["UPS_DISABLED_METRICS"] = "battery_charge"
-        ups = FakeUps({"input_voltage": "220", "battery_charge": None, "ups_status": "OL", "output_current": "3"})
-
-        result = ups.status_for("apc-3000")
+        result = self._status_for(
+            {"input_voltage": "220", "battery_charge": None, "ups_status": "OL", "output_current": "3"},
+            disabled_metrics="battery_charge",
+        )
 
         self.assertNotIn("battery_charge", result)
         self.assertEqual("220", result["input_voltage"])
 
     def test_status_for_omits_excluded_metric_even_if_present(self):
-        os.environ["UPS_DISABLED_METRICS"] = "input_voltage"
-        ups = FakeUps({"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": "3"})
-
-        result = ups.status_for("apc-3000")
+        result = self._status_for(
+            {"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": "3"},
+            disabled_metrics="input_voltage",
+        )
 
         self.assertNotIn("input_voltage", result)
 
     def test_status_for_omits_excluded_current_metric(self):
-        os.environ["UPS_DISABLED_METRICS"] = "output_current"
-        ups = FakeUps({"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": None})
-
-        result = ups.status_for("apc-3000")
+        result = self._status_for(
+            {"input_voltage": "220", "battery_charge": "80", "ups_status": "OL", "output_current": None},
+            disabled_metrics="output_current",
+        )
 
         self.assertNotIn("output_current", result)
 
     def test_status_for_ups_status_is_never_gated_by_disabled_metrics(self):
-        ups = FakeUps({"input_voltage": "220", "battery_charge": "80", "ups_status": None, "output_current": "3"})
-
-        result = ups.status_for("apc-3000")
+        result = self._status_for({"input_voltage": "220", "battery_charge": "80", "ups_status": None, "output_current": "3"})
 
         self.assertIsNone(result["ups_status"])
