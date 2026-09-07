@@ -30,43 +30,43 @@ class UpsService(UpsServicer):
                 min=0,
                 max=100,
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "battery_ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "battery_ok"),
+                    "upper_bound": Config.getFloat("upper_bound", "battery_charge.ok"),
+                    "lower_bound": Config.getFloat("lower_bound", "battery_charge.ok"),
                 },),
                 range_warn=({
-                    "upper_bound": Config.getFloat("upper_bound", "battery_warning"),
-                    "lower_bound": Config.getFloat("lower_bound", "battery_warning"),
+                    "upper_bound": Config.getFloat("upper_bound", "battery_charge.warning"),
+                    "lower_bound": Config.getFloat("lower_bound", "battery_charge.warning"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "battery_danger"),
-                    "lower_bound": Config.getFloat("lower_bound", "battery_danger"),
+                    "upper_bound": Config.getFloat("upper_bound", "battery_charge.danger"),
+                    "lower_bound": Config.getFloat("lower_bound", "battery_charge.danger"),
                 },),
             )),
             ("input_voltage", "voltage", "Batteria", "V", dict(
-                min=Config.getFloat("lower_bound", "voltage_danger_lower"),
-                max=Config.getFloat("upper_bound", "voltage_danger_upper"),
+                min=Config.getFloat("lower_bound", "input_voltage.danger_lower"),
+                max=Config.getFloat("upper_bound", "input_voltage.danger_upper"),
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "voltage_ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "voltage_ok"),
+                    "upper_bound": Config.getFloat("upper_bound", "input_voltage.ok"),
+                    "lower_bound": Config.getFloat("lower_bound", "input_voltage.ok"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "voltage_danger_upper"),
-                    "lower_bound": Config.getFloat("lower_bound", "voltage_danger_upper"),
+                    "upper_bound": Config.getFloat("upper_bound", "input_voltage.danger_upper"),
+                    "lower_bound": Config.getFloat("lower_bound", "input_voltage.danger_upper"),
                 }, {
-                    "upper_bound": Config.getFloat("upper_bound", "voltage_danger_lower"),
-                    "lower_bound": Config.getFloat("lower_bound", "voltage_danger_lower"),
+                    "upper_bound": Config.getFloat("upper_bound", "input_voltage.danger_lower"),
+                    "lower_bound": Config.getFloat("lower_bound", "input_voltage.danger_lower"),
                 },),
             )),
             ("output_current", "current", "Corrente", "A", dict(
-                min=Config.getFloat("lower_bound", "current_ok"),
-                max=Config.getFloat("upper_bound", "current_danger"),
+                min=Config.getFloat("lower_bound", "output_current.ok"),
+                max=Config.getFloat("upper_bound", "output_current.danger"),
                 range_normal=({
-                    "upper_bound": Config.getFloat("upper_bound", "current_ok"),
-                    "lower_bound": Config.getFloat("lower_bound", "current_ok"),
+                    "upper_bound": Config.getFloat("upper_bound", "output_current.ok"),
+                    "lower_bound": Config.getFloat("lower_bound", "output_current.ok"),
                 },),
                 range_danger=({
-                    "upper_bound": Config.getFloat("upper_bound", "current_danger"),
-                    "lower_bound": Config.getFloat("lower_bound", "current_danger"),
+                    "upper_bound": Config.getFloat("upper_bound", "output_current.danger"),
+                    "lower_bound": Config.getFloat("lower_bound", "output_current.danger"),
                 },),
             )),
         )
