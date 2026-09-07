@@ -71,6 +71,24 @@ class UpsService(UpsServicer):
             )),
         )
 
+    def _build_charts(self, device: str, ups: dict) -> list:
+        charts = []
+        for key, urn_suffix, title, unit, chart_kwargs_fn in self._chart_specs():
+            if ups.get(key) is None:
+                continue
+            charts.append(
+                UpsChart(
+                    chart = build_chart(
+                        value=float(ups[key]),
+                        title=title,
+                        urn=f"ups.{device}.chart.{urn_suffix}",
+                        unit_of_measurement=unit,
+                        **chart_kwargs_fn()
+                    )
+                )
+            )
+        return charts
+
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         response = UpsResponse(
             updated_at=self.timestamp_or_none(datetime.now()),
@@ -79,24 +97,12 @@ class UpsService(UpsServicer):
         for device in Config.getValue("ups_list", "ups").split(","):
             try:
                 ups = UPS.status_for(device)
+                charts = self._build_charts(device, ups)
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
                 continue
             response.devices.append(device)
-            for key, urn_suffix, title, unit, chart_kwargs_fn in self._chart_specs():
-                if ups.get(key) is None:
-                    continue
-                response.charts.append(
-                    UpsChart(
-                        chart = build_chart(
-                            value=float(ups[key]),
-                            title=title,
-                            urn=f"ups.{device}.chart.{urn_suffix}",
-                            unit_of_measurement=unit,
-                            **chart_kwargs_fn()
-                        )
-                    )
-                )
+            response.charts.extend(charts)
         response.status = self.calculate_status(UPS, response.charts)
         logger.debug(f"ups response is {response}")
         return response

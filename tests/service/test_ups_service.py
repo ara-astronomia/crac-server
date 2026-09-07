@@ -139,6 +139,39 @@ class TestUpsService(unittest.TestCase):
         self.assertTrue(all("chart.current" not in urn for urn in urns))
         self.assertEqual(4, len(response.charts))
 
+    def test_get_status_isolates_non_numeric_value(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                return {**self._ok_reading(), "battery_charge": "N/A"}
+            return self._ok_reading()
+
+        UPS.status_for = MagicMock(side_effect=side_effect)
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["cyberpower"], list(response.devices))
+        self.assertEqual(2, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
+
+    def test_get_status_does_not_emit_partial_charts_for_failing_device(self):
+        # tensione valida, batteria sporca: il device non deve finire nella
+        # risposta a metà (un chart sì e uno no)
+        UPS.status_for = MagicMock(return_value={**self._ok_reading(), "battery_charge": "N/A"})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual([], list(response.devices))
+        self.assertEqual(0, len(response.charts))
+
+    def test_get_status_all_devices_non_numeric(self):
+        UPS.status_for = MagicMock(return_value={**self._ok_reading(), "input_voltage": ""})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual([], list(response.devices))
+        self.assertEqual(0, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+
     def test_get_status_device_present_with_no_charts_when_all_metrics_unavailable(self):
         UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "ups_status": None, "output_current": None})
 
