@@ -30,6 +30,14 @@ class TestSimulatorUps(unittest.TestCase):
         result = self.ups._read("apc-3000")
         self.assertIn("output.current", result)
 
+    def test_read_reports_attributes_beyond_the_dynamic_ones(self):
+        # simula un UPS NUT reale, che espone molti più attributi di quelli
+        # letti oggi da [ups_metrics] - il filtro deve avvenire in
+        # Ups.status_for(), non riducendo già qui cosa il device "ha"
+        result = self.ups._read("apc-3000")
+        self.assertGreater(len(result), 4)
+        self.assertIn("driver.name", result)
+
     def test_read_raises_when_fail_flag_set(self):
         config = ConfigParser()
         config.read(self.ups_path)
