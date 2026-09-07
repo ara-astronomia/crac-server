@@ -97,7 +97,7 @@ class TestUpsService(unittest.TestCase):
 
         self.assertEqual(["cyberpower"], list(response.devices))
         self.assertEqual(2, len(response.charts))
-        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_isolates_generic_exception(self):
         def side_effect(device):
@@ -167,6 +167,36 @@ class TestUpsService(unittest.TestCase):
         self.assertTrue(all("chart.current" not in urn for urn in urns))
         self.assertEqual(4, len(response.charts))
 
+    def test_get_status_reports_unspecified_when_a_device_is_unreachable(self):
+        # un UPS morto non deve poter essere spacciato per NORMAL solo perche'
+        # l'altro sta bene: sul device perso non sappiamo nulla
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return self._ok_reading()
+
+        UPS.status_for = MagicMock(side_effect=side_effect)
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(["cyberpower"], list(response.devices))
+        self.assertEqual(2, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+
+    def test_get_status_does_not_mask_a_real_danger_with_unspecified(self):
+        # un device perso non deve declassare un pericolo reale rilevato
+        # sull'altro: DANGER vince su "non so"
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return {**self._ok_reading(), "battery_charge": "10"}
+
+        UPS.status_for = MagicMock(side_effect=side_effect)
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+
     def test_get_status_isolates_non_numeric_value(self):
         def side_effect(device):
             if device == "apc-3000":
@@ -179,7 +209,7 @@ class TestUpsService(unittest.TestCase):
 
         self.assertEqual(["cyberpower"], list(response.devices))
         self.assertEqual(2, len(response.charts))
-        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_does_not_emit_partial_charts_for_failing_device(self):
         # tensione valida, batteria sporca: il device non deve finire nella

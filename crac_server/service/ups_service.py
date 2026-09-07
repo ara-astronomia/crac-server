@@ -107,16 +107,24 @@ class UpsService(UpsServicer):
             updated_at=self.timestamp_or_none(datetime.now()),
             interval=UPS.time_expired
         )
+        unreadable = []
         for device in Config.getValue("ups_list", "ups").split(","):
             try:
                 ups = UPS.status_for(device)
                 charts = self._build_charts(device, ups)
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
+                unreadable.append(device)
                 continue
             response.devices.append(device)
             response.charts.extend(charts)
         response.status = self.calculate_status(UPS, response.charts)
+        if unreadable and response.status != UpsStatus.UPS_STATUS_DANGER:
+            # su un UPS che non risponde non sappiamo nulla: riportare NORMAL
+            # perche' gli altri stanno bene sarebbe una rassicurazione falsa.
+            # Un pericolo gia' rilevato altrove non viene pero' declassato.
+            logger.warning(f"UPS non leggibili {unreadable}: stato riportato come UNSPECIFIED")
+            response.status = UpsStatus.UPS_STATUS_UNSPECIFIED
         logger.debug(f"ups response is {response}")
         return response
 
