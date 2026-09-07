@@ -36,10 +36,10 @@ class Config:
     @staticmethod
     def getRequiredFloat(key, section='automazione'):
         """
-        Come getFloat ma senza fallback: solleva se la chiave manca, e' vuota
-        o non e' numerica, invece di tornare 0 in silenzio. Da usare per i
-        valori su cui si prendono decisioni di sicurezza, dove uno 0 inventato
-        e' indistinguibile da una soglia reale.
+        Like getFloat but without a fallback: raises when the key is missing,
+        empty or not numeric, instead of silently returning 0. Use it for the
+        values safety decisions are taken on, where a made up 0 is
+        indistinguishable from a real threshold.
         """
         value = Config.getValue(key, section)
         if not value:
@@ -82,8 +82,8 @@ class Config:
     @staticmethod
     def get_section_keys(section_name: str):
         """
-        Tutte le chiavi della sezione, comprese quelle con valore vuoto che
-        get_section scarta: serve a chi deve accorgersi di una chiave svuotata
-        per sbaglio invece di vederla sparire in silenzio.
+        Every key of the section, including the empty ones that get_section
+        drops, so that a key emptied by mistake can be spotted instead of
+        silently disappearing.
         """
         return list(Config().configparser[section_name])

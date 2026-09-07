@@ -19,9 +19,7 @@ from typing import Union
 
 logger = logging.getLogger(__name__)
 
-# Metriche lette di proposito senza produrre un grafico: ups_status serve alla
-# chiusura automatica (#22) e come battery_statuses del protocollo (#81).
-METRICS_WITHOUT_CHART = {"ups_status"}
+METRICS_READ_BUT_NOT_CHARTED = {"ups_status"}
 
 
 class UpsService(UpsServicer):
@@ -32,25 +30,32 @@ class UpsService(UpsServicer):
 
     def _validate_metrics(self):
         """
-        [ups_metrics] e le soglie vanno verificate all'avvio: una config rotta
-        scoperta durante il polling scarta ogni device ad ogni chiamata, con un
-        messaggio che incolpa l'UPS invece della configurazione.
+        Validate [ups_metrics] and its thresholds at startup. A broken
+        configuration found while polling would discard every device on every
+        call, blaming the UPS for a mistake of ours.
         """
         enabled = Config.get_section("ups_metrics")
+        self._reject_metrics_left_without_a_value(enabled)
+        self._reject_metrics_that_produce_no_chart(enabled)
+        self._read_thresholds_of(enabled)
 
-        # Una chiave svuotata per sbaglio verrebbe scartata da get_section
-        # senza un errore, e quella metrica smetterebbe di essere letta.
+    def _reject_metrics_left_without_a_value(self, enabled):
+        """An emptied key is dropped by get_section, silently unmonitoring it."""
         empty = [key for key in Config.get_section_keys("ups_metrics") if key not in enabled]
         if empty:
             raise RuntimeError(f"[ups_metrics]: metriche senza valore, rimuoverle o valorizzarle: {sorted(empty)}")
 
-        # Una metrica che il service non sa graficare non produce nulla, ma
-        # resta obbligatoria sul device: tutto il rischio, nessun beneficio.
+    def _reject_metrics_that_produce_no_chart(self, enabled):
+        """
+        Such a metric shows nothing, yet the device is still discarded when it
+        is missing: all of the risk, none of the benefit.
+        """
         chartable = {key for key, _, _, _, _ in self._chart_specs()}
-        unknown = set(enabled) - chartable - METRICS_WITHOUT_CHART
+        unknown = set(enabled) - chartable - METRICS_READ_BUT_NOT_CHARTED
         if unknown:
             raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
 
+    def _read_thresholds_of(self, enabled):
         for key, _, _, _, chart_kwargs_fn in self._chart_specs():
             if key in enabled:
                 chart_kwargs_fn()
@@ -140,17 +145,23 @@ class UpsService(UpsServicer):
             response.devices.append(device)
             response.charts.extend(charts)
             response.device_states.append(
-                UpsDevice(name=device, status=self.calculate_status(UPS, charts))
+                UpsDevice(name=device, status=self.calculate_status(charts))
             )
-        response.status = self.calculate_status(UPS, response.charts)
-        if unreadable and response.status != UpsStatus.UPS_STATUS_DANGER:
-            # su un UPS che non risponde non sappiamo nulla: riportare NORMAL
-            # perche' gli altri stanno bene sarebbe una rassicurazione falsa.
-            # Un pericolo gia' rilevato altrove non viene pero' declassato.
-            logger.warning(f"UPS non leggibili {unreadable}: stato riportato come UNSPECIFIED")
-            response.status = UpsStatus.UPS_STATUS_UNSPECIFIED
+        response.status = self._overall_status(response.charts, unreadable)
         logger.debug(f"ups response is {response}")
         return response
+
+    def _overall_status(self, charts, unreadable):
+        """
+        Nothing is known about a UPS that does not answer, so reporting NORMAL
+        because the others are fine would be a false reassurance. A danger
+        already detected elsewhere is never downgraded.
+        """
+        status = self.calculate_status(charts)
+        if unreadable and status != UpsStatus.UPS_STATUS_DANGER:
+            logger.warning(f"UPS non leggibili {unreadable}: stato riportato come UNSPECIFIED")
+            return UpsStatus.UPS_STATUS_UNSPECIFIED
+        return status
 
     def timestamp_or_none(self, updated_at: Union[datetime, None]) -> int:
         if updated_at != None:
@@ -158,9 +169,8 @@ class UpsService(UpsServicer):
         else: 
             return 0
 
-    def calculate_status(self, ups, charts):
+    def calculate_status(self, charts):
         status = UpsStatus.UPS_STATUS_UNSPECIFIED
-        #if not ups.is_unavailable:
         for chart in charts:
             logger.debug("chart is:")
             logger.debug(chart)
