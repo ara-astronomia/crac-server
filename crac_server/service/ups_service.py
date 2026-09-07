@@ -19,21 +19,38 @@ from typing import Union
 
 logger = logging.getLogger(__name__)
 
+# Metriche lette di proposito senza produrre un grafico: ups_status serve alla
+# chiusura automatica (#22) e come battery_statuses del protocollo (#81).
+METRICS_WITHOUT_CHART = {"ups_status"}
+
 
 class UpsService(UpsServicer):
 
     def __init__(self) -> None:
         super().__init__()
-        self._validate_thresholds()
+        self._validate_metrics()
 
-    def _validate_thresholds(self):
+    def _validate_metrics(self):
         """
-        Le soglie delle metriche abilitate devono esistere ed essere numeriche
-        gia' all'avvio: una config rotta scoperta durante il polling scarta
-        ogni device ad ogni chiamata, con un messaggio che incolpa l'UPS
-        invece della configurazione.
+        [ups_metrics] e le soglie vanno verificate all'avvio: una config rotta
+        scoperta durante il polling scarta ogni device ad ogni chiamata, con un
+        messaggio che incolpa l'UPS invece della configurazione.
         """
         enabled = Config.get_section("ups_metrics")
+
+        # Una chiave svuotata per sbaglio verrebbe scartata da get_section
+        # senza un errore, e quella metrica smetterebbe di essere letta.
+        empty = [key for key in Config.get_section_keys("ups_metrics") if key not in enabled]
+        if empty:
+            raise RuntimeError(f"[ups_metrics]: metriche senza valore, rimuoverle o valorizzarle: {sorted(empty)}")
+
+        # Una metrica che il service non sa graficare non produce nulla, ma
+        # resta obbligatoria sul device: tutto il rischio, nessun beneficio.
+        chartable = {key for key, _, _, _, _ in self._chart_specs()}
+        unknown = set(enabled) - chartable - METRICS_WITHOUT_CHART
+        if unknown:
+            raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
+
         for key, _, _, _, chart_kwargs_fn in self._chart_specs():
             if key in enabled:
                 chart_kwargs_fn()

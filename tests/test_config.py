@@ -29,3 +29,18 @@ class TestGetRequiredFloat(unittest.TestCase):
         with patch("crac_server.config.Config.getValue", side_effect=KeyError("battery_charge.ok")):
             with self.assertRaises(KeyError):
                 Config.getRequiredFloat("lower_bound", "battery_charge.ok")
+
+
+class TestGetSectionKeys(unittest.TestCase):
+    """
+    get_section scarta le chiavi con valore vuoto: chi deve accorgersi di una
+    chiave svuotata per sbaglio ha bisogno dei nomi non filtrati.
+    """
+
+    def test_returns_every_key_including_the_empty_ones(self):
+        import configparser
+        parser = configparser.ConfigParser()
+        parser.read_string("[ups_metrics]\nbattery_charge = battery.charge\ninput_voltage =\n")
+        with patch("crac_server.config.Config.__init__", lambda self: setattr(self, "configparser", parser)):
+            self.assertEqual({"battery_charge", "input_voltage"}, set(Config.get_section_keys("ups_metrics")))
+            self.assertEqual({"battery_charge"}, set(Config.get_section("ups_metrics")))

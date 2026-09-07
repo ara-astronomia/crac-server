@@ -31,9 +31,37 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
             return getfloat_side_effect(key, section)
 
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
              patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=broken):
             with self.assertRaises(ValueError):
                 UpsService()
+
+    def test_init_raises_on_a_metric_the_service_cannot_chart(self):
+        # una metrica sconosciuta non produce alcun chart, ma rende comunque
+        # obbligatoria la sua presenza sul device: danno netto, va rifiutata
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "battery_voltage": "battery.voltage"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "battery_voltage"]), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect):
+            with self.assertRaises(RuntimeError) as ctx:
+                UpsService()
+        self.assertIn("battery_voltage", str(ctx.exception))
+
+    def test_init_accepts_ups_status_even_without_a_chart(self):
+        # ups_status e' letto di proposito senza produrre un chart: serve a #22
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "ups_status": "ups.status"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "ups_status"]), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect):
+            UpsService()
+
+    def test_init_raises_on_a_metric_left_empty(self):
+        # get_section scarta le chiavi vuote: senza questo controllo una
+        # metrica svuotata per sbaglio smette di essere letta in silenzio
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect):
+            with self.assertRaises(RuntimeError) as ctx:
+                UpsService()
+        self.assertIn("input_voltage", str(ctx.exception))
 
     def test_init_ignores_thresholds_of_metrics_not_enabled(self):
         def missing_current_config(key, section):
@@ -42,6 +70,7 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
             return getfloat_side_effect(key, section)
 
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]), \
              patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=missing_current_config):
             UpsService()  # non deve sollevare: output_current non e' abilitata
 
@@ -53,9 +82,11 @@ class TestUpsService(unittest.TestCase):
         self._getfloat_patch = patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect)
         self._getvalue_patch = patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000,cyberpower")
         self._getsection_patch = patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage", "ups_status": "ups.status"})
+        self._getkeys_patch = patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage", "ups_status"])
         self._getfloat_patch.start()
         self._getvalue_patch.start()
         self._getsection_patch.start()
+        self._getkeys_patch.start()
         self.ups_service = UpsService()
 
     def tearDown(self):
@@ -63,6 +94,7 @@ class TestUpsService(unittest.TestCase):
         self._getfloat_patch.stop()
         self._getvalue_patch.stop()
         self._getsection_patch.stop()
+        self._getkeys_patch.stop()
 
     def _ok_reading(self):
         return {"input_voltage": "220", "battery_charge": "80", "ups_status": "OL"}

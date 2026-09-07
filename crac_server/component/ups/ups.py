@@ -12,7 +12,12 @@ class Ups(ABC):
         result = {}
         for our_name, source_name in metrics.items():
             if raw.get(source_name) is None:
-                raise RuntimeError(f"UPS {device}: metrica '{our_name}' ({source_name}) non disponibile")
+                raise RuntimeError(
+                    f"UPS {device}: metrica '{our_name}' ({source_name}) non disponibile. "
+                    f"Se questo UPS non la espone, toglierla da [ups_metrics] in config.ini: "
+                    f"finche' resta elencata il device viene scartato per intero, "
+                    f"comprese le metriche leggibili."
+                )
             result[our_name] = raw[source_name]
         return result
 

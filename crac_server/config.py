@@ -78,3 +78,12 @@ class Config:
         section = config.configparser[section_name]
         raw_list = {key: config.getValue(key, section_name) for key in section}
         return {key: value for key, value in raw_list.items() if value}
+
+    @staticmethod
+    def get_section_keys(section_name: str):
+        """
+        Tutte le chiavi della sezione, comprese quelle con valore vuoto che
+        get_section scarta: serve a chi deve accorgersi di una chiave svuotata
+        per sbaglio invece di vederla sparire in silenzio.
+        """
+        return list(Config().configparser[section_name])
