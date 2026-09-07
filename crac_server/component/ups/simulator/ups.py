@@ -13,69 +13,13 @@ class Ups(UpsBase):
         ups_config.read(ups_path)
         if ups_config.getboolean(device, "fail", fallback=False):
             raise ConnectionError(f"UPS simulato {device}: fail=true in ups.ini")
-        voltage = ups_config.get(device, "input.voltage", fallback='220')
-        battery = ups_config.get(device, "battery.charge", fallback='100')
-        ups_status = ups_config.get(device, "ups.status", fallback='OL')
-        current = ups_config.get(device, "output.current", fallback='0.00')
-        ups_config[device] = {
-            "input.voltage": voltage,
-            "battery.charge": battery,
-            "ups.status": ups_status,
-            "output.current": current
+        values = {
+            "input.voltage": ups_config.get(device, "input.voltage", fallback='220'),
+            "battery.charge": ups_config.get(device, "battery.charge", fallback='100'),
+            "ups.status": ups_config.get(device, "ups.status", fallback='OL'),
+            "output.current": ups_config.get(device, "output.current", fallback='0.00'),
         }
-        
+        ups_config[device] = values
         with open(ups_path, 'w') as ups_file:
             ups_config.write(ups_file)
-        return {
-            'driver.parameter.synchronous': 'no', 
-            'battery.runtime.low': '120', 
-            'ups.vendorid': '051d', 
-            'ups.mfr': 'American Power Conversion', 
-            'ups.timer.shutdown': '-1', 
-            'battery.mfr.date': '2009/09/16', 
-            'output_voltage': ups_config.get(device, "output.voltage", fallback='220'), 
-            'input_voltage': ups_config.get(device, "input.voltage", fallback='220'),
-            'driver.parameter.pollfreq': '30', 
-            'battery.type': 'PbAc', 
-            'ups.productid': '0002', 
-            'battery.voltage': '55.4', 
-            'ups.timer.start': '-1', 
-            'driver.parameter.vendorId': '051d', 
-            'driver.version.internal': '0.41', 
-            'input.sensitivity': 'low', 
-            'driver.name': 'usbhid-ups', 
-            'driver.version.data': 'APC HID 0.96', 
-            'ups.delay.shutdown': '20', 
-            'output.frequency': '50.0', 
-            'output.voltage.nominal': "230",
-            'battery.runtime': '13980', 
-            'device.model': 'Smart-UPS 3000 RM', 
-            'input.transfer.low': '208', 
-            'ups.beeper.status': 'enabled', 
-            'driver.parameter.pollinterval': '2', 
-            'driver.parameter.port': 'auto', 
-            'battery.charge.warning': "50",
-            'input.transfer.high': '253', 
-            'ups.model': 'Smart-UPS 3000 RM', 
-            'device.mfr': 'American Power Conversion', 
-            'ups.timer.reboot': '-1', 
-            'output.current': '0.00', 
-            'battery_charge': ups_config.get(device, "battery.charge", fallback='0'),
-            'input.voltage': '217.4', 
-            'ups.firmware.aux': '7.4', 
-            'device.serial': 'JS0938004696', 
-            'ups.delay.start': '30', 
-            'driver.version': '2.7.4', 
-            'device.type': 'ups', 
-            'ups.firmware': '666.6.I', 
-            'ups.test.result': 'No test initiated', 
-            'driver.parameter.productId': '0002', 
-            'battery.temperature': '13.0', 
-            'ups.load': '0.0', 
-            'battery.voltage.nominal': '48.0', 
-            'battery.charge.low': "10", 
-            'ups.mfr.date': '2009/09/16', 
-            'ups.serial': 'JS0938004696',
-            'ups_status': ups_config.get(device, "ups.status", fallback='OL'),
-            'output_current': current
-        }
+        return values

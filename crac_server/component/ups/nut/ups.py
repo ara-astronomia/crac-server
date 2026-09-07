@@ -1,4 +1,4 @@
-from crac_server.component.ups.ups import Ups as UpsBase, METRICS
+from crac_server.component.ups.ups import Ups as UpsBase
 from nut2 import PyNUTClient
 
 class Ups(UpsBase):
@@ -28,8 +28,7 @@ class Ups(UpsBase):
 
     def _read(self, device: str) -> dict[str,str]:
         client = self._get_client()
-        raw_data = client.list_vars(device)
-        return {key: raw_data.get(source) for key, source in METRICS}
+        return client.list_vars(device)
 
     def list_ups(self):
         client = self._get_client()

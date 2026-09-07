@@ -24,11 +24,11 @@ class TestSimulatorUps(unittest.TestCase):
 
     def test_read_returns_defaults_when_no_fail_flag(self):
         result = self.ups._read("apc-3000")
-        self.assertEqual("OL", result["ups_status"])
+        self.assertEqual("OL", result["ups.status"])
 
     def test_read_includes_output_current(self):
         result = self.ups._read("apc-3000")
-        self.assertIn("output_current", result)
+        self.assertIn("output.current", result)
 
     def test_read_raises_when_fail_flag_set(self):
         config = ConfigParser()
