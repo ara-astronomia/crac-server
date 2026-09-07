@@ -28,7 +28,7 @@ from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
-block_on_unspecified = Config.getBoolean("block_on_unspecified", "weather")
+block_on_unspecified = Config.getRequiredBoolean("block_on_unspecified", "weather")
 
 class AbstractButtonHandler(AbstractHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:

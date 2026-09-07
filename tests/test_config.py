@@ -44,3 +44,34 @@ class TestGetSectionKeys(unittest.TestCase):
         with patch("crac_server.config.Config.__init__", lambda self: setattr(self, "configparser", parser)):
             self.assertEqual({"battery_charge", "input_voltage"}, set(Config.get_section_keys("ups_metrics")))
             self.assertEqual({"battery_charge"}, set(Config.get_section("ups_metrics")))
+
+
+class TestGetRequiredBoolean(unittest.TestCase):
+    """
+    Safety switches must not be readable as "off" just because nobody wrote
+    them down: an absent key has to fail loudly, the way a missing threshold
+    does in getRequiredFloat.
+    """
+
+    def _get_required_boolean(self, raw_value):
+        with patch("crac_server.config.Config.getValue", return_value=raw_value):
+            return Config.getRequiredBoolean("block_on_unspecified", "weather")
+
+    def test_returns_true_for_a_true_value(self):
+        self.assertIs(True, self._get_required_boolean("true"))
+
+    def test_returns_false_for_a_false_value(self):
+        self.assertIs(False, self._get_required_boolean("false"))
+
+    def test_raises_on_empty_value(self):
+        with self.assertRaises(ValueError):
+            self._get_required_boolean("")
+
+    def test_raises_on_non_boolean_value(self):
+        with self.assertRaises(ValueError):
+            self._get_required_boolean("maybe")
+
+    def test_propagates_error_when_key_or_section_is_missing(self):
+        with patch("crac_server.config.Config.getValue", side_effect=KeyError("weather")):
+            with self.assertRaises(KeyError):
+                Config.getRequiredBoolean("block_on_unspecified", "weather")
