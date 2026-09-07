@@ -34,6 +34,19 @@ class Config:
         return 0
 
     @staticmethod
+    def getRequiredFloat(key, section='automazione'):
+        """
+        Like getFloat but without a fallback: raises when the key is missing,
+        empty or not numeric, instead of silently returning 0. Use it for the
+        values safety decisions are taken on, where a made up 0 is
+        indistinguishable from a real threshold.
+        """
+        value = Config.getValue(key, section)
+        if not value:
+            raise ValueError(f"{section}.{key} non impostata in config.ini")
+        return float(value)
+
+    @staticmethod
     def getInt(key, section='automazione'):
         config = Config()
         env_value = Config.__check_environ__(key, section=section)
@@ -65,3 +78,12 @@ class Config:
         section = config.configparser[section_name]
         raw_list = {key: config.getValue(key, section_name) for key in section}
         return {key: value for key, value in raw_list.items() if value}
+
+    @staticmethod
+    def get_section_keys(section_name: str):
+        """
+        Every key of the section, including the empty ones that get_section
+        drops, so that a key emptied by mistake can be spotted instead of
+        silently disappearing.
+        """
+        return list(Config().configparser[section_name])
