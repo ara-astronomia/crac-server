@@ -38,12 +38,14 @@ class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):
 
     def test_get_status_open(self):
         self.mock_client.get_property.return_value = {
+            "state": "Ok",
             "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
         }
         self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_OPENED)
 
     def test_get_status_closed(self):
         self.mock_client.get_property.return_value = {
+            "state": "Ok",
             "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": True}]
         }
         self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_CLOSED)
@@ -54,6 +56,48 @@ class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):
 
     def test_get_status_no_switch_true_is_error(self):
         self.mock_client.get_property.return_value = {
+            "state": "Ok",
             "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": False}]
+        }
+        self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_ERROR)
+
+    def test_get_status_alert_with_open_true_is_error(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_ERROR)
+
+    def test_get_status_alert_with_close_true_is_error(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": True}]
+        }
+        self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_ERROR)
+
+    def test_get_status_busy_with_open_true_is_opening(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Busy",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_OPENING)
+
+    def test_get_status_busy_with_close_true_is_closing(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Busy",
+            "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": True}]
+        }
+        self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_CLOSING)
+
+    def test_get_status_busy_with_no_switch_true_is_error(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Busy",
+            "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": False}]
+        }
+        self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_ERROR)
+
+    def test_get_status_missing_state_is_error(self):
+        self.mock_client.get_property.return_value = {
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
         }
         self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_ERROR)
