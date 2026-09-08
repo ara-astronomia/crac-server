@@ -97,7 +97,7 @@ def build_chart(
 
     chart.status = ChartStatus.CHART_STATUS_UNSPECIFIED
     classified_value = _clamp_to_scale(chart.value, chart.thresholds)
-    for threashold in chart.thresholds:
+    for threashold in sorted(chart.thresholds, key=lambda band: -band.threshold_type):
         if threashold.lower_bound <= classified_value <= threashold.upper_bound:
             if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
                 chart.status = ChartStatus.CHART_STATUS_NORMAL

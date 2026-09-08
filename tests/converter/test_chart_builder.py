@@ -114,3 +114,20 @@ class TestBuildChartRejectsEmptyBands(unittest.TestCase):
     def test_accepts_a_band_reduced_to_a_single_value(self):
         chart = self._build({"lower_bound": 36, "upper_bound": 36})
         self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, chart.status)
+
+
+class TestBuildChartOnBandBoundaries(unittest.TestCase):
+    """
+    A threshold names the level it opens: at exactly 36, with error = 36, the
+    wind is dangerous. Bands share their endpoints, so a value sitting on one
+    belongs to two of them and the more severe has to win.
+    """
+
+    def test_the_danger_threshold_is_already_danger(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(36, WIND_RANGES))
+
+    def test_the_warning_threshold_is_already_warning(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, _status(10, WIND_RANGES))
+
+    def test_the_danger_threshold_is_already_danger_when_danger_is_below(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(990, BAROMETER_RANGES))
