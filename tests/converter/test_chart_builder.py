@@ -78,3 +78,39 @@ class TestBuildChartStatus(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBuildChartRejectsEmptyBands(unittest.TestCase):
+    """
+    A band whose bounds are inverted can never be reached: the reading falls
+    back into the band below it, so a danger level configured that way is
+    silently switched off. It has to be refused, not worked around.
+    """
+
+    def _build(self, danger_bounds):
+        return build_chart(
+            value=5,
+            title="Vento",
+            urn="weather.chart.test",
+            min=0,
+            max=40,
+            unit_of_measurement="m/s",
+            range_normal=({"lower_bound": 0, "upper_bound": 10},),
+            range_warn=({"lower_bound": 10, "upper_bound": 36},),
+            range_danger=(danger_bounds,),
+        )
+
+    def test_raises_when_a_band_has_its_bounds_inverted(self):
+        with self.assertRaises(ValueError):
+            self._build({"lower_bound": 36, "upper_bound": 30})
+
+    def test_names_the_chart_and_the_band_in_the_error(self):
+        with self.assertRaises(ValueError) as raised:
+            self._build({"lower_bound": 36, "upper_bound": 30})
+        message = str(raised.exception)
+        self.assertIn("weather.chart.test", message)
+        self.assertIn("DANGER", message)
+
+    def test_accepts_a_band_reduced_to_a_single_value(self):
+        chart = self._build({"lower_bound": 36, "upper_bound": 36})
+        self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, chart.status)
