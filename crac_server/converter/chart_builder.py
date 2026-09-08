@@ -7,6 +7,22 @@ from crac_protobuf.chart_pb2 import (
 from typing import Union
   
 
+def _clamp_to_scale(value: float, thresholds) -> float:
+    """
+    Bounds describe the scale the gauge is drawn on, not the range the measure
+    can take: a reading past either end of it still belongs to the outermost
+    band, it is not an unknown reading. Only the classification uses the
+    clamped copy, so the value reported stays the measured one.
+    """
+    if not thresholds:
+        return value
+
+    lowest = min(threshold.lower_bound for threshold in thresholds)
+    highest = max(threshold.upper_bound for threshold in thresholds)
+
+    return min(max(value, lowest), highest)
+
+
 def build_chart(
     value: float, 
     title: str, 
@@ -52,8 +68,9 @@ def build_chart(
         )
 
     chart.status = ChartStatus.CHART_STATUS_UNSPECIFIED
+    classified_value = _clamp_to_scale(chart.value, chart.thresholds)
     for threashold in chart.thresholds:
-        if threashold.lower_bound <= chart.value <= threashold.upper_bound:
+        if threashold.lower_bound <= classified_value <= threashold.upper_bound:
             if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
                 chart.status = ChartStatus.CHART_STATUS_NORMAL
             elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_WARNING:
