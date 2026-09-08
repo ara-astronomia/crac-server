@@ -59,16 +59,27 @@ class CoverMirrorConverter:
         button_gui = ButtonGui(
             key=ButtonKey.KEY_COVER_MIRROR,
             label=label,
-            metadata=(
-                CoverMirrorAction.CLOSE_COVER_MIRROR
-                if mediator.status in [CoverMirrorStatus.COVER_MIRROR_OPENED, CoverMirrorStatus.COVER_MIRROR_OPENING]
-                else CoverMirrorAction.OPEN_COVER_MIRROR
-            ),
+            metadata=self.__next_action(mediator),
             is_disabled=mediator.is_disabled,
             button_color=ButtonColor(text_color=text_color, background_color=background_color),
         )
 
         return CoverMirrorResponse(status=mediator.status, button_gui=button_gui)
+
+    def __next_action(self, mediator) -> CoverMirrorAction:
+        """After a failure the position is unknown, so the movement to offer is
+        the one that did not complete - offering its opposite would drive the
+        cover away from where the operator was taking it."""
+        if mediator.status is CoverMirrorStatus.COVER_MIRROR_ERROR:
+            failed_action = mediator.button.get_commanded_action()
+            if failed_action is not CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION:
+                return failed_action
+            return CoverMirrorAction.OPEN_COVER_MIRROR
+
+        if mediator.status in [CoverMirrorStatus.COVER_MIRROR_OPENED, CoverMirrorStatus.COVER_MIRROR_OPENING]:
+            return CoverMirrorAction.CLOSE_COVER_MIRROR
+
+        return CoverMirrorAction.OPEN_COVER_MIRROR
 
     def __cover_mirror_label(self, status):
         if status is CoverMirrorStatus.COVER_MIRROR_CLOSED:

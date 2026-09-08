@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from crac_protobuf.cover_mirror_pb2 import CoverMirrorStatus
+from crac_protobuf.cover_mirror_pb2 import CoverMirrorAction, CoverMirrorStatus
 from crac_server.component.cover_mirror.cover_mirror_control import CoverMirrorControl
 
 
@@ -101,3 +101,33 @@ class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):
             "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
         }
         self.assertEqual(self.control.get_status(), CoverMirrorStatus.COVER_MIRROR_ERROR)
+
+    def test_get_commanded_action_open(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        self.assertEqual(self.control.get_commanded_action(), CoverMirrorAction.OPEN_COVER_MIRROR)
+
+    def test_get_commanded_action_close(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": True}]
+        }
+        self.assertEqual(self.control.get_commanded_action(), CoverMirrorAction.CLOSE_COVER_MIRROR)
+
+    def test_get_commanded_action_missing_property_is_default(self):
+        self.mock_client.get_property.return_value = None
+        self.assertEqual(self.control.get_commanded_action(), CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION)
+
+    def test_get_commanded_action_no_switch_true_is_default(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": False}]
+        }
+        self.assertEqual(self.control.get_commanded_action(), CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION)
+
+    def test_get_commanded_action_does_not_wait_for_a_missing_property(self):
+        self.mock_client.get_property.return_value = None
+        self.control.get_commanded_action()
+        self.mock_client.get_property.assert_called_with(self.control._name, "AUX_COVER", timeout=0)
