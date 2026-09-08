@@ -47,6 +47,19 @@ class Config:
         return float(value)
 
     @staticmethod
+    def getRequiredBoolean(key, section='automazione'):
+        """
+        Like getBoolean but without a fallback: raises when the key is missing,
+        empty or not a boolean, instead of silently returning None. Use it for
+        the switches safety decisions are taken on, where an absent key turns
+        a check off without leaving any trace.
+        """
+        value = Config.getValue(key, section)
+        if not value:
+            raise ValueError(f"{section}.{key} is not set in config.ini")
+        return bool(strtobool(value))
+
+    @staticmethod
     def getInt(key, section='automazione'):
         config = Config()
         env_value = Config.__check_environ__(key, section=section)

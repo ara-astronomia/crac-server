@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
+from crac_protobuf.chart_pb2 import ChartStatus
 from crac_protobuf.ups_pb2 import UpsStatus
 from crac_server.component.ups import UPS
+from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.service.ups_service import UpsService
 
 
@@ -34,6 +36,22 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
              patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
              patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=broken):
             with self.assertRaises(ValueError):
+                UpsService()
+
+    def test_init_raises_when_a_band_can_never_be_reached(self):
+        """
+        A band whose bounds are inverted covers nothing: the level it stands
+        for is off, and no reading will ever report it.
+        """
+        def unreachable_band(key, section):
+            if section == "battery_charge.danger":
+                return {"upper_bound": 0.0, "lower_bound": 35.0}[key]
+            return getfloat_side_effect(key, section)
+
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
+             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=unreachable_band):
+            with self.assertRaises(UnreachableThresholdError):
                 UpsService()
 
     def test_init_raises_on_a_metric_the_service_cannot_chart(self):
@@ -345,3 +363,108 @@ class TestUpsService(unittest.TestCase):
 
         self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
         self.assertEqual(0, len(response.charts))
+
+
+class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
+    """
+    A device that does not answer is reported as unreadable, which is honest.
+    A misconfigured threshold is a different thing, and reporting it the same
+    way hides a broken configuration behind a hardware problem.
+    """
+
+    def setUp(self):
+        self._original_status_for = UPS.status_for
+        self._patches = [
+            patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect),
+            patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000"),
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]),
+        ]
+        for p in self._patches:
+            p.start()
+        self.ups_service = UpsService()
+
+    def tearDown(self):
+        UPS.status_for = self._original_status_for
+        for p in self._patches:
+            p.stop()
+
+    def test_reraises_an_unreachable_threshold_instead_of_blaming_the_device(self):
+        UPS.status_for = MagicMock(return_value={"battery_charge": "80"})
+
+        def unreachable_band(key, section):
+            if section == "battery_charge.danger":
+                return {"upper_bound": 0.0, "lower_bound": 35.0}[key]
+            return getfloat_side_effect(key, section)
+
+        with patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=unreachable_band):
+            with self.assertRaises(UnreachableThresholdError):
+                self.ups_service.GetStatus(None, None)
+
+    def test_still_reports_the_device_as_unreadable_when_the_reading_fails(self):
+        UPS.status_for = MagicMock(side_effect=ConnectionError("unreachable"))
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual([], list(response.devices))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+
+
+class TestUpsChartLevels(unittest.TestCase):
+    """
+    The level a reading ends up with, all the way from the device to the
+    reported status, with the thresholds actually configured for the UPS:
+    battery ok [50, 100] warning [35, 50] danger [0, 35], mains voltage
+    ok [209, 241.5] with a dangerous band on each side.
+    """
+
+    def setUp(self):
+        self._original_status_for = UPS.status_for
+        self._patches = [
+            patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect),
+            patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000"),
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]),
+        ]
+        for p in self._patches:
+            p.start()
+        self.ups_service = UpsService()
+
+    def tearDown(self):
+        UPS.status_for = self._original_status_for
+        for p in self._patches:
+            p.stop()
+
+    def _chart_status(self, urn_suffix, **reading):
+        UPS.status_for = MagicMock(return_value={"battery_charge": "80", "input_voltage": "220", **reading})
+        response = self.ups_service.GetStatus(None, None)
+        chart = next(c.chart for c in response.charts if c.chart.urn.endswith(urn_suffix))
+        return chart.status
+
+    def _device_status(self, **reading):
+        UPS.status_for = MagicMock(return_value={"battery_charge": "80", "input_voltage": "220", **reading})
+        return self.ups_service.GetStatus(None, None).device_states[0].status
+
+    def test_battery_inside_each_band(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, self._chart_status("battery", battery_charge="80"))
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("battery", battery_charge="40"))
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("battery", battery_charge="20"))
+
+    def test_battery_on_a_threshold_takes_the_more_severe_level(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("battery", battery_charge="35"))
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("battery", battery_charge="50"))
+
+    def test_voltage_is_dangerous_on_both_sides_of_the_safe_range(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, self._chart_status("voltage", input_voltage="220"))
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="200"))
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="245"))
+
+    def test_a_reading_past_the_scale_keeps_the_level_of_the_outermost_band(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="400"))
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="0"))
+
+    def test_the_device_takes_the_level_of_its_worst_chart(self):
+        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, self._device_status())
+        self.assertEqual(UpsStatus.UPS_STATUS_WARNING, self._device_status(battery_charge="40"))
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(input_voltage="200"))
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(battery_charge="40", input_voltage="200"))

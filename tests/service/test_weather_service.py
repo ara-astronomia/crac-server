@@ -6,6 +6,7 @@ from crac_protobuf.chart_pb2 import (
     WeatherStatus,  # type: ignore
 )
 from crac_server.component.telescope import TELESCOPE
+from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.component.weather import WEATHER
 from crac_server.service.weather_service import WeatherService
 
@@ -67,3 +68,30 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
         self.weather_service._emergency_closure = MagicMock()
         await self.weather_service.GetStatus(None, None)
         self.weather_service._emergency_closure.assert_called_once()
+
+
+class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):
+    """
+    A weather reading that fails is reported as UNSPECIFIED, which is honest:
+    the data is not there. A misconfigured threshold is a different thing, and
+    reporting it the same way hides a protection that is not running.
+    """
+
+    async def test_reraises_an_unreachable_threshold_instead_of_reporting_unspecified(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = UnreachableThresholdError(
+            "weather.chart.wind: the DANGER band is unreachable"
+        )
+
+        with self.assertRaises(UnreachableThresholdError):
+            await service.GetStatus(None, None)
+
+    async def test_still_reports_unspecified_when_the_reading_fails(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = ConnectionError("weather station unreachable")
+
+        response = await service.GetStatus(None, None)
+
+        self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)

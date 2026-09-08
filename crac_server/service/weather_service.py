@@ -22,6 +22,7 @@ from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN
 from crac_server.component.roof import ROOF
 from crac_server.component.telescope import TELESCOPE
 from crac_server.component.weather import WEATHER
+from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.converter.weather_converter import WeatherConverter
 
 
@@ -39,6 +40,8 @@ class WeatherService(WeatherServicer):
     async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         try:
             response = self.weather_converter.convert(WEATHER)
+        except UnreachableThresholdError:
+            raise
         except Exception:
             logger.error("Weather read failed: reporting status as UNSPECIFIED", exc_info=1)
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)

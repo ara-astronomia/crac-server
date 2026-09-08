@@ -7,6 +7,48 @@ from crac_protobuf.chart_pb2 import (
 from typing import Union
   
 
+class UnreachableThresholdError(ValueError):
+    """
+    Raised when a configured band can never be reached. It is a broken
+    configuration, not a missing reading, and the two must not be reported the
+    same way: a reading that is not there is unknown, a check that cannot fire
+    is unprotected.
+    """
+
+
+def _reject_empty_bands(chart: Chart) -> None:
+    """
+    A band whose lower bound sits above its upper bound covers nothing, so no
+    reading is ever classified into it and the level it stands for is switched
+    off without a trace. Refuse it: an unreachable danger level is the kind of
+    protection everybody believes is on.
+    """
+    for threshold in chart.thresholds:
+        if threshold.lower_bound > threshold.upper_bound:
+            raise UnreachableThresholdError(
+                f"{chart.urn}: the "
+                f"{ThresholdType.Name(threshold.threshold_type)} band is unreachable, "
+                f"lower_bound {threshold.lower_bound} is above "
+                f"upper_bound {threshold.upper_bound}"
+            )
+
+
+def _clamp_to_scale(value: float, thresholds) -> float:
+    """
+    Bounds describe the scale the gauge is drawn on, not the range the measure
+    can take: a reading past either end of it still belongs to the outermost
+    band, it is not an unknown reading. Only the classification uses the
+    clamped copy, so the value reported stays the measured one.
+    """
+    if not thresholds:
+        return value
+
+    lowest = min(threshold.lower_bound for threshold in thresholds)
+    highest = max(threshold.upper_bound for threshold in thresholds)
+
+    return min(max(value, lowest), highest)
+
+
 def build_chart(
     value: float, 
     title: str, 
@@ -51,9 +93,12 @@ def build_chart(
             )
         )
 
+    _reject_empty_bands(chart)
+
     chart.status = ChartStatus.CHART_STATUS_UNSPECIFIED
-    for threashold in chart.thresholds:
-        if threashold.lower_bound <= chart.value <= threashold.upper_bound:
+    classified_value = _clamp_to_scale(chart.value, chart.thresholds)
+    for threashold in sorted(chart.thresholds, key=lambda band: -band.threshold_type):
+        if threashold.lower_bound <= classified_value <= threashold.upper_bound:
             if threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_NORMAL:
                 chart.status = ChartStatus.CHART_STATUS_NORMAL
             elif threashold.threshold_type == ThresholdType.THRESHOLD_TYPE_WARNING:
