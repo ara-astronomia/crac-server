@@ -126,3 +126,8 @@ class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):
             "items": [{"name": "OPEN", "value": False}, {"name": "CLOSE", "value": False}]
         }
         self.assertEqual(self.control.get_commanded_action(), CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION)
+
+    def test_get_commanded_action_does_not_wait_for_a_missing_property(self):
+        self.mock_client.get_property.return_value = None
+        self.control.get_commanded_action()
+        self.mock_client.get_property.assert_called_with(self.control._name, "AUX_COVER", timeout=0)

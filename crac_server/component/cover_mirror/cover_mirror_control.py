@@ -83,8 +83,11 @@ class CoverMirrorControl():
     def get_commanded_action(self):
         """The switch that is still true carries the movement last commanded,
         the only one that survives a failure: after a close that never
-        completed the operator still wants to close, not to open."""
-        prop = self._client.get_property(self._name, "AUX_COVER")
+        completed the operator still wants to close, not to open.
+
+        Read without waiting: get_status() has just looked the property up, so
+        a miss here means it is absent, not late."""
+        prop = self._client.get_property(self._name, "AUX_COVER", timeout=0)
         if not prop:
             return CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION
 
