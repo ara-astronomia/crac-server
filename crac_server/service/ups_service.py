@@ -13,7 +13,7 @@ from crac_protobuf.ups_pb2 import (
 )
 from crac_server.component.ups import UPS
 from crac_server.config import Config
-from crac_server.converter.chart_builder import build_chart
+from crac_server.converter.chart_builder import build_chart, UnreachableThresholdError
 from typing import Union
 
 
@@ -42,7 +42,7 @@ class UpsService(UpsServicer):
             )
         self._reject_metrics_left_without_a_value(enabled)
         self._reject_metrics_that_produce_no_chart(enabled)
-        self._read_thresholds_of(enabled)
+        self._reject_unusable_thresholds_of(enabled)
 
     def _configured_devices(self):
         """
@@ -76,10 +76,22 @@ class UpsService(UpsServicer):
         if unknown:
             raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
 
-    def _read_thresholds_of(self, enabled):
-        for key, _, _, _, chart_kwargs_fn in self._chart_specs():
+    def _reject_unusable_thresholds_of(self, enabled):
+        """
+        Reading the thresholds catches the missing ones, building a chart out
+        of them also catches the bands no reading can ever fall into. Both are
+        levels that are off while everybody believes they are on, so both have
+        to stop the startup rather than surface at the first poll.
+        """
+        for key, urn_suffix, title, unit, chart_kwargs_fn in self._chart_specs():
             if key in enabled:
-                chart_kwargs_fn()
+                build_chart(
+                    value=0,
+                    title=title,
+                    urn=f"ups.chart.{urn_suffix}",
+                    unit_of_measurement=unit,
+                    **chart_kwargs_fn()
+                )
 
     def _chart_specs(self):
         return (
@@ -156,6 +168,8 @@ class UpsService(UpsServicer):
             try:
                 ups = UPS.status_for(device)
                 charts = self._build_charts(device, ups)
+            except UnreachableThresholdError:
+                raise
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
                 unreadable.append(device)

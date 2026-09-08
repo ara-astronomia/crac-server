@@ -131,3 +131,35 @@ class TestBuildChartOnBandBoundaries(unittest.TestCase):
 
     def test_the_danger_threshold_is_already_danger_when_danger_is_below(self):
         self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(990, BAROMETER_RANGES))
+
+
+VOLTAGE_RANGES = {
+    "range_normal": ({"lower_bound": 209, "upper_bound": 241.5},),
+    "range_danger": (
+        {"lower_bound": 241.5, "upper_bound": 250},
+        {"lower_bound": 0, "upper_bound": 209},
+    ),
+}
+
+
+class TestBuildChartWithTwoBandsOfTheSameLevel(unittest.TestCase):
+    """
+    The mains voltage is dangerous on both sides, with the safe range in the
+    middle: the level appears twice, and a reading past either end of the
+    scale still belongs to the band on that side.
+    """
+
+    def test_reports_normal_between_the_two_dangerous_bands(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, _status(220, VOLTAGE_RANGES))
+
+    def test_reports_danger_below_the_safe_range(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(200, VOLTAGE_RANGES))
+
+    def test_reports_danger_above_the_safe_range(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(245, VOLTAGE_RANGES))
+
+    def test_reports_danger_far_below_the_scale(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(-10, VOLTAGE_RANGES))
+
+    def test_reports_danger_far_above_the_scale(self):
+        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, _status(400, VOLTAGE_RANGES))
