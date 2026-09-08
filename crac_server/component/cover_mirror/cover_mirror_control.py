@@ -1,6 +1,6 @@
 import logging
 
-from crac_protobuf.cover_mirror_pb2 import CoverMirrorStatus
+from crac_protobuf.cover_mirror_pb2 import CoverMirrorAction, CoverMirrorStatus
 from crac_server import config
 from crac_server.component.indigo_client import get_indigo_client
 
@@ -15,6 +15,11 @@ STATUS_BY_INDIGO_STATE = {
         "OPEN": CoverMirrorStatus.COVER_MIRROR_OPENING,
         "CLOSE": CoverMirrorStatus.COVER_MIRROR_CLOSING,
     },
+}
+
+ACTION_BY_SWITCH = {
+    "OPEN": CoverMirrorAction.OPEN_COVER_MIRROR,
+    "CLOSE": CoverMirrorAction.CLOSE_COVER_MIRROR,
 }
 
 
@@ -74,3 +79,17 @@ class CoverMirrorControl():
                 return status_by_switch[switch["name"]]
 
         return CoverMirrorStatus.COVER_MIRROR_ERROR
+
+    def get_commanded_action(self):
+        """The switch that is still true carries the movement last commanded,
+        the only one that survives a failure: after a close that never
+        completed the operator still wants to close, not to open."""
+        prop = self._client.get_property(self._name, "AUX_COVER")
+        if not prop:
+            return CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION
+
+        for switch in prop.get("items", []):
+            if switch.get("value") is True and switch.get("name") in ACTION_BY_SWITCH:
+                return ACTION_BY_SWITCH[switch["name"]]
+
+        return CoverMirrorAction.COVER_MIRROR_DEFAULT_ACTION
