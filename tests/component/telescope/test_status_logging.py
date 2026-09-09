@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import TelescopeStatus
-from crac_server.component.status_log import ErrorCause
+from crac_server.status_log import ErrorCause
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from crac_protobuf.cover_mirror_pb2 import CoverMirrorAction, CoverMirrorStatus
 from crac_server.component.cover_mirror.cover_mirror_control import CoverMirrorControl
-from crac_server.component.status_log import ErrorCause
+from crac_server.status_log import ErrorCause
 
 
 class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):

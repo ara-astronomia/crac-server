@@ -2,7 +2,7 @@ import logging
 import unittest
 
 from crac_protobuf.roof_pb2 import RoofStatus
-from crac_server.component.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause, StatusLogger
 
 
 class TestStatusLogger(unittest.TestCase):

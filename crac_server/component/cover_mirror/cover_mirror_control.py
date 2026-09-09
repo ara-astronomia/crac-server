@@ -3,7 +3,7 @@ import logging
 from crac_protobuf.cover_mirror_pb2 import CoverMirrorAction, CoverMirrorStatus
 from crac_server import config
 from crac_server.component.indigo_client import get_indigo_client
-from crac_server.component.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause, StatusLogger
 
 logger = logging.getLogger(__name__)
 

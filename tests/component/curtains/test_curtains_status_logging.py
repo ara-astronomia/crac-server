@@ -6,7 +6,7 @@ from gpiozero import Device
 
 from crac_protobuf.curtains_pb2 import CurtainOrientation
 from crac_server.component.curtains.simulator.curtains import MockCurtain
-from crac_server.component.status_log import ErrorCause
+from crac_server.status_log import ErrorCause
 
 
 class TestCurtainStatusLogging(unittest.TestCase):

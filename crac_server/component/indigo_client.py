@@ -4,7 +4,7 @@ import socket
 import threading
 import time
 
-from crac_server.component.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause, StatusLogger
 
 logger = logging.getLogger(__name__)
 

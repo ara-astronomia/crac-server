@@ -6,7 +6,7 @@ from gpiozero import Device
 from crac_server.component.roof.roof_control import RoofControl
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.roof.simulator.roof_control import MockRoofControl
-from crac_server.component.status_log import ErrorCause
+from crac_server.status_log import ErrorCause
 
 
 class TestRoofControl(unittest.IsolatedAsyncioTestCase):

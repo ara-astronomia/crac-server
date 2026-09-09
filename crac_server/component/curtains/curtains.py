@@ -4,7 +4,7 @@ from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
-from crac_server.component.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause, StatusLogger
 
 
 logger = logging.getLogger(__name__)

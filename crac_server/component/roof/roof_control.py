@@ -3,7 +3,7 @@ import logging
 from gpiozero import OutputDevice, DigitalInputDevice
 from crac_server.config import Config
 from crac_protobuf.roof_pb2 import RoofStatus
-from crac_server.component.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause, StatusLogger
 
 
 logger = logging.getLogger(__name__)

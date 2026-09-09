@@ -16,7 +16,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
 )
 from crac_server import config
-from crac_server.component.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause, StatusLogger
 from datetime import datetime
 from threading import Thread
 from time import sleep
