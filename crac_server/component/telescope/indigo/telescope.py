@@ -13,6 +13,7 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server.component.client.indigo import get_indigo_client
+from crac_server.status_log import ErrorCause, StatusLogger
 import logging
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class Telescope(TelescopeBase):
         # dall'operatore dal pannello INDIGO (mount.html/ctrl.html) prima
         # che crac la usi, non forzata da crac stesso - vedi retrieve().
         self._geo_synced = False
+        self._speed_log = StatusLogger(logger, "Telescope speed", TelescopeSpeed)
         self.__sync_geographic_coordinates()
         self._park_position_synced = False
         self._uses_raw_socket = False
@@ -400,6 +402,7 @@ class Telescope(TelescopeBase):
         status_mount_speed = coords.get("state") if coords else None
 
         if status_mount_speed == "Ok" and status_mount_track == "ON":
+            self._speed_log.record(TelescopeSpeed.SPEED_TRACKING)
             return TelescopeSpeed.SPEED_TRACKING
         # indigo_mount_simulator.c non usa mai lo stato "Idle" per
         # MOUNT_EQUATORIAL_COORDINATES (solo "Ok"/"Busy"/"Alert"): a riposo
@@ -407,9 +410,17 @@ class Telescope(TelescopeBase):
         # confronto SPEED_NOT_TRACKING non veniva mai rilevata, cadendo
         # sempre su SPEED_ERROR.
         if status_mount_speed == "Ok" and status_mount_track == "OFF":
+            self._speed_log.record(TelescopeSpeed.SPEED_NOT_TRACKING)
             return TelescopeSpeed.SPEED_NOT_TRACKING
         if status_mount_speed == "Busy":
+            self._speed_log.record(TelescopeSpeed.SPEED_SLEWING)
             return TelescopeSpeed.SPEED_SLEWING
+
+        self._speed_log.record(
+            TelescopeSpeed.SPEED_ERROR,
+            ErrorCause.DEVICE_UNREACHABLE if not coords or not tracking else ErrorCause.STATE_NOT_RECOGNIZED,
+            detail=f"coordinates: {status_mount_speed}, tracking: {status_mount_track}",
+        )
         return TelescopeSpeed.SPEED_ERROR
 
     def __retrieve_eq_coords(self) -> EquatorialCoords:
