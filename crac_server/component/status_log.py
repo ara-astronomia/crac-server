@@ -1,8 +1,3 @@
-CALLING_COMPONENT = 2
-"""Keeps filename and lineno in the log pointing at the component that
-detected the failure, instead of at this module."""
-
-
 class ErrorCause:
     """Names of what went wrong, shared by every component so that the same
     failure reads the same way in the log wherever it happens."""
@@ -31,6 +26,8 @@ class StatusLogger:
         self._last_recorded = None
 
     def record(self, status, cause: str = None, detail: str = None) -> None:
+        """The stacklevel keeps filename and lineno in the log pointing at the
+        component that detected the failure, instead of at this module."""
         current = (status, cause)
         if current == self._last_recorded:
             return
@@ -44,10 +41,10 @@ class StatusLogger:
                 "[%s] %s: %s%s",
                 self._component, status_name, cause,
                 f" ({detail})" if detail else "",
-                stacklevel=CALLING_COMPONENT,
+                stacklevel=2,
             )
         elif was_failing:
             self._logger.info(
                 "[%s] recovered: %s", self._component, status_name,
-                stacklevel=CALLING_COMPONENT,
+                stacklevel=2,
             )
