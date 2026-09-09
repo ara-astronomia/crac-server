@@ -4,6 +4,7 @@ from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
 from crac_protobuf.curtains_pb2 import CurtainStatus
+from crac_server.component.status_log import ErrorCause, StatusLogger
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ class Curtain:
         self.lock_rotation = threading.RLock()
         self.to_disable = False
         self._orientation = orientation
+        self._status_log = StatusLogger(logger, orientation, CurtainStatus)
 
     def __base__(self):
         self.__sub_min_step__ = Config.getInt("n_step_sub_min", "encoder_step")
@@ -172,6 +174,14 @@ class Curtain:
             logger.debug("Curtain: %s, curtain closed is active: %s, curtain open is active: %s, motor value: %s", self._orientation, self.curtain_closed.is_active, self.curtain_open.is_active, self.motor.value)
         elif self.__is_stopped__():
             status = CurtainStatus.CURTAIN_STOPPED
+
+        if status is CurtainStatus.CURTAIN_ERROR:
+            self._status_log.record(
+                status, ErrorCause.STATE_NOT_RECOGNIZED,
+                detail=f"closed={self.curtain_closed.is_active} open={self.curtain_open.is_active} motor={self.motor.value}",
+            )
+        else:
+            self._status_log.record(status)
 
         return status
 

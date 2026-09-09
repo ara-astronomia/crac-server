@@ -3,6 +3,7 @@ import logging
 from crac_protobuf.cover_mirror_pb2 import CoverMirrorAction, CoverMirrorStatus
 from crac_server import config
 from crac_server.component.indigo_client import get_indigo_client
+from crac_server.component.status_log import ErrorCause, StatusLogger
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class CoverMirrorControl():
         self._name = config.Config.getValue("device", "cover_mirror")
         self._client = get_indigo_client(hostname, port)
         self._client.connect_device(self._name)
+        self._status_log = StatusLogger(logger, "CoverMirror", CoverMirrorStatus)
 
     async def open(self):
         logger.info(f"Opening mirror cover: {self._name}")
@@ -65,19 +67,32 @@ class CoverMirrorControl():
         self._client.connect_device(self._name)
         prop = self._client.get_property(self._name, "AUX_COVER")
         if not prop:
-            logger.error("[CoverMirror] AUX_COVER property not available from INDIGO")
+            self._status_log.record(
+                CoverMirrorStatus.COVER_MIRROR_ERROR, ErrorCause.DEVICE_UNREACHABLE,
+                detail="AUX_COVER not available from INDIGO",
+            )
             return CoverMirrorStatus.COVER_MIRROR_ERROR
 
         state = prop.get("state")
         status_by_switch = STATUS_BY_INDIGO_STATE.get(state)
         if not status_by_switch:
-            logger.error(f"[CoverMirror] AUX_COVER in unusable INDIGO state: {state}")
+            self._status_log.record(
+                CoverMirrorStatus.COVER_MIRROR_ERROR,
+                ErrorCause.MOVEMENT_NOT_CONFIRMED if state == "Alert" else ErrorCause.STATE_NOT_RECOGNIZED,
+                detail=f"INDIGO state: {state}",
+            )
             return CoverMirrorStatus.COVER_MIRROR_ERROR
 
         for switch in prop.get("items", []):
             if switch.get("value") is True and switch.get("name") in status_by_switch:
-                return status_by_switch[switch["name"]]
+                status = status_by_switch[switch["name"]]
+                self._status_log.record(status)
+                return status
 
+        self._status_log.record(
+            CoverMirrorStatus.COVER_MIRROR_ERROR, ErrorCause.STATE_NOT_RECOGNIZED,
+            detail="no switch reported as active",
+        )
         return CoverMirrorStatus.COVER_MIRROR_ERROR
 
     def get_commanded_action(self):

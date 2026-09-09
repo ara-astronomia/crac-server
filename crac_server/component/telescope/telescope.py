@@ -16,12 +16,18 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
 )
 from crac_server import config
+from crac_server.component.status_log import ErrorCause, StatusLogger
 from datetime import datetime
 from threading import Thread
 from time import sleep
 
 
 logger = logging.getLogger(__name__)
+
+ERROR_CAUSE_BY_STATUS = {
+    TelescopeStatus.LOST: ErrorCause.DEVICE_UNREACHABLE,
+    TelescopeStatus.ERROR: ErrorCause.UNEXPECTED_FAILURE,
+}
 
 
 class Telescope(ABC):
@@ -39,7 +45,20 @@ class Telescope(ABC):
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
         self._connection_retry = 0
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
+        self._status_log = StatusLogger(logger, "Telescope", TelescopeStatus)
         self._reset()
+
+    @property
+    def status(self) -> TelescopeStatus:
+        return self._status
+
+    @status.setter
+    def status(self, value: TelescopeStatus) -> None:
+        """The status is assigned from several points of the polling loop and
+        from whatever retrieve() returns, so the transition is caught here
+        instead of at each assignment."""
+        self._status_log.record(value, ERROR_CAUSE_BY_STATUS.get(value))
+        self._status = value
 
     @abstractmethod
     def sync(self, started_at: datetime):

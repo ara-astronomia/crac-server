@@ -1,10 +1,12 @@
 # test open roof
+import logging
 import unittest
 from unittest.mock import patch
 from gpiozero import Device
 from crac_server.component.roof.roof_control import RoofControl
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.roof.simulator.roof_control import MockRoofControl
+from crac_server.component.status_log import ErrorCause
 
 
 class TestRoofControl(unittest.IsolatedAsyncioTestCase):
@@ -82,3 +84,60 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
                 mockedroofopen.assert_called_once()
                 mockedroofclosed.assert_called_once()
                 self.assertEqual(is_open, True)
+
+
+class TestRoofControlStatusLogging(unittest.TestCase):
+
+    LOGGER = "crac_server.component.roof.roof_control"
+
+    @classmethod
+    def setUpClass(cls):
+        Device.pin_factory.reset()
+
+    def tearDown(self):
+        Device.pin_factory.reset()
+
+    def _roof_with_inconsistent_sensors(self):
+        roof_control = MockRoofControl()
+        roof_control.roof_open_switch.pin.drive_low()
+        roof_control.roof_closed_switch.pin.drive_low()
+        return roof_control
+
+    def test_inconsistent_sensors_are_logged_once(self):
+        roof_control = self._roof_with_inconsistent_sensors()
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            roof_control.get_status()
+            roof_control.get_status()
+            roof_control.get_status()
+        self.assertEqual(len(captured.records), 1)
+        message = captured.records[0].getMessage()
+        self.assertIn("[Roof]", message)
+        self.assertIn(ErrorCause.SENSORS_INCONSISTENT, message)
+
+    def test_safety_block_is_told_apart_from_a_broken_sensor(self):
+        roof_control = MockRoofControl()
+        roof_control.roof_open_switch.pin.drive_high()
+        roof_control.roof_closed_switch.pin.drive_low()
+        roof_control.motor.value = False
+        roof_control.is_blocked = True
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            roof_control.get_status()
+        self.assertIn(ErrorCause.BLOCKED_BY_SAFETY, captured.records[0].getMessage())
+
+    def test_recovery_is_logged_at_info(self):
+        roof_control = self._roof_with_inconsistent_sensors()
+        roof_control.get_status()
+        roof_control.roof_open_switch.pin.drive_high()
+        roof_control.motor.value = False
+        with self.assertLogs(self.LOGGER, level="INFO") as captured:
+            roof_control.get_status()
+        self.assertEqual(len(captured.records), 1)
+        self.assertEqual(captured.records[0].levelno, logging.INFO)
+
+    def test_a_healthy_roof_logs_no_error(self):
+        roof_control = MockRoofControl()
+        roof_control.roof_open_switch.pin.drive_high()
+        roof_control.roof_closed_switch.pin.drive_low()
+        roof_control.motor.value = False
+        with self.assertNoLogs(self.LOGGER, level="ERROR"):
+            roof_control.get_status()

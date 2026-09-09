@@ -3,6 +3,7 @@ import logging
 from gpiozero import OutputDevice, DigitalInputDevice
 from crac_server.config import Config
 from crac_protobuf.roof_pb2 import RoofStatus
+from crac_server.component.status_log import ErrorCause, StatusLogger
 
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ class RoofControl():
         self.timeout = Config.getInt("roof_timeout", "roof_board")
         self.lock = asyncio.Lock()
         self.is_blocked = False
+        self._status_log = StatusLogger(logger, "Roof", RoofStatus)
 
     async def open(self):
         async with self.lock:
@@ -52,8 +54,15 @@ class RoofControl():
         is_switched_on = self.motor.value
         logger.debug(f'roof motor switch is {is_switched_on}')
 
-        if (is_roof_closed and is_roof_open) or self.is_blocked:
+        if is_roof_closed and is_roof_open:
             status = RoofStatus.ROOF_ERROR
+            self._status_log.record(
+                status, ErrorCause.SENSORS_INCONSISTENT,
+                detail="both limit switches active",
+            )
+        elif self.is_blocked:
+            status = RoofStatus.ROOF_ERROR
+            self._status_log.record(status, ErrorCause.BLOCKED_BY_SAFETY)
         elif is_roof_closed and not is_switched_on:
             status = RoofStatus.ROOF_CLOSED
         elif is_roof_open and is_switched_on:
@@ -64,4 +73,6 @@ class RoofControl():
             status = RoofStatus.ROOF_CLOSING
 
         logger.debug(f'roof status is {status}')
+        if status is not RoofStatus.ROOF_ERROR:
+            self._status_log.record(status)
         return status
