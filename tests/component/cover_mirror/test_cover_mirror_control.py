@@ -1,8 +1,10 @@
+import logging
 import unittest
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.cover_mirror_pb2 import CoverMirrorAction, CoverMirrorStatus
 from crac_server.component.cover_mirror.cover_mirror_control import CoverMirrorControl
+from crac_server.status_log import ErrorCause
 
 
 class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):
@@ -131,3 +133,57 @@ class TestCoverMirrorControl(unittest.IsolatedAsyncioTestCase):
         self.mock_client.get_property.return_value = None
         self.control.get_commanded_action()
         self.mock_client.get_property.assert_called_with(self.control._name, "AUX_COVER", timeout=0)
+
+    LOGGER = "crac_server.component.cover_mirror.cover_mirror_control"
+
+    def test_missing_property_is_logged_once(self):
+        self.mock_client.get_property.return_value = None
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            self.control.get_status()
+            self.control.get_status()
+        self.assertEqual(len(captured.records), 1)
+        message = captured.records[0].getMessage()
+        self.assertIn("[CoverMirror]", message)
+        self.assertIn(ErrorCause.DEVICE_UNREACHABLE, message)
+
+    def test_alert_state_is_logged_as_movement_not_confirmed(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            self.control.get_status()
+        message = captured.records[0].getMessage()
+        self.assertIn(ErrorCause.MOVEMENT_NOT_CONFIRMED, message)
+        self.assertIn("Alert", message)
+
+    def test_recovery_after_an_alert_is_logged_at_info(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Alert",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        self.control.get_status()
+        self.mock_client.get_property.return_value = {
+            "state": "Ok",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        with self.assertLogs(self.LOGGER, level="INFO") as captured:
+            self.control.get_status()
+        self.assertEqual(len(captured.records), 1)
+        self.assertEqual(captured.records[0].levelno, logging.INFO)
+
+    def test_a_healthy_reading_logs_nothing(self):
+        self.mock_client.get_property.return_value = {
+            "state": "Ok",
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        with self.assertNoLogs(self.LOGGER, level="INFO"):
+            self.control.get_status()
+
+    def test_missing_state_is_logged_as_state_not_recognized(self):
+        self.mock_client.get_property.return_value = {
+            "items": [{"name": "OPEN", "value": True}, {"name": "CLOSE", "value": False}]
+        }
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            self.control.get_status()
+        self.assertIn(ErrorCause.STATE_NOT_RECOGNIZED, captured.records[0].getMessage())

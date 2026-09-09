@@ -4,6 +4,8 @@ import socket
 import threading
 import time
 
+from crac_server.status_log import ErrorCause, StatusLogger
+
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 1.0
@@ -41,6 +43,7 @@ class IndigoClient:
         self._socket_lock = threading.Lock()
         self._properties = {}
         self._connected_devices = set()
+        self._status_log = StatusLogger(logger, "IndigoClient")
         self._lock = threading.Lock()
         self._running = True
         self._thread = threading.Thread(target=self._read_loop, daemon=True)
@@ -70,12 +73,26 @@ class IndigoClient:
             with self._socket_lock:
                 self._socket = sock
             logger.info(f"[IndigoClient] Connected to {self._hostname}:{self._port}")
+            self._status_log.record("CONNECTED")
             with self._lock:
                 self._connected_devices.clear()
         except OSError as e:
-            logger.error(f"[IndigoClient] Connection to {self._hostname}:{self._port} failed: {e}")
+            self._status_log.record(
+                "DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE,
+                detail=f"{self._hostname}:{self._port}: {e}",
+            )
             with self._socket_lock:
                 self._socket = None
+
+    def _on_read_failure(self, error: Exception) -> None:
+        """A dropped connection and the failed retries that follow are one
+        outage: recording them under the same cause keeps the reason the
+        connection actually died - which only this point knows - and leaves
+        the retries silent."""
+        self._status_log.record(
+            "DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE,
+            detail=f"{self._hostname}:{self._port}: {error}",
+        )
 
     def _drop_socket(self, sock):
         """Azzera self._socket solo se è ancora quello fallito: una
@@ -102,7 +119,7 @@ class IndigoClient:
                 logger.debug(f"[IndigoClient] Received {len(data)} bytes")
                 buffer += data.decode("utf-8", errors="ignore")
             except (OSError, ConnectionError) as e:
-                logger.error(f"[IndigoClient] Read error: {e}")
+                self._on_read_failure(e)
                 self._drop_socket(sock)
                 buffer = ""
                 time.sleep(RECONNECT_DELAY)

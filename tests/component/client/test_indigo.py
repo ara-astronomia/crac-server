@@ -1,13 +1,13 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from crac_server.component.indigo_client import IndigoClient, get_indigo_client, _clients
+from crac_server.component.client.indigo import IndigoClient, get_indigo_client, _clients
 
 
 class TestIndigoClient(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("crac_server.component.indigo_client.threading.Thread")
+        patcher = patch("crac_server.component.client.indigo.threading.Thread")
         self.addCleanup(patcher.stop)
         patcher.start()
         self.client = IndigoClient(hostname="test-host", port=1234)
@@ -28,7 +28,7 @@ class TestIndigoClient(unittest.TestCase):
         # ogni volta che INDIGO resta silenzioso per 5s e causando reconnect
         # continui scambiati per errori di connessione.
         mock_socket = MagicMock()
-        with patch("crac_server.component.indigo_client.socket.create_connection", return_value=mock_socket):
+        with patch("crac_server.component.client.indigo.socket.create_connection", return_value=mock_socket):
             self.client._connect()
         mock_socket.settimeout.assert_called_once_with(None)
 
@@ -110,7 +110,7 @@ class TestIndigoClient(unittest.TestCase):
 class TestGetIndigoClient(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("crac_server.component.indigo_client.threading.Thread")
+        patcher = patch("crac_server.component.client.indigo.threading.Thread")
         self.addCleanup(patcher.stop)
         patcher.start()
         _clients.clear()
@@ -121,3 +121,60 @@ class TestGetIndigoClient(unittest.TestCase):
         third = get_indigo_client("host", 2)
         self.assertIs(first, second)
         self.assertIsNot(first, third)
+
+
+class TestIndigoClientConnectionLogging(unittest.TestCase):
+
+    LOGGER = "crac_server.component.client.indigo"
+
+    def setUp(self):
+        patcher = patch("crac_server.component.client.indigo.threading.Thread")
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        self.client = IndigoClient(hostname="test-host", port=1234)
+
+    def _connection_refused(self):
+        return patch(
+            "crac_server.component.client.indigo.socket.create_connection",
+            side_effect=OSError("connection refused"),
+        )
+
+    def test_a_failure_retried_every_second_is_logged_once(self):
+        with self._connection_refused():
+            with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+                for _ in range(30):
+                    self.client._connect()
+        self.assertEqual(len(captured.records), 1)
+        message = captured.records[0].getMessage()
+        self.assertIn("[IndigoClient]", message)
+        self.assertIn("device_unreachable", message)
+        self.assertIn("connection refused", message)
+
+    def test_reconnection_after_a_failure_is_logged(self):
+        with self._connection_refused():
+            self.client._connect()
+        with patch("crac_server.component.client.indigo.socket.create_connection"):
+            with self.assertLogs(self.LOGGER, level="INFO") as captured:
+                self.client._connect()
+        self.assertTrue(any("recovered" in r.getMessage() for r in captured.records))
+
+    def test_a_new_failure_after_a_reconnection_is_logged_again(self):
+        with self._connection_refused():
+            self.client._connect()
+        with patch("crac_server.component.client.indigo.socket.create_connection"):
+            self.client._connect()
+        with self._connection_refused():
+            with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+                self.client._connect()
+        self.assertEqual(len(captured.records), 1)
+
+    def test_a_dropped_connection_and_the_failed_retries_are_one_transition(self):
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            self.client._on_read_failure(ConnectionError("connection closed by peer"))
+            with self._connection_refused():
+                for _ in range(10):
+                    self.client._connect()
+        self.assertEqual(len(captured.records), 1)
+        message = captured.records[0].getMessage()
+        self.assertIn("device_unreachable", message)
+        self.assertIn("connection closed by peer", message)
