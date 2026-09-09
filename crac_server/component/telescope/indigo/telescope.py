@@ -13,7 +13,7 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server.component.client.indigo import get_indigo_client
-from crac_server.status_log import ErrorCause, StatusLogger
+from crac_server.status_log import ErrorCause
 import logging
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,6 @@ class Telescope(TelescopeBase):
         # dall'operatore dal pannello INDIGO (mount.html/ctrl.html) prima
         # che crac la usi, non forzata da crac stesso - vedi retrieve().
         self._geo_synced = False
-        self._speed_log = StatusLogger(logger, "Telescope speed", TelescopeSpeed)
         self.__sync_geographic_coordinates()
         self._park_position_synced = False
         self._uses_raw_socket = False

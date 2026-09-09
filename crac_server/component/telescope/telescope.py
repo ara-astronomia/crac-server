@@ -46,6 +46,7 @@ class Telescope(ABC):
         self._connection_retry = 0
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._status_log = StatusLogger(logger, "Telescope", TelescopeStatus)
+        self._speed_log = StatusLogger(logger, "Telescope speed", TelescopeSpeed)
         self._reset()
 
     @property

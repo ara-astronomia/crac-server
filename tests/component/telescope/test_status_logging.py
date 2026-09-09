@@ -51,7 +51,7 @@ class TestTelescopeStatusLogging(unittest.TestCase):
 
 class TestTelescopeSpeedLogging(unittest.TestCase):
 
-    LOGGER = "crac_server.component.telescope.indigo.telescope"
+    LOGGER = "crac_server.component.telescope.telescope"
 
     def setUp(self):
         patcher = patch("crac_server.component.telescope.indigo.telescope.get_indigo_client")
@@ -112,6 +112,6 @@ class TestTelescopeSpeedLogging(unittest.TestCase):
     def test_the_speed_log_does_not_silence_the_status_log(self):
         self._stub_properties({})
         self.telescope._Telescope__retrieve_speed()
-        with self.assertLogs("crac_server.component.telescope.telescope", level="ERROR") as captured:
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
             self.telescope.status = TelescopeStatus.LOST
         self.assertEqual(len(captured.records), 1)
