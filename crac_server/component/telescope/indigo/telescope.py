@@ -12,7 +12,7 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
-from crac_server.component.client.indigo_client import get_indigo_client
+from crac_server.component.client.indigo import get_indigo_client
 import logging
 logger = logging.getLogger(__name__)
 

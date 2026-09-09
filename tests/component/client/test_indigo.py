@@ -1,13 +1,13 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from crac_server.component.client.indigo_client import IndigoClient, get_indigo_client, _clients
+from crac_server.component.client.indigo import IndigoClient, get_indigo_client, _clients
 
 
 class TestIndigoClient(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("crac_server.component.client.indigo_client.threading.Thread")
+        patcher = patch("crac_server.component.client.indigo.threading.Thread")
         self.addCleanup(patcher.stop)
         patcher.start()
         self.client = IndigoClient(hostname="test-host", port=1234)
@@ -28,7 +28,7 @@ class TestIndigoClient(unittest.TestCase):
         # ogni volta che INDIGO resta silenzioso per 5s e causando reconnect
         # continui scambiati per errori di connessione.
         mock_socket = MagicMock()
-        with patch("crac_server.component.client.indigo_client.socket.create_connection", return_value=mock_socket):
+        with patch("crac_server.component.client.indigo.socket.create_connection", return_value=mock_socket):
             self.client._connect()
         mock_socket.settimeout.assert_called_once_with(None)
 
@@ -110,7 +110,7 @@ class TestIndigoClient(unittest.TestCase):
 class TestGetIndigoClient(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("crac_server.component.client.indigo_client.threading.Thread")
+        patcher = patch("crac_server.component.client.indigo.threading.Thread")
         self.addCleanup(patcher.stop)
         patcher.start()
         _clients.clear()
@@ -125,17 +125,17 @@ class TestGetIndigoClient(unittest.TestCase):
 
 class TestIndigoClientConnectionLogging(unittest.TestCase):
 
-    LOGGER = "crac_server.component.client.indigo_client"
+    LOGGER = "crac_server.component.client.indigo"
 
     def setUp(self):
-        patcher = patch("crac_server.component.client.indigo_client.threading.Thread")
+        patcher = patch("crac_server.component.client.indigo.threading.Thread")
         self.addCleanup(patcher.stop)
         patcher.start()
         self.client = IndigoClient(hostname="test-host", port=1234)
 
     def _connection_refused(self):
         return patch(
-            "crac_server.component.client.indigo_client.socket.create_connection",
+            "crac_server.component.client.indigo.socket.create_connection",
             side_effect=OSError("connection refused"),
         )
 
@@ -153,7 +153,7 @@ class TestIndigoClientConnectionLogging(unittest.TestCase):
     def test_reconnection_after_a_failure_is_logged(self):
         with self._connection_refused():
             self.client._connect()
-        with patch("crac_server.component.client.indigo_client.socket.create_connection"):
+        with patch("crac_server.component.client.indigo.socket.create_connection"):
             with self.assertLogs(self.LOGGER, level="INFO") as captured:
                 self.client._connect()
         self.assertTrue(any("recovered" in r.getMessage() for r in captured.records))
@@ -161,7 +161,7 @@ class TestIndigoClientConnectionLogging(unittest.TestCase):
     def test_a_new_failure_after_a_reconnection_is_logged_again(self):
         with self._connection_refused():
             self.client._connect()
-        with patch("crac_server.component.client.indigo_client.socket.create_connection"):
+        with patch("crac_server.component.client.indigo.socket.create_connection"):
             self.client._connect()
         with self._connection_refused():
             with self.assertLogs(self.LOGGER, level="ERROR") as captured:
