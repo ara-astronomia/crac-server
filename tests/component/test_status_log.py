@@ -66,3 +66,8 @@ class TestStatusLogger(unittest.TestCase):
                 detail="open=True closed=True",
             )
         self.assertIn("open=True closed=True", captured.records[0].getMessage())
+
+    def test_the_log_points_at_the_caller_not_at_the_helper(self):
+        with self.assertLogs(self.logger, level="ERROR") as captured:
+            self.status_log.record(RoofStatus.ROOF_ERROR, ErrorCause.SENSORS_INCONSISTENT)
+        self.assertEqual(captured.records[0].filename, "test_status_log.py")
