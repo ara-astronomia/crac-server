@@ -27,6 +27,12 @@ class StatusLogger:
         self._status_enum = status_enum
         self._last_recorded = None
 
+    def forget(self) -> None:
+        """Drops what is known about the component, without writing anything.
+        Used when the component stops being watched: whatever comes next is a
+        fresh start, not the recovery of a failure nobody is following."""
+        self._last_recorded = None
+
     def record(self, status, cause: str = None, detail: str = None) -> None:
         """The stacklevel keeps filename and lineno in the log pointing at the
         component that detected the failure, instead of at this module."""

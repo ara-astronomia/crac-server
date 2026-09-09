@@ -67,6 +67,19 @@ class TestStatusLogger(unittest.TestCase):
             )
         self.assertIn("open=True closed=True", captured.records[0].getMessage())
 
+    def test_forgetting_drops_the_failure_without_claiming_a_recovery(self):
+        self.status_log.record(RoofStatus.ROOF_ERROR, ErrorCause.SENSORS_INCONSISTENT)
+        self.status_log.forget()
+        with self.assertNoLogs(self.logger, level="INFO"):
+            self.status_log.record(RoofStatus.ROOF_CLOSED)
+
+    def test_a_failure_after_forgetting_is_logged_again(self):
+        self.status_log.record(RoofStatus.ROOF_ERROR, ErrorCause.SENSORS_INCONSISTENT)
+        self.status_log.forget()
+        with self.assertLogs(self.logger, level="ERROR") as captured:
+            self.status_log.record(RoofStatus.ROOF_ERROR, ErrorCause.SENSORS_INCONSISTENT)
+        self.assertEqual(len(captured.records), 1)
+
     def test_the_log_points_at_the_caller_not_at_the_helper(self):
         with self.assertLogs(self.logger, level="ERROR") as captured:
             self.status_log.record(RoofStatus.ROOF_ERROR, ErrorCause.SENSORS_INCONSISTENT)

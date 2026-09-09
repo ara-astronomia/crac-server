@@ -39,6 +39,11 @@ class TestTelescopeStatusLogging(unittest.TestCase):
         self.assertEqual(len(captured.records), 1)
         self.assertEqual(captured.records[0].levelno, logging.INFO)
 
+    def test_stopping_the_polling_is_not_a_recovery(self):
+        self.telescope.status = TelescopeStatus.LOST
+        with self.assertNoLogs(self.LOGGER, level="INFO"):
+            self.telescope._reset()
+
     def test_status_is_still_readable_after_being_set(self):
         self.telescope.status = TelescopeStatus.PARKED
         self.assertEqual(self.telescope.status, TelescopeStatus.PARKED)

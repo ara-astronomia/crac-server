@@ -200,6 +200,8 @@ class Telescope(ABC):
                 self.__disconnect()
 
     def _reset(self):
+        self._status_log.forget()
+        self._speed_log.forget()
         self.status = TelescopeStatus.DISCONNECTED
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
