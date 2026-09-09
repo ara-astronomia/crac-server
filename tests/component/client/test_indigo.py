@@ -167,3 +167,14 @@ class TestIndigoClientConnectionLogging(unittest.TestCase):
             with self.assertLogs(self.LOGGER, level="ERROR") as captured:
                 self.client._connect()
         self.assertEqual(len(captured.records), 1)
+
+    def test_a_dropped_connection_and_the_failed_retries_are_one_transition(self):
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            self.client._on_read_failure(ConnectionError("connection closed by peer"))
+            with self._connection_refused():
+                for _ in range(10):
+                    self.client._connect()
+        self.assertEqual(len(captured.records), 1)
+        message = captured.records[0].getMessage()
+        self.assertIn("device_unreachable", message)
+        self.assertIn("connection closed by peer", message)

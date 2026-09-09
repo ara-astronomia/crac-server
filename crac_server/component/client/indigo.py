@@ -84,6 +84,16 @@ class IndigoClient:
             with self._socket_lock:
                 self._socket = None
 
+    def _on_read_failure(self, error: Exception) -> None:
+        """A dropped connection and the failed retries that follow are one
+        outage: recording them under the same cause keeps the reason the
+        connection actually died - which only this point knows - and leaves
+        the retries silent."""
+        self._status_log.record(
+            "DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE,
+            detail=f"{self._hostname}:{self._port}: {error}",
+        )
+
     def _drop_socket(self, sock):
         """Azzera self._socket solo se è ancora quello fallito: una
         riconnessione nel frattempo avvenuta non va persa."""
@@ -109,7 +119,7 @@ class IndigoClient:
                 logger.debug(f"[IndigoClient] Received {len(data)} bytes")
                 buffer += data.decode("utf-8", errors="ignore")
             except (OSError, ConnectionError) as e:
-                logger.error(f"[IndigoClient] Read error: {e}")
+                self._on_read_failure(e)
                 self._drop_socket(sock)
                 buffer = ""
                 time.sleep(RECONNECT_DELAY)
