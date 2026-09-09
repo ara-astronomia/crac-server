@@ -19,7 +19,9 @@ class StatusLogger:
     recovery when it ends, which is what tells how long a fault lasted.
     """
 
-    def __init__(self, logger, component: str, status_enum) -> None:
+    def __init__(self, logger, component: str, status_enum=None) -> None:
+        """Without a status_enum the status is used as it is: the INDIGO
+        client has no protobuf status, only a connection that holds or not."""
         self._logger = logger
         self._component = component
         self._status_enum = status_enum
@@ -34,7 +36,7 @@ class StatusLogger:
 
         was_failing = self._last_recorded is not None and self._last_recorded[1] is not None
         self._last_recorded = current
-        status_name = self._status_enum.Name(status)
+        status_name = self._status_enum.Name(status) if self._status_enum else status
 
         if cause:
             self._logger.error(

@@ -121,3 +121,49 @@ class TestGetIndigoClient(unittest.TestCase):
         third = get_indigo_client("host", 2)
         self.assertIs(first, second)
         self.assertIsNot(first, third)
+
+
+class TestIndigoClientConnectionLogging(unittest.TestCase):
+
+    LOGGER = "crac_server.component.indigo_client"
+
+    def setUp(self):
+        patcher = patch("crac_server.component.indigo_client.threading.Thread")
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        self.client = IndigoClient(hostname="test-host", port=1234)
+
+    def _connection_refused(self):
+        return patch(
+            "crac_server.component.indigo_client.socket.create_connection",
+            side_effect=OSError("connection refused"),
+        )
+
+    def test_a_failure_retried_every_second_is_logged_once(self):
+        with self._connection_refused():
+            with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+                for _ in range(30):
+                    self.client._connect()
+        self.assertEqual(len(captured.records), 1)
+        message = captured.records[0].getMessage()
+        self.assertIn("[IndigoClient]", message)
+        self.assertIn("device_unreachable", message)
+        self.assertIn("connection refused", message)
+
+    def test_reconnection_after_a_failure_is_logged(self):
+        with self._connection_refused():
+            self.client._connect()
+        with patch("crac_server.component.indigo_client.socket.create_connection"):
+            with self.assertLogs(self.LOGGER, level="INFO") as captured:
+                self.client._connect()
+        self.assertTrue(any("recovered" in r.getMessage() for r in captured.records))
+
+    def test_a_new_failure_after_a_reconnection_is_logged_again(self):
+        with self._connection_refused():
+            self.client._connect()
+        with patch("crac_server.component.indigo_client.socket.create_connection"):
+            self.client._connect()
+        with self._connection_refused():
+            with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+                self.client._connect()
+        self.assertEqual(len(captured.records), 1)

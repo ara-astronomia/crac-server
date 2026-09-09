@@ -71,3 +71,32 @@ class TestStatusLogger(unittest.TestCase):
         with self.assertLogs(self.logger, level="ERROR") as captured:
             self.status_log.record(RoofStatus.ROOF_ERROR, ErrorCause.SENSORS_INCONSISTENT)
         self.assertEqual(captured.records[0].filename, "test_status_log.py")
+
+
+class TestStatusLoggerWithoutEnum(unittest.TestCase):
+    """Components that talk to hardware have a protobuf status; the INDIGO
+    client only knows whether it is connected."""
+
+    def setUp(self):
+        self.logger = logging.getLogger("test_status_log_plain")
+        self.status_log = StatusLogger(self.logger, "IndigoClient")
+
+    def test_plain_status_is_used_as_it_is(self):
+        with self.assertLogs(self.logger, level="ERROR") as captured:
+            self.status_log.record("DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE, detail="name resolution failed")
+        message = captured.records[0].getMessage()
+        self.assertIn("[IndigoClient] DISCONNECTED: device_unreachable", message)
+        self.assertIn("name resolution failed", message)
+
+    def test_a_failure_repeated_every_second_is_logged_once(self):
+        with self.assertLogs(self.logger, level="ERROR") as captured:
+            for _ in range(60):
+                self.status_log.record("DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE, detail="refused")
+        self.assertEqual(len(captured.records), 1)
+
+    def test_reconnection_is_logged_at_info(self):
+        self.status_log.record("DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE)
+        with self.assertLogs(self.logger, level="INFO") as captured:
+            self.status_log.record("CONNECTED")
+        self.assertEqual(captured.records[0].levelno, logging.INFO)
+        self.assertIn("CONNECTED", captured.records[0].getMessage())

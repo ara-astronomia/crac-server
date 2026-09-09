@@ -4,6 +4,8 @@ import socket
 import threading
 import time
 
+from crac_server.component.status_log import ErrorCause, StatusLogger
+
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 1.0
@@ -41,6 +43,7 @@ class IndigoClient:
         self._socket_lock = threading.Lock()
         self._properties = {}
         self._connected_devices = set()
+        self._status_log = StatusLogger(logger, "IndigoClient")
         self._lock = threading.Lock()
         self._running = True
         self._thread = threading.Thread(target=self._read_loop, daemon=True)
@@ -70,10 +73,14 @@ class IndigoClient:
             with self._socket_lock:
                 self._socket = sock
             logger.info(f"[IndigoClient] Connected to {self._hostname}:{self._port}")
+            self._status_log.record("CONNECTED")
             with self._lock:
                 self._connected_devices.clear()
         except OSError as e:
-            logger.error(f"[IndigoClient] Connection to {self._hostname}:{self._port} failed: {e}")
+            self._status_log.record(
+                "DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE,
+                detail=f"{self._hostname}:{self._port}: {e}",
+            )
             with self._socket_lock:
                 self._socket = None
 
