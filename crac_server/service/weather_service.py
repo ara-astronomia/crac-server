@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from threading import Lock, Thread
 from time import sleep
@@ -39,7 +40,7 @@ class WeatherService(WeatherServicer):
 
     async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         try:
-            response = self.weather_converter.convert(WEATHER)
+            response = await asyncio.to_thread(self.weather_converter.convert, WEATHER)
         except UnreachableThresholdError:
             raise
         except Exception:

@@ -106,6 +106,19 @@ class TestWeather(unittest.TestCase):
         self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
         self.assertRaises(URLError, self.weather._get_sensor, "outTemp")        
 
+    @patch("urllib.request.urlopen")
+    def test_the_reading_has_a_deadline(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen()
+        self.weather.temperature
+        self.assertEqual(self.weather.url_timeout, urlopen.call_args.kwargs.get("timeout"))
+
+    @patch("urllib.request.urlopen")
+    def test_the_fallback_reading_has_a_deadline_too(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen()
+        self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
+        self.weather.temperature
+        self.assertEqual(self.weather.url_timeout, urlopen.call_args.kwargs.get("timeout"))
+
     def mocked_urlopen(self):
         current, time = self.retrieve()
         
