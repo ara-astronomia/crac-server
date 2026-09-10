@@ -1,5 +1,7 @@
 from datetime import datetime
 import json
+from threading import Thread
+from time import sleep
 from typing import Any
 import unittest
 from unittest.mock import MagicMock, patch
@@ -118,6 +120,24 @@ class TestWeather(unittest.TestCase):
         self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
         self.weather.temperature
         self.assertEqual(self.weather.url_timeout, urlopen.call_args.kwargs.get("timeout"))
+
+    def test_two_concurrent_readings_refresh_once(self):
+        """La conversione ora gira in un thread, e le catene di handler leggono
+        lo stesso oggetto dal loop: due letture insieme non devono rileggere
+        due volte dalla stazione."""
+        letture = []
+
+        def lettura_lenta():
+            sleep(0.2)
+            letture.append(1)
+            return self.retrieve()
+
+        self.weather._retrieve_data = lettura_lenta
+        thread = Thread(target=lambda: self.weather.temperature)
+        thread.start()
+        self.weather.humidity
+        thread.join()
+        self.assertEqual(1, len(letture))
 
     def mocked_urlopen(self):
         current, time = self.retrieve()

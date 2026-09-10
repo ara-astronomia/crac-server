@@ -1,5 +1,6 @@
 from datetime import datetime
 import html
+from threading import Lock
 import logging
 from typing import Union
 from urllib.error import HTTPError, URLError
@@ -24,6 +25,7 @@ class Weather:
         self._time_expired = time_expired
         self._retry_interval = retry_interval
         self._url_timeout = url_timeout
+        self._refresh_lock = Lock()
 
     @property
     def url(self):
@@ -122,17 +124,23 @@ class Weather:
 
 
     def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
-        if self.is_expired() and self.is_retriable():
+        self._refresh_if_stale()
+        sensor = self.json[name]
+        return self.__convert_to_float(sensor["value"]), html.unescape(sensor["unit_of_measurement"]).strip()
+
+    def _refresh_if_stale(self):
+        if not (self.is_expired() and self.is_retriable()):
+            return
+        with self._refresh_lock:
+            if not (self.is_expired() and self.is_retriable()):
+                return
             try:
                 self.json, self.updated_at = self._retrieve_data()
-            except (HTTPError, URLError, TimeoutError) as error:
+            except (HTTPError, URLError, TimeoutError):
                 logger.error("url in error")
                 self.json, self.updated_at = self._retrieve_fallback_data()
             if (datetime.now() - self.updated_at).seconds >= self._time_expired * 3:
-                    self.last_attempt_at = datetime.now()
-        
-        sensor = self.json[name]
-        return self.__convert_to_float(sensor["value"]), html.unescape(sensor["unit_of_measurement"]).strip()
+                self.last_attempt_at = datetime.now()
 
     def __convert_to_float(self, value: str):
         value = value.strip().replace(',', '.')
