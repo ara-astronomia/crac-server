@@ -8,7 +8,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
+CONFIG_PATH = os.environ.get("CRAC_CONFIG_PATH", os.path.join(os.path.dirname(__file__), 'config.ini'))
+"""
+Which configuration file gets read. It is an environment variable because the
+components read Config while being imported - the test suite has to redirect it
+before importing anything, and there is no later moment to do it in.
+"""
 
 _parser = None
 _parsed_from = None

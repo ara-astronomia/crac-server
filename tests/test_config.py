@@ -5,6 +5,7 @@ import unittest
 from contextlib import contextmanager
 from unittest.mock import patch
 
+from crac_server import config as config_module
 from crac_server.config import Config
 
 
@@ -140,3 +141,20 @@ class TestConfigIsReadOnceFromDisk(unittest.TestCase):
             Config.getInt("roof_timeout", "roof_board")
 
         self.assertEqual([], reads)
+
+
+class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
+    """
+    Components build their singletons while being imported, reading Config
+    right there: any test importing one of them inherits whatever config.ini
+    happens to say today - thresholds, but also which telescope driver gets
+    loaded and whether the GPIO is mocked. tests/__init__.py points the
+    loading at tests/config.ini instead, and these two fail if it stops
+    doing so.
+    """
+
+    def test_the_configuration_comes_from_the_tests_directory(self):
+        self.assertEqual(os.path.join(os.path.dirname(__file__), "config.ini"), config_module.CONFIG_PATH)
+
+    def test_the_values_read_are_the_ones_of_the_tests(self):
+        self.assertEqual("http://weather.invalid/current.json", Config.getValue("url", "weather"))

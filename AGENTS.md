@@ -10,7 +10,7 @@ luci, e copertura a petali dello specchio. Espone RPC consumate da
 ```bash
 uv sync                          # installa dipendenze
 python -m crac_server.app        # avvia il server gRPC (porta 50051)
-python -m unittest discover -s tests   # suite di test (unittest, NON pytest)
+python -m unittest discover -t . -s tests   # suite di test (unittest, NON pytest)
 autopep8 --in-place --recursive crac_server/   # format
 python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/*.proto  # rigenera stub protobuf, quando cambia crac-protobuf
 ```
@@ -32,7 +32,8 @@ Richiede Python 3.12 (vincolo esplicito in `pyproject.toml`,
 ```
 crac_server/
   app.py                    # entrypoint, avvio server gRPC + logging
-  config.py                 # lettura config.ini, override via env {SECTION}_{KEY}
+  config.py                 # lettura config.ini (percorso da CRAC_CONFIG_PATH),
+                            # override dei valori via env {SECTION}_{KEY}
   component/                # driver hardware/protocollo
     telescope/               # un sotto-modulo per driver: indigo, indi, ascom_hub, theskyx, simulator
     curtains/, roof/         # controllo GPIO via gpiozero (simulator/ per mock)
@@ -91,6 +92,21 @@ tests/                      # rispecchia la struttura di crac_server/
   (vedi `queue_set_speed`) - senza dedup, un client che pollasse più spesso
   del ciclo interno di retrieve() farebbe crescere la coda senza limite,
   ritardando i comandi reali (park/flat) dietro job ridondanti.
+- **La suite va lanciata con `-t .`**: `tests/__init__.py` e' il setup
+  globale (pin factory mock e `config.ini` dei test), e viene eseguito solo
+  se `tests` viene importato come package. Con `discover -s tests` e basta,
+  unittest prende `tests/` come top level: i moduli diventano
+  `component.roof.test_...`, il `tests/__init__.py` non gira e i test
+  leggono la configurazione di produzione.
+- **La suite legge `tests/config.ini`, non `crac_server/config.ini`**: i
+  componenti costruiscono i loro singleton all'import leggendo `Config` -
+  `crac_server/__init__.py` lo fa addirittura per decidere se montare il
+  GPIO finto - quindi la configurazione va sostituita prima che il primo
+  modulo entri, e l'unico punto abbastanza presto e' `CRAC_CONFIG_PATH`
+  impostata in `tests/__init__.py`.
+  Una chiave nuova usata dal codice va aggiunta anche li', altrimenti i
+  test falliscono con `KeyError`. Un test che vuole un valore suo continua
+  a fare `patch` su `Config` come fanno quelli dell'UPS.
 - **Test roof**: serve `Device.pin_factory.reset()` in `setUpClass`/
   `tearDown` - un singolo eager (`ROOF` in `component/roof/__init__.py`,
   istanziato all'import) riserva il pin GPIO mock prima ancora che parta
