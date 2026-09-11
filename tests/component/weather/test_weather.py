@@ -1,5 +1,7 @@
 from datetime import datetime
 import json
+from threading import Thread
+from time import sleep
 from typing import Any
 import unittest
 from unittest.mock import MagicMock, patch
@@ -51,7 +53,7 @@ class TestWeather(unittest.TestCase):
         self.format = "%Y-%m-%d %H:%M:%S"
         self.url = "http://ara.test"
         self.fallback_url = "http://fallback.ara.test"
-        self.weather = Weather(self.url, self.fallback_url, self.format, 600, 1200)
+        self.weather = Weather(self.url, self.fallback_url, self.format, 600, 1200, url_timeout=10)
 
     def tearDown(self) -> None:
         del(self.weather, self.format, self.url, self.fallback_url)
@@ -105,6 +107,37 @@ class TestWeather(unittest.TestCase):
         urlopen.return_value = self.mocked_urlopen_in_error()
         self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
         self.assertRaises(URLError, self.weather._get_sensor, "outTemp")        
+
+    @patch("urllib.request.urlopen")
+    def test_the_reading_has_a_deadline(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen()
+        self.weather.temperature
+        self.assertEqual(self.weather.url_timeout, urlopen.call_args.kwargs.get("timeout"))
+
+    @patch("urllib.request.urlopen")
+    def test_the_fallback_reading_has_a_deadline_too(self, urlopen):
+        urlopen.return_value = self.mocked_urlopen()
+        self.weather._retrieve_data = MagicMock(side_effect=URLError(reason="url not found"))
+        self.weather.temperature
+        self.assertEqual(self.weather.url_timeout, urlopen.call_args.kwargs.get("timeout"))
+
+    def test_two_concurrent_readings_refresh_once(self):
+        """The conversion now runs in a thread while the handler chains read
+        the same object from the loop: two readings together must not hit the
+        weather station twice."""
+        readings = []
+
+        def slow_reading():
+            sleep(0.2)
+            readings.append(1)
+            return self.retrieve()
+
+        self.weather._retrieve_data = slow_reading
+        thread = Thread(target=lambda: self.weather.temperature)
+        thread.start()
+        self.weather.humidity
+        thread.join()
+        self.assertEqual(1, len(readings))
 
     def mocked_urlopen(self):
         current, time = self.retrieve()
