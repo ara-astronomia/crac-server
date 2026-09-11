@@ -67,6 +67,8 @@ class WeatherService(WeatherServicer):
         """
         try:
             self._close_crac(loop)
+        except Exception:
+            logger.error("weather in danger status - the closure did not complete", exc_info=True)
         finally:
             self.t = None
 

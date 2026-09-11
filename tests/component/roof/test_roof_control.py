@@ -8,6 +8,7 @@ from gpiozero import Device
 from crac_server.component.roof.roof_control import RoofControl
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_server.component.roof.simulator.roof_pins import simulated_roof
+from crac_server.config import Config
 from crac_server.status_log import ErrorCause
 
 
@@ -113,6 +114,15 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         sleep(0.3)
         return True
 
+    def test_a_motor_pin_already_taken_is_not_left_silently_unwired(self):
+        """A pin already in the factory comes back as it is, keeping its own
+        class: the roof would then wait out its timeout on every run, with
+        nothing saying the simulation did not install."""
+        Device.pin_factory.pin(Config.getInt("switch_roof", "roof_board"))
+
+        with self.assertRaises(RuntimeError):
+            simulated_roof()
+
     async def test_when_roof_is_blocked_while_opening_then_it_will_close(self):
         roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
@@ -122,7 +132,7 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
                 is_open = await roof_control.open()
                 mockedroofopen.assert_called_once()
                 mockedroofclosed.assert_called_once()
-                self.assertEqual(is_open, True)
+                self.assertFalse(is_open)
 
 
 class TestRoofControlStatusLogging(unittest.TestCase):

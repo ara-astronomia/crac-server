@@ -23,15 +23,16 @@ class RoofControl():
         async with self.lock:
             self.motor.on()
             self.is_blocked = not await asyncio.to_thread(self.roof_open_switch.wait_for_active, self.timeout)
+        is_open = not self.is_blocked
         if self.is_blocked:
-            await self.close()
             logger.error(
                 "Roof opening blocked after %s seconds: motor=%s, "
                 "open limit switch=%s, closed limit switch=%s",
                 self.timeout, self.motor.value,
                 self.roof_open_switch.is_active, self.roof_closed_switch.is_active
             )
-        return not self.is_blocked
+            await self.close()
+        return is_open
 
     async def close(self):
         async with self.lock:

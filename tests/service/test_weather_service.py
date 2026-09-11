@@ -172,13 +172,14 @@ class TestWeatherServiceEmergencyClosureReachesTheRoof(unittest.IsolatedAsyncioT
 
         self.assertIn("roof", captured.records[0].getMessage().lower())
 
-    async def test_a_failed_sequence_does_not_disarm_the_next_closure(self):
+    async def test_a_failed_sequence_is_logged_and_does_not_disarm_the_next_closure(self):
         self.telescope.queue_park.side_effect = RuntimeError("telescope unreachable")
         self.service.t = MagicMock()
 
-        with self.assertRaises(RuntimeError):
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
             await self.__run_emergency_closure()
 
+        self.assertIn("telescope unreachable", captured.output[0])
         self.assertIsNone(self.service.t)
 
     async def __run_emergency_closure(self):
