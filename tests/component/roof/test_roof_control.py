@@ -114,6 +114,16 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         sleep(0.3)
         return True
 
+    def test_reversing_the_motor_leaves_only_the_new_limit_switch_active(self):
+        roof_control = simulated_roof(travel_seconds=0.2)
+
+        roof_control.motor.on()
+        roof_control.motor.off()
+        sleep(0.4)
+
+        self.assertFalse(roof_control.roof_open_switch.is_active)
+        self.assertTrue(roof_control.roof_closed_switch.is_active)
+
     def test_a_motor_pin_already_taken_is_not_left_silently_unwired(self):
         """A pin already in the factory comes back as it is, keeping its own
         class: the roof would then wait out its timeout on every run, with

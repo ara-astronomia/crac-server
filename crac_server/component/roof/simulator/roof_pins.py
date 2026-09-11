@@ -27,28 +27,21 @@ class MockRoofMotorPin(MockPin):
         self.open_switch = open_switch
         self.closed_switch = closed_switch
         self.travel_seconds = travel_seconds
-        self._run = 0
 
     def _set_state(self, value):
-        is_a_new_run = self.state != bool(value)
+        heading_open = bool(value)
+        is_a_new_run = self.state != heading_open
         super()._set_state(value)
         if not is_a_new_run or self.open_switch is None or self.closed_switch is None:
             return
-        self._run += 1
         self.open_switch.drive_high()
         self.closed_switch.drive_high()
-        self.__travel_to(self.open_switch if value else self.closed_switch)
-
-    def __travel_to(self, arriving_at):
-        """Reversing the motor mid-run leaves the previous arrival stale, and
-        cancelling its timer is not enough because it may already be running:
-        the arrival latches its switch only if it still belongs to the run in
-        progress. The timer is a daemon so a pending travel never holds up
-        the shutdown of the server."""
-        run = self._run
+        arriving_at = self.open_switch if heading_open else self.closed_switch
 
         def reach_the_limit_switch():
-            if run == self._run:
+            """The motor can reverse while the roof travels: latch the switch
+            only if it is still heading this way."""
+            if self.state == heading_open:
                 arriving_at.drive_low()
 
         travel = Timer(self.travel_seconds, reach_the_limit_switch)
