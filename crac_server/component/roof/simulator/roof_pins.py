@@ -12,14 +12,10 @@ class MockRoofMotorPin(MockPin):
     """Motor pin wired to the limit switches it drives.
 
     A mock limit switch is never tripped by anything, so a roof built on plain
-    mock pins would run until its timeout and report itself blocked. Here the
-    motor leaves both switches free while the roof travels and latches the one
-    at the end it is heading to, the way the real wiring does.
+    mock pins would run until its timeout and never confirm the movement. Here
+    the motor leaves both switches free while the roof travels and latches the
+    one at the end it is heading to, the way the real wiring does.
     """
-
-    open_switch = None
-    closed_switch = None
-    travel_seconds = TRAVEL_SECONDS
 
     def __init__(self, factory, info, open_switch=None, closed_switch=None,
                  travel_seconds=TRAVEL_SECONDS):
