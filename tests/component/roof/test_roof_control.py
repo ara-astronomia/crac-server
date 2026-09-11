@@ -1,15 +1,20 @@
 # test open roof
+import asyncio
 import logging
+from time import sleep
 import unittest
 from unittest.mock import patch
 from gpiozero import Device
 from crac_server.component.roof.roof_control import RoofControl
 from crac_protobuf.roof_pb2 import RoofStatus
-from crac_server.component.roof.simulator.roof_control import MockRoofControl
+from crac_server.component.roof.simulator.roof_pins import simulated_roof
+from crac_server.config import Config
 from crac_server.status_log import ErrorCause
 
 
 class TestRoofControl(unittest.IsolatedAsyncioTestCase):
+
+    LOGGER = "crac_server.component.roof.roof_control"
 
     @classmethod
     def setUpClass(cls):
@@ -21,58 +26,147 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
 
     def tearDown(self):
         # Ogni test riserva lo stesso pin su una nuova istanza di
-        # RoofControl/MockRoofControl - va rilasciato anche tra un test e
-        # l'altro, non solo prima del primo.
+        # RoofControl - va rilasciato anche tra un test e l'altro, non solo
+        # prima del primo.
         Device.pin_factory.reset()
 
     def test_status_is_opening(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
         roof_control.motor.value = True
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_OPENING)
 
     def test_status_is_closing(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
         roof_control.motor.value = False
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_CLOSING)
 
     def test_status_is_closed(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_low()
         roof_control.motor.value = False
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_CLOSED)
 
     def test_status_is_opened(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_low()
         roof_control.roof_closed_switch.pin.drive_high()
         roof_control.motor.value = True
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_OPENED)
 
     def test_status_is_error(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_low()
         roof_control.roof_closed_switch.pin.drive_low()
         roof_control.motor.value = True
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_ERROR)
     
     async def test_open_roof(self):
-        roof_control = MockRoofControl()
-        roof_control.roof_open_switch.pin.drive_high()
-        roof_control.roof_closed_switch.pin.drive_high()
-        await roof_control.open()
+        roof_control = simulated_roof(travel_seconds=0.2)
+        self.assertTrue(await roof_control.open())
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_OPENED)
-    
+
     async def test_close_roof(self):
-        roof_control = MockRoofControl()
+        roof_control = simulated_roof(travel_seconds=0.2)
+        await roof_control.open()
+        self.assertTrue(await roof_control.close())
+        self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_CLOSED)
+
+    async def test_the_roof_tells_it_is_running_while_it_travels(self):
+        """The simulated travel is what makes the intermediate states visible
+        on the test stack: the roof is neither open nor closed for a while,
+        and the server keeps answering throughout."""
+        roof_control = simulated_roof(travel_seconds=0.3)
+
+        run = asyncio.create_task(roof_control.open())
+        await asyncio.sleep(0.1)
+        self.assertEqual(RoofStatus.ROOF_OPENING, roof_control.get_status())
+
+        await run
+        self.assertEqual(RoofStatus.ROOF_OPENED, roof_control.get_status())
+
+    async def test_the_run_does_not_stop_the_server_from_answering(self):
+        """The roof takes seconds to reach the end of its run: for that whole
+        time the event loop must stay free, or no other RPC gets an answer."""
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
-        await roof_control.close()
-        self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_CLOSED)
+        order = []
+
+        async def roof_run():
+            with patch.object(
+                roof_control.roof_open_switch, "wait_for_active",
+                side_effect=self.__limit_switch_trips_late,
+            ):
+                await roof_control.open()
+            order.append("roof")
+
+        async def other_rpc():
+            await asyncio.sleep(0.05)
+            order.append("other rpc")
+
+        await asyncio.gather(roof_run(), other_rpc())
+        self.assertEqual(["other rpc", "roof"], order)
+
+    def __limit_switch_trips_late(self, timeout):
+        sleep(0.3)
+        return True
+
+    async def test_a_recovery_that_fails_too_is_not_retried(self):
+        """The roof that cannot open closes back, and nothing else: a recovery
+        inside close() would turn the two into mutual recursion."""
+        roof_control = RoofControl()
+        roof_control.timeout = 0
+        closes = []
+        closing = roof_control.close
+
+        async def counted_close():
+            closes.append(1)
+            return await closing()
+
+        with patch.object(roof_control, "close", counted_close):
+            is_open = await roof_control.open()
+
+        self.assertFalse(is_open)
+        self.assertEqual(1, len(closes))
+        self.assertEqual(RoofStatus.ROOF_ERROR, roof_control.get_status())
+
+    async def test_a_run_cut_short_leaves_a_trace(self):
+        """Nothing cancels a run while the server is up, but a shutdown does:
+        the roof stays mid travel, and afterwards only the log says so."""
+        roof_control = simulated_roof(travel_seconds=1)
+
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            run = asyncio.create_task(roof_control.open())
+            await asyncio.sleep(0.1)
+            run.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await run
+
+        self.assertIn("mid travel", captured.records[0].getMessage())
+
+    def test_reversing_the_motor_leaves_only_the_new_limit_switch_active(self):
+        roof_control = simulated_roof(travel_seconds=0.2)
+
+        roof_control.motor.on()
+        roof_control.motor.off()
+        sleep(0.4)
+
+        self.assertFalse(roof_control.roof_open_switch.is_active)
+        self.assertTrue(roof_control.roof_closed_switch.is_active)
+
+    def test_a_motor_pin_already_taken_is_not_left_silently_unwired(self):
+        """A pin already in the factory comes back as it is, keeping its own
+        class: the roof would then wait out its timeout on every run, with
+        nothing saying the simulation did not install."""
+        Device.pin_factory.pin(Config.getInt("switch_roof", "roof_board"))
+
+        with self.assertRaises(RuntimeError):
+            simulated_roof()
 
     async def test_when_roof_is_blocked_while_opening_then_it_will_close(self):
         roof_control = RoofControl()
@@ -83,7 +177,7 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
                 is_open = await roof_control.open()
                 mockedroofopen.assert_called_once()
                 mockedroofclosed.assert_called_once()
-                self.assertEqual(is_open, True)
+                self.assertFalse(is_open)
 
 
 class TestRoofControlStatusLogging(unittest.TestCase):
@@ -98,7 +192,7 @@ class TestRoofControlStatusLogging(unittest.TestCase):
         Device.pin_factory.reset()
 
     def _roof_with_inconsistent_sensors(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_low()
         roof_control.roof_closed_switch.pin.drive_low()
         return roof_control
@@ -114,15 +208,15 @@ class TestRoofControlStatusLogging(unittest.TestCase):
         self.assertIn("[Roof]", message)
         self.assertIn(ErrorCause.SENSORS_INCONSISTENT, message)
 
-    def test_safety_block_is_told_apart_from_a_broken_sensor(self):
-        roof_control = MockRoofControl()
+    def test_an_unconfirmed_movement_is_told_apart_from_a_broken_sensor(self):
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_low()
         roof_control.motor.value = False
-        roof_control.is_blocked = True
+        roof_control.movement_not_confirmed = True
         with self.assertLogs(self.LOGGER, level="ERROR") as captured:
             roof_control.get_status()
-        self.assertIn(ErrorCause.BLOCKED_BY_SAFETY, captured.records[0].getMessage())
+        self.assertIn(ErrorCause.MOVEMENT_NOT_CONFIRMED, captured.records[0].getMessage())
 
     def test_recovery_is_logged_at_info(self):
         roof_control = self._roof_with_inconsistent_sensors()
@@ -135,7 +229,7 @@ class TestRoofControlStatusLogging(unittest.TestCase):
         self.assertEqual(captured.records[0].levelno, logging.INFO)
 
     def test_a_healthy_roof_logs_no_error(self):
-        roof_control = MockRoofControl()
+        roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_low()
         roof_control.motor.value = False
