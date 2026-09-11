@@ -15,13 +15,13 @@ class MockRoofControl(RoofControl):
         self.__movement_in_progress()
         open = super().open()
         await self.__wait_for_open__(self.roof_open_switch.pin)
-        await open
+        return await open
 
     async def close(self):
         self.__movement_in_progress()
         close = super().close()
         await self.__wait_for_open__(self.roof_closed_switch.pin)
-        await close
+        return await close
 
     async def __wait_for_open__(self, pin):
         await asyncio.sleep(10)

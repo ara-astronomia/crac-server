@@ -64,14 +64,14 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         roof_control = MockRoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
-        await roof_control.open()
+        self.assertTrue(await roof_control.open())
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_OPENED)
     
     async def test_close_roof(self):
         roof_control = MockRoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_high()
-        await roof_control.close()
+        self.assertTrue(await roof_control.close())
         self.assertEqual(roof_control.get_status(), RoofStatus.ROOF_CLOSED)
 
     async def test_when_roof_is_blocked_while_opening_then_it_will_close(self):
