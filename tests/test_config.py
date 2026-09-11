@@ -1,5 +1,10 @@
+import configparser
+import os
+import tempfile
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
+
 from crac_server.config import Config
 
 
@@ -75,3 +80,63 @@ class TestGetRequiredBoolean(unittest.TestCase):
         with patch("crac_server.config.Config.getValue", side_effect=KeyError("weather")):
             with self.assertRaises(KeyError):
                 Config.getRequiredBoolean("block_on_unspecified", "weather")
+
+
+class TestConfigIsReadOnceFromDisk(unittest.TestCase):
+    """
+    Every getter used to build a Config of its own, reparsing config.ini from
+    disk: 54 reads for a single weather response. The file is parsed once and
+    parsed again only when it changes, so editing it on a running server keeps
+    taking effect without a restart.
+    """
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "config.ini")
+        self._write(interval="10")
+        path_patch = patch("crac_server.config.CONFIG_PATH", self.path)
+        path_patch.start()
+        self.addCleanup(path_patch.stop)
+
+    def _write(self, interval):
+        with open(self.path, "w") as config_file:
+            config_file.write(f"[roof_board]\nroof_timeout = {interval}\nswitch_roof = 4\ngpio_mock = on\n")
+
+    @contextmanager
+    def _counting_reads(self):
+        reads = []
+        real_read = configparser.ConfigParser.read
+
+        def counted_read(parser, *args, **kwargs):
+            reads.append(args)
+            return real_read(parser, *args, **kwargs)
+
+        with patch.object(configparser.ConfigParser, "read", counted_read):
+            yield reads
+
+    def test_many_keys_cost_a_single_parse(self):
+        with self._counting_reads() as reads:
+            for _ in range(20):
+                Config.getInt("roof_timeout", "roof_board")
+                Config.getValue("switch_roof", "roof_board")
+                Config.getBoolean("gpio_mock", "roof_board")
+
+        self.assertEqual(1, len(reads))
+
+    def test_a_changed_file_is_parsed_again(self):
+        self.assertEqual(10, Config.getInt("roof_timeout", "roof_board"))
+
+        self._write(interval="50")
+        stat = os.stat(self.path)
+        os.utime(self.path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+        self.assertEqual(50, Config.getInt("roof_timeout", "roof_board"))
+
+    def test_an_untouched_file_is_not_parsed_again(self):
+        Config.getInt("roof_timeout", "roof_board")
+
+        with self._counting_reads() as reads:
+            Config.getInt("roof_timeout", "roof_board")
+
+        self.assertEqual([], reads)
