@@ -116,6 +116,25 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         sleep(0.3)
         return True
 
+    async def test_a_recovery_that_fails_too_is_not_retried(self):
+        """The roof that cannot open closes back, and nothing else: a recovery
+        inside close() would turn the two into mutual recursion."""
+        roof_control = RoofControl()
+        roof_control.timeout = 0
+        closes = []
+        closing = roof_control.close
+
+        async def counted_close():
+            closes.append(1)
+            return await closing()
+
+        with patch.object(roof_control, "close", counted_close):
+            is_open = await roof_control.open()
+
+        self.assertFalse(is_open)
+        self.assertEqual(1, len(closes))
+        self.assertEqual(RoofStatus.ROOF_ERROR, roof_control.get_status())
+
     async def test_a_run_cut_short_leaves_a_trace(self):
         """Nothing cancels a run while the server is up, but a shutdown does:
         the roof stays mid travel, and afterwards only the log says so."""
@@ -189,15 +208,15 @@ class TestRoofControlStatusLogging(unittest.TestCase):
         self.assertIn("[Roof]", message)
         self.assertIn(ErrorCause.SENSORS_INCONSISTENT, message)
 
-    def test_safety_block_is_told_apart_from_a_broken_sensor(self):
+    def test_an_unconfirmed_movement_is_told_apart_from_a_broken_sensor(self):
         roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
         roof_control.roof_closed_switch.pin.drive_low()
         roof_control.motor.value = False
-        roof_control.is_blocked = True
+        roof_control.movement_not_confirmed = True
         with self.assertLogs(self.LOGGER, level="ERROR") as captured:
             roof_control.get_status()
-        self.assertIn(ErrorCause.BLOCKED_BY_SAFETY, captured.records[0].getMessage())
+        self.assertIn(ErrorCause.MOVEMENT_NOT_CONFIRMED, captured.records[0].getMessage())
 
     def test_recovery_is_logged_at_info(self):
         roof_control = self._roof_with_inconsistent_sensors()
