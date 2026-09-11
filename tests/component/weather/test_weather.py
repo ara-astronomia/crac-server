@@ -53,7 +53,7 @@ class TestWeather(unittest.TestCase):
         self.format = "%Y-%m-%d %H:%M:%S"
         self.url = "http://ara.test"
         self.fallback_url = "http://fallback.ara.test"
-        self.weather = Weather(self.url, self.fallback_url, self.format, 600, 1200)
+        self.weather = Weather(self.url, self.fallback_url, self.format, 600, 1200, url_timeout=10)
 
     def tearDown(self) -> None:
         del(self.weather, self.format, self.url, self.fallback_url)
@@ -122,22 +122,22 @@ class TestWeather(unittest.TestCase):
         self.assertEqual(self.weather.url_timeout, urlopen.call_args.kwargs.get("timeout"))
 
     def test_two_concurrent_readings_refresh_once(self):
-        """La conversione ora gira in un thread, e le catene di handler leggono
-        lo stesso oggetto dal loop: due letture insieme non devono rileggere
-        due volte dalla stazione."""
-        letture = []
+        """The conversion now runs in a thread while the handler chains read
+        the same object from the loop: two readings together must not hit the
+        weather station twice."""
+        readings = []
 
-        def lettura_lenta():
+        def slow_reading():
             sleep(0.2)
-            letture.append(1)
+            readings.append(1)
             return self.retrieve()
 
-        self.weather._retrieve_data = lettura_lenta
+        self.weather._retrieve_data = slow_reading
         thread = Thread(target=lambda: self.weather.temperature)
         thread.start()
         self.weather.humidity
         thread.join()
-        self.assertEqual(1, len(letture))
+        self.assertEqual(1, len(readings))
 
     def mocked_urlopen(self):
         current, time = self.retrieve()

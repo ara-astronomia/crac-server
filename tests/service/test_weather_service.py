@@ -98,24 +98,24 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
         self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
 
     async def test_a_slow_reading_lets_the_other_rpcs_through(self):
-        """Il meteo si rinfresca da una sorgente remota: finche' quella tace,
-        tetto, telescopio, tende e UPS devono continuare a rispondere."""
+        """The weather refreshes from a remote source: while that one stays
+        silent, roof, telescope, curtains and UPS must keep answering."""
         service = WeatherService()
         service.weather_converter = MagicMock()
         service.weather_converter.convert = self.__slow_reading
 
-        ordine = []
+        order = []
 
-        async def lettura_meteo():
+        async def weather_reading():
             await service.GetStatus(None, None)
-            ordine.append("meteo")
+            order.append("weather")
 
-        async def altra_rpc():
+        async def other_rpc():
             await asyncio.sleep(0.05)
-            ordine.append("altra rpc")
+            order.append("other rpc")
 
-        await asyncio.gather(lettura_meteo(), altra_rpc())
-        self.assertEqual(["altra rpc", "meteo"], ordine)
+        await asyncio.gather(weather_reading(), other_rpc())
+        self.assertEqual(["other rpc", "weather"], order)
 
     def __slow_reading(self, weather):
         sleep(0.3)

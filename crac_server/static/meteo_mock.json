@@ -7,8 +7,8 @@
         "humidity": { "value": "60,0", "unit_of_measurement": "%" },
         "barometer": { "value": "1013,0", "unit_of_measurement": " mbar" },
         "barometerTrend": { "value": "0,0", "unit_of_measurement": " mbar" },
-        "windSpeed": { "value": "0,0", "unit_of_measurement": " m/s" },
-        "windGust": { "value": "0,0", "unit_of_measurement": " m/s" },
+        "windSpeed": { "value": "0,0", "unit_of_measurement": " km/h" },
+        "windGust": { "value": "0,0", "unit_of_measurement": " km/h" },
         "rainRate": { "value": "0,0", "unit_of_measurement": " mm/h" }
     }
 }
