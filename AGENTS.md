@@ -46,6 +46,19 @@ tests/                      # rispecchia la struttura di crac_server/
 
 ## Vincoli e gotcha non ovvi
 
+- **Il tetto sta aperto solo finché il relè è eccitato**: `RoofControl.open()`
+  accende il motore e `close()` lo spegne, quindi un processo che muore lascia
+  il pin rilasciato e il tetto va verso la chiusura. È un fail-safe, ed è
+  **altamente probabile** ma non verificato sull'hardware: dal codice si legge
+  solo che aperto = eccitato, cosa faccia il relè senza corrente lo dice il
+  cablaggio in cupola.
+- **Una corsa interrotta lascia il tetto a metà**: l'attesa del finecorsa gira
+  fuori dal loop (`asyncio.to_thread`), quindi un arresto la cancella con il
+  motore ancora eccitato. Viene registrata a ERROR, ed è l'unica traccia che
+  resta dopo un riavvio. Attenzione a una conseguenza non ovvia: il processo
+  non esce subito, perché `asyncio.run()` si unisce al thread rimasto dentro
+  `wait_for_active` - aspetta il `roof_timeout` residuo (50s), e su
+  `docker compose stop` scadono prima i 10 secondi di grazia.
 - **Driver telescopio "indigo"**: non forza più la connessione al device da
   solo - il telescopio va connesso manualmente dal pannello INDIGO prima
   che crac lo usi (replica il workflow reale: l'operatore collega il

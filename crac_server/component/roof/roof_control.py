@@ -22,7 +22,7 @@ class RoofControl():
     async def open(self):
         async with self.lock:
             self.motor.on()
-            self.is_blocked = not await asyncio.to_thread(self.roof_open_switch.wait_for_active, self.timeout)
+            self.is_blocked = not await self.__reaches(self.roof_open_switch)
         is_open = not self.is_blocked
         if self.is_blocked:
             logger.error(
@@ -37,7 +37,7 @@ class RoofControl():
     async def close(self):
         async with self.lock:
             self.motor.off()
-            self.is_blocked = not await asyncio.to_thread(self.roof_closed_switch.wait_for_active, self.timeout)
+            self.is_blocked = not await self.__reaches(self.roof_closed_switch)
             if self.is_blocked:
                 logger.error(
                     "Roof closing blocked after %s seconds: motor=%s, "
@@ -46,6 +46,16 @@ class RoofControl():
                     self.roof_closed_switch.is_active, self.roof_open_switch.is_active
                 )
             return not self.is_blocked
+
+    async def __reaches(self, limit_switch) -> bool:
+        """Waits off the event loop, so the server keeps answering for the
+        whole run. A cancelled wait leaves the motor driving and the roof
+        mid travel, which only the log can tell afterwards."""
+        try:
+            return await asyncio.to_thread(limit_switch.wait_for_active, self.timeout)
+        except asyncio.CancelledError:
+            logger.error("Roof run interrupted with the motor still driving: the roof is left mid travel")
+            raise
 
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active

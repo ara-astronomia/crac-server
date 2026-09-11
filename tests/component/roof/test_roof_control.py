@@ -14,6 +14,8 @@ from crac_server.status_log import ErrorCause
 
 class TestRoofControl(unittest.IsolatedAsyncioTestCase):
 
+    LOGGER = "crac_server.component.roof.roof_control"
+
     @classmethod
     def setUpClass(cls):
         # Importare questo modulo attiva crac_server.component.roof.__init__,
@@ -113,6 +115,20 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
     def __limit_switch_trips_late(self, timeout):
         sleep(0.3)
         return True
+
+    async def test_a_run_cut_short_leaves_a_trace(self):
+        """Nothing cancels a run while the server is up, but a shutdown does:
+        the roof stays mid travel, and afterwards only the log says so."""
+        roof_control = simulated_roof(travel_seconds=1)
+
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            run = asyncio.create_task(roof_control.open())
+            await asyncio.sleep(0.1)
+            run.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await run
+
+        self.assertIn("mid travel", captured.records[0].getMessage())
 
     def test_reversing_the_motor_leaves_only_the_new_limit_switch_active(self):
         roof_control = simulated_roof(travel_seconds=0.2)
