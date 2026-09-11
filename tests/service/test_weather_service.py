@@ -11,7 +11,7 @@ from crac_protobuf.chart_pb2 import (
     WeatherResponse,  # type: ignore
     WeatherStatus,  # type: ignore
 )
-from crac_server.component.roof.roof_control import RoofControl
+from crac_server.component.roof.simulator.roof_pins import simulated_roof
 from crac_server.component.telescope import TELESCOPE
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.component.weather import WEATHER
@@ -140,7 +140,7 @@ class TestWeatherServiceEmergencyClosureReachesTheRoof(unittest.IsolatedAsyncioT
     def setUp(self):
         Device.pin_factory.reset()
         self.addCleanup(Device.pin_factory.reset)
-        self.roof = RoofControl()
+        self.roof = simulated_roof(travel_seconds=0.1)
         self.telescope = MagicMock()
         self.telescope.status = TelescopeStatus.PARKED
         doubles = {
@@ -157,20 +157,18 @@ class TestWeatherServiceEmergencyClosureReachesTheRoof(unittest.IsolatedAsyncioT
         self.service = WeatherService()
 
     async def test_the_roof_is_closed_when_the_sequence_is_over(self):
-        self.__roof_running_with_both_limit_switches_free()
-        with patch.object(
-            self.roof.roof_closed_switch, "wait_for_active",
-            side_effect=self.__closed_limit_switch_trips,
-        ):
-            await self.__run_emergency_closure()
+        await self.roof.open()
+
+        await self.__run_emergency_closure()
 
         self.assertEqual(RoofStatus.ROOF_CLOSED, self.roof.get_status())
 
     async def test_a_roof_that_did_not_close_is_logged_as_an_error(self):
-        self.__roof_running_with_both_limit_switches_free()
-        with patch.object(self.roof.roof_closed_switch, "wait_for_active", return_value=False):
-            with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
-                await self.__run_emergency_closure()
+        await self.roof.open()
+        self.roof.timeout = 0
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__run_emergency_closure()
 
         self.assertIn("roof", captured.records[0].getMessage().lower())
 
@@ -185,15 +183,6 @@ class TestWeatherServiceEmergencyClosureReachesTheRoof(unittest.IsolatedAsyncioT
 
     async def __run_emergency_closure(self):
         await asyncio.to_thread(self.service._emergency_closure, asyncio.get_running_loop())
-
-    def __roof_running_with_both_limit_switches_free(self):
-        self.roof.motor.on()
-        self.roof.roof_open_switch.pin.drive_high()
-        self.roof.roof_closed_switch.pin.drive_high()
-
-    def __closed_limit_switch_trips(self, timeout):
-        self.roof.roof_closed_switch.pin.drive_low()
-        return True
 
     def __disabled_curtain(self):
         curtain = MagicMock()
