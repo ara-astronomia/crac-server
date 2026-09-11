@@ -26,7 +26,7 @@ class RoofControl():
             self.movement_not_confirmed = not is_open
         if not is_open:
             logger.error(
-                "Roof opening blocked after %s seconds: motor=%s, "
+                "Roof opening not confirmed after %s seconds: motor=%s, "
                 "open limit switch=%s, closed limit switch=%s",
                 self.timeout, self.motor.value,
                 self.roof_open_switch.is_active, self.roof_closed_switch.is_active
@@ -41,7 +41,7 @@ class RoofControl():
             self.movement_not_confirmed = not is_closed
             if not is_closed:
                 logger.error(
-                    "Roof closing blocked after %s seconds: motor=%s, "
+                    "Roof closing not confirmed after %s seconds: motor=%s, "
                     "closed limit switch=%s, open limit switch=%s",
                     self.timeout, self.motor.value,
                     self.roof_closed_switch.is_active, self.roof_open_switch.is_active
