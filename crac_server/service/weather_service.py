@@ -55,11 +55,22 @@ class WeatherService(WeatherServicer):
             self.t == None
         ):
             logger.info("weather in danger status - block crac")
-            self.t = Thread(target=self._emergency_closure)
+            self.t = Thread(target=self._emergency_closure, args=(asyncio.get_running_loop(),))
             self.t.start()
         return response
 
-    def _emergency_closure(self):
+    def _emergency_closure(self, loop: asyncio.AbstractEventLoop):
+        """Close the observatory from its own thread.
+
+        The roof is driven by a coroutine owned by the event loop, so its
+        closure is handed over to the loop instead of being called here.
+        """
+        try:
+            self._close_crac(loop)
+        finally:
+            self.t = None
+
+    def _close_crac(self, loop: asyncio.AbstractEventLoop):
         with self.lock:
             logger.info("weather in danger status - send telescope in park")
             TELESCOPE.queue_park()
@@ -87,9 +98,11 @@ class WeatherService(WeatherServicer):
             ):
                 sleep(1)
             logger.info("weather in danger status - close the roof")
-            ROOF.close()
-            
+            if asyncio.run_coroutine_threadsafe(ROOF.close(), loop).result():
+                logger.info("weather in danger status - the roof is closed")
+            else:
+                logger.error("weather in danger status - the roof did not close")
+
             logger.info("weather in danger status - switch off telescope button")
             TELESCOPE.polling_end()
             SWITCHES[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
-            self.t = None
