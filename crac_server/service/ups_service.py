@@ -11,7 +11,7 @@ from crac_protobuf.ups_pb2 import (
     UpsChart,
     UpsDevice,
 )
-from crac_server.component.ups import UPS
+from crac_server.component.ups import ups
 from crac_server.config import Config
 from crac_server.converter.chart_builder import build_chart, UnreachableThresholdError
 from typing import Union
@@ -161,13 +161,13 @@ class UpsService(UpsServicer):
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         response = UpsResponse(
             updated_at=self.timestamp_or_none(datetime.now()),
-            interval=UPS.time_expired
+            interval=ups().time_expired
         )
         unreadable = []
         for device in self._configured_devices():
             try:
-                ups = UPS.status_for(device)
-                charts = self._build_charts(device, ups)
+                reading = ups().status_for(device)
+                charts = self._build_charts(device, reading)
             except UnreachableThresholdError:
                 raise
             except Exception as e:

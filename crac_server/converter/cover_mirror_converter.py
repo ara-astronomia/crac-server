@@ -10,7 +10,7 @@ from crac_protobuf.cover_mirror_pb2 import (
     CoverMirrorResponse,  # type: ignore
     CoverMirrorStatus,  # type: ignore
 )
-from crac_server.component.cover_mirror import COVER_MIRROR
+from crac_server.component.cover_mirror import cover_mirror
 from crac_server.component.cover_mirror.cover_mirror_control import CoverMirrorControl
 
 
@@ -18,7 +18,7 @@ class CoverMirrorMediator:
     def __init__(self, request: CoverMirrorRequest) -> None:
         self.request = request
         self._action = request.action
-        self._button = COVER_MIRROR
+        self._button = cover_mirror()
         self._status = self.button.get_status()
         self._is_disabled = False
 

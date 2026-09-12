@@ -10,7 +10,7 @@ luci, e copertura a petali dello specchio. Espone RPC consumate da
 ```bash
 uv sync                          # installa dipendenze
 python -m crac_server.app        # avvia il server gRPC (porta 50051)
-python -m unittest discover -t . -s tests   # suite di test (unittest, NON pytest)
+python -m unittest discover      # suite di test (unittest, NON pytest)
 autopep8 --in-place --recursive crac_server/   # format
 python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/*.proto  # rigenera stub protobuf, quando cambia crac-protobuf
 ```
@@ -98,16 +98,27 @@ tests/                      # rispecchia la struttura di crac_server/
   `discover -s tests` unittest prende `tests/` come top level, quel setup non
   viene eseguito e due test lo dicono fallendo.
 - **La suite legge `tests/config.ini`**, scelto da `CRAC_CONFIG_PATH` in
-  `tests/__init__.py`: i componenti leggono `Config` mentre vengono
-  importati - `crac_server/__init__.py` lo fa per decidere se montare il
-  GPIO finto - quindi piu' tardi non c'e' momento utile. Una chiave nuova
-  usata dal codice va aggiunta anche li', altrimenti i test falliscono con
-  `KeyError`. Un test che vuole un valore suo fa `patch` su `Config`, come
-  quelli dell'UPS.
+  `tests/__init__.py`. Una chiave nuova usata dal codice va aggiunta anche
+  li', altrimenti i test falliscono con `KeyError`. Un test che vuole un
+  valore suo fa `patch` su `Config`, come quelli dell'UPS.
+- **I componenti si prendono chiamandoli**: `roof()`, `telescope()`,
+  `curtain_east()`, `curtain_west()`, `weather()`, `switches()`,
+  `cover_mirror()`. Costruiscono al primo uso e poi tengono l'istanza
+  (`lru_cache`), quindi importare un modulo non legge configurazione e non
+  apre pin - un test lo verifica importando in un processo puntato a un
+  file di configurazione inesistente. Per lo stesso motivo la
+  configurazione va letta dentro le funzioni: a livello di modulo si
+  congela, e la rilettura a caldo di `Config` non ha piu' effetto.
+  `app.py` li costruisce tutti all'avvio, cosi' un guasto si vede quando il
+  servizio parte e non alla prima richiesta.
+- **Chi monta il GPIO finto**: nei test `tests/__init__.py`, nello stack
+  Docker `GPIOZERO_PIN_FACTORY=mock` (meccanismo di gpiozero). Da quando i
+  componenti sono pigri, `Device.pin_factory` resta `None` finche' qualcuno
+  non costruisce un device: chi ha bisogno della factory prima chiama
+  `Device.ensure_pin_factory()`.
 - **Test roof**: serve `Device.pin_factory.reset()` in `setUpClass`/
-  `tearDown` - un singolo eager (`ROOF` in `component/roof/__init__.py`,
-  istanziato all'import) riserva il pin GPIO mock prima ancora che parta
-  il primo test.
+  `tearDown`, e `roof.cache_clear()` se il test vuole un tetto nuovo:
+  l'istanza tenuta dalla cache trattiene i pin GPIO mock gia' riservati.
 
 ## Convenzioni di stile
 

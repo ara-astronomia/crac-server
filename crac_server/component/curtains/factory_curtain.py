@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Literal, Union
 from crac_protobuf.curtains_pb2 import CurtainOrientation
 from crac_server.config import Config
@@ -125,5 +126,11 @@ class FactoryCurtain:
         return builder_curtain.build(mock)
 
 
-CURTAIN_EAST = FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_EAST, mock=Config.getBoolean("gpio_mock", "server"))
-CURTAIN_WEST = FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_WEST, mock=Config.getBoolean("gpio_mock", "server"))
+@lru_cache(maxsize=1)
+def curtain_east() -> Curtain:
+    return FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_EAST, mock=Config.getBoolean("gpio_mock", "server"))
+
+
+@lru_cache(maxsize=1)
+def curtain_west() -> Curtain:
+    return FactoryCurtain.curtain(orientation=CurtainOrientation.CURTAIN_WEST, mock=Config.getBoolean("gpio_mock", "server"))

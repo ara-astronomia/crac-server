@@ -26,7 +26,9 @@ ACTION_BY_SWITCH = {
 
 class CoverMirrorControl():
 
-    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
+    def __init__(self, hostname=None, port=None) -> None:
+        hostname = config.Config.getValue("hostname", "telescope") if hostname is None else hostname
+        port = config.Config.getInt("port", "telescope") if port is None else port
         self._name = config.Config.getValue("device", "cover_mirror")
         self._client = get_indigo_client(hostname, port)
         self._client.connect_device(self._name)

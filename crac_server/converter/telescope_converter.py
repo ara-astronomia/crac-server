@@ -13,7 +13,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
 )
 from crac_server.component.telescope import (
-    TELESCOPE, 
+    telescope, 
     Telescope,
 )
 
@@ -25,7 +25,7 @@ class TelescopeMediator:
     def __init__(self, request: TelescopeRequest) -> None:
         self.request = request
         self._action = request.action
-        self._button = TELESCOPE
+        self._button = telescope()
         self._status = self.button.status
         self._speed = self.button.speed
         self._connect_is_disabled = False

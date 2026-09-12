@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 class Telescope(TelescopeBase):
 
     # default port 7624
-    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
+    def __init__(self, hostname=None, port=None) -> None:
+        hostname = config.Config.getValue("hostname", "telescope") if hostname is None else hostname
+        port = config.Config.getInt("port", "telescope") if port is None else port
         super().__init__(hostname=hostname, port=port)
         self._name = config.Config.getValue("name", "indigo")
         self._client = get_indigo_client(hostname, port)

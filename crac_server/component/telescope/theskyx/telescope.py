@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 class Telescope(TelescopeBase):
 
     # default port 3040
-    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")):
+    def __init__(self, hostname=None, port=None):
+        hostname = config.Config.getValue("hostname", "telescope") if hostname is None else hostname
+        port = config.Config.getInt("port", "telescope") if port is None else port
         super().__init__(hostname=hostname, port=port)
         self.script = os.path.join(os.path.dirname(__file__), 'get_alt_az.js')
         self.script_move_track = os.path.join(os.path.dirname(__file__), 'set_move_track.js')

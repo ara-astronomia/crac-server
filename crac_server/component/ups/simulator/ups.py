@@ -52,8 +52,8 @@ NUT_ATTRIBUTES_NOT_READ_BY_CRAC = {
 
 
 class Ups(UpsBase):
-    def __init__(self, host: str, login: str, password: str, time_expired: int) -> None:
-        super().__init__(host, login, password, time_expired)
+    def __init__(self, host: str, port: int, login: str, password: str, time_expired: int) -> None:
+        super().__init__(host, port, login, password, time_expired)
     
     def _read(self, device: str) -> dict[str,str]:
         ups_path = os.path.join(os.path.dirname(__file__), "ups.ini")

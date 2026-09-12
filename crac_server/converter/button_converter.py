@@ -11,7 +11,7 @@ from crac_protobuf.button_pb2 import (
     ButtonType,  # type: ignore
 )
 from crac_server.component.button_control import (
-    SWITCHES, 
+    switches, 
     ButtonControl,
 )
 
@@ -24,7 +24,7 @@ class ButtonMediator:
         self.request = request
         self._type = request.type
         self._action = request.action
-        self._button = SWITCHES[ButtonType.Name(request.type)]
+        self._button = switches()[ButtonType.Name(request.type)]
         self._status = self.button.get_status()
         self._is_disabled = False
     

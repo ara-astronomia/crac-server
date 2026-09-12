@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 class Telescope(TelescopeBase):
 
     # default port 11111
-    def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
+    def __init__(self, hostname=None, port=None) -> None:
+        hostname = config.Config.getValue("hostname", "telescope") if hostname is None else hostname
+        port = config.Config.getInt("port", "telescope") if port is None else port
         super().__init__(hostname="http://" + hostname, port=port)
         self._base_path = "/api/v1/telescope/" + config.Config.getValue("device_number", "ascom_hub") + "/"
         self.client_transaction_id = 0

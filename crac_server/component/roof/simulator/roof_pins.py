@@ -48,6 +48,7 @@ class MockRoofMotorPin(MockPin):
 def simulated_roof(travel_seconds: float = TRAVEL_SECONDS) -> RoofControl:
     """The production RoofControl with only the travel of the roof simulated,
     starting from a closed roof."""
+    Device.ensure_pin_factory()
     factory = Device.pin_factory
     open_switch = factory.pin(Config.getInt("roof_verify_open", "roof_board"))
     closed_switch = factory.pin(Config.getInt("roof_verify_closed", "roof_board"))

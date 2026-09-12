@@ -1,6 +1,6 @@
 import logging
-from crac_server.component.telescope import TELESCOPE
-from crac_server.component.weather import WEATHER
+from crac_server.component.telescope import telescope
+from crac_server.component.weather import weather
 from crac_server.converter.button_converter import (
     ButtonConverter, 
     ButtonMediator,
@@ -42,7 +42,7 @@ class ButtonWeatherHandler(AbstractButtonHandler):
         ):
             logger.debug(f"In turn on or check action {mediator.action} for {mediator.type}")
             weather_converter = WeatherConverter()
-            weather_response = weather_converter.convert(WEATHER)
+            weather_response = weather_converter.convert(weather())
             logger.debug(f"In weather status {weather_response.status}")
             if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
                 logger.info(f"In status danger {weather_response.status}")
@@ -59,7 +59,7 @@ class ButtonTelescopeHandler(AbstractButtonHandler):
             mediator.action == ButtonAction.TURN_OFF
         ):
             logger.debug("Turned off telescope connection when telescope is turned off")
-            TELESCOPE.polling_end()
+            telescope().polling_end()
 
         return super().handle(mediator)
 
@@ -69,10 +69,10 @@ class ButtonFlatHandler(AbstractButtonHandler):
         if (
             mediator.type == ButtonType.FLAT_LIGHT and
             mediator.action is ButtonAction.TURN_ON and
-            TELESCOPE.status is TelescopeStatus.FLATTER
+            telescope().status is TelescopeStatus.FLATTER
         ):
             logger.debug("Track telescope on when Flat Panel is switched on")
-            TELESCOPE.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
+            telescope().queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
         return super().handle(mediator)
 
