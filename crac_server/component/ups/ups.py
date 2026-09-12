@@ -3,7 +3,7 @@ from crac_server.config import Config
 
 
 class Ups(ABC):
-    def __init__(self, host: str, login: str, password: str, time_expired: int) -> None:
+    def __init__(self, host: str, port: int, login: str, password: str, time_expired: int) -> None:
         self.time_expired = time_expired
 
     def status_for(self, device: str) -> dict[str, str]:
