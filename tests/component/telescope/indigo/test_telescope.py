@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -26,12 +27,53 @@ class TestIndigoTelescope(unittest.TestCase):
         self.mock_client.connect_device.assert_not_called()
         self.assertFalse(self.telescope._uses_raw_socket)
 
-    def test_init_syncs_geographic_coordinates(self):
+    def test_init_sends_nothing_to_the_mount(self):
+        # __init__ runs before the operator has connected the device on the
+        # INDIGO panel: nothing may reach the mount from there.
+        self.mock_client.send.assert_not_called()
+
+    def _stub_site(self, latitude, longitude, elevation=0.0):
+        self._stub_properties({
+            "GEOGRAPHIC_COORDINATES": {"items": [
+                {"name": "LATITUDE", "value": latitude},
+                {"name": "LONGITUDE", "value": longitude},
+                {"name": "ELEVATION", "value": elevation},
+            ]},
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+
+    def _sent_property_names(self):
+        return [next(iter(c.args[0].values())).get("name") for c in self.mock_client.send.call_args_list]
+
+    def _enable_geographic_sync(self):
+        """The override the test stack puts in place for the Mount Simulator."""
+        patcher = patch.dict(os.environ, {"TELESCOPE_SYNC_GEOGRAPHIC_COORDINATES": "on"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_geographic_coordinates_not_written_when_mount_declares_no_site(self):
+        # The case a real mount is in right now: its site got lost, so it
+        # declares 0,0 exactly like a simulator. What the mount answers may
+        # not unlock the write - only the configuration does.
+        self._stub_site(latitude=0, longitude=0)
+        self.telescope.retrieve()
+        self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
+
+    def test_geographic_coordinates_not_written_when_mount_declares_its_own_site(self):
+        self._stub_site(latitude=42.229333, longitude=12.8115, elevation=465)
+        self.telescope.retrieve()
+        self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
+
+    def test_geographic_coordinates_written_when_configuration_asks_for_it(self):
         # regressione: Mount Simulator parte a lat/lon 0°,0° finché non
         # gliela mandiamo - la stessa RA/DEC risulta a un'altitudine
         # completamente diversa da quella vista dal nostro calcolo (fatto
         # sulla posizione reale dell'osservatorio), facendo atterrare
         # qualunque slew (es. flat) nel punto sbagliato.
+        self._enable_geographic_sync()
+        self._stub_site(latitude=0, longitude=0)
+        self.telescope.retrieve()
         sent = [c.args[0] for c in self.mock_client.send.call_args_list]
         geo = next(s["newNumberVector"] for s in sent if s.get("newNumberVector", {}).get("name") == "GEOGRAPHIC_COORDINATES")
         items = {i["name"]: i["value"] for i in geo["items"]}
@@ -41,32 +83,22 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertAlmostEqual(items["ELEVATION"], 465, places=3)
 
     def test_geographic_coordinates_retried_until_send_succeeds(self):
-        # regressione: il send() in __init__ è fire-and-forget - se il
-        # socket del client condiviso non è ancora pronto al primo
-        # tentativo (stessa race di connect_device), senza ritentare la
-        # sincronizzazione geografica fallirebbe in silenzio per sempre.
-        patcher = patch("crac_server.component.telescope.indigo.telescope.get_indigo_client")
-        mock_get_client = patcher.start()
-        self.addCleanup(patcher.stop)
-        mock_client = MagicMock()
-        mock_client.send.return_value = False
-        mock_get_client.return_value = mock_client
-        telescope = Telescope(hostname="host", port=1)
-        self.assertFalse(telescope._geo_synced)
+        # regressione: il send() è fire-and-forget - se il socket del client
+        # condiviso non è ancora pronto al primo tentativo (stessa race di
+        # connect_device), senza ritentare la sincronizzazione geografica
+        # fallirebbe in silenzio per sempre.
+        self._enable_geographic_sync()
+        self._stub_site(latitude=0, longitude=0)
+        self.mock_client.send.return_value = False
+        self.telescope.retrieve()
+        self.assertIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
+        self.assertFalse(self.telescope._geo_synced)
 
-        mock_client.send.return_value = True
-        mock_client.send.reset_mock()
-        self._stub_properties_for(telescope, mock_client, {
-            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
-            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
-        })
-        telescope.retrieve()
-        self.assertTrue(telescope._geo_synced)
-        sent_names = [next(iter(c.args[0].values()))["name"] for c in mock_client.send.call_args_list]
-        self.assertIn("GEOGRAPHIC_COORDINATES", sent_names)
-
-    def _stub_properties_for(self, telescope, mock_client, props):
-        mock_client.get_property.side_effect = lambda device, name, timeout=2.0: props.get(name)
+        self.mock_client.send.return_value = True
+        self.mock_client.send.reset_mock()
+        self.telescope.retrieve()
+        self.assertIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
+        self.assertTrue(self.telescope._geo_synced)
 
     def test_retrieve_reconnects_device_on_every_cycle(self):
         # non basta farlo in __init__: se il client si riconnette e la cache

@@ -85,6 +85,15 @@ tests/                      # rispecchia la struttura di crac_server/
   nel mount e quella proprietà non esiste nemmeno. Nessun
   `CONFIG_SAVE`/`CONFIG_LOAD`: alla riconnessione `_park_position_synced`
   si azzera e la posizione viene rimandata al primo park utile.
+- **`GEOGRAPHIC_COORDINATES` non si scrive, salvo che la config lo chieda**:
+  la posizione dell'osservatorio vive nel mount ed è il riferimento di ogni
+  conversione RA/DEC ↔ ALT/AZ che il mount fa - riscriverla dall'esterno la
+  invalida. Il default committato (`[telescope] sync_geographic_coordinates =
+  off`) non scrive mai; l'accende solo lo stack di test
+  (`TELESCOPE_SYNC_GEOGRAPHIC_COORDINATES=on`) per il Mount Simulator, che
+  parte a 0,0 e senza la posizione di `[geography]` non punta da nessuna
+  parte. Non si può decidere leggendo il mount: uno che ha perso il sito
+  dichiara 0,0 identico al simulatore.
 - **Dopo il park non si tocca `MOUNT_TRACKING`**: parcheggiare spegne già
   il tracking da solo, e il comando arriverebbe a mount parcheggiato (dove
   viene rifiutato) o in pieno park.

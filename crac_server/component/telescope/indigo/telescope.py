@@ -29,7 +29,6 @@ class Telescope(TelescopeBase):
         # dall'operatore dal pannello INDIGO (mount.html/ctrl.html) prima
         # che crac la usi, non forzata da crac stesso - vedi retrieve().
         self._geo_synced = False
-        self.__sync_geographic_coordinates()
         self._park_position_synced = False
         self._uses_raw_socket = False
 
@@ -39,10 +38,17 @@ class Telescope(TelescopeBase):
         # un'altitudine completamente diversa a 0° di quella vista dal
         # nostro calcolo (fatto sulla posizione reale dell'osservatorio),
         # facendo atterrare qualunque slew (es. flat) in un punto sbagliato.
-        # Va ritentata (non solo in __init__, vedi retrieve()) perché il
+        # Va ritentata (a ogni retrieve(), non una volta sola) perché il
         # send() qui è fire-and-forget: se il socket del client condiviso
         # non è ancora pronto al primo tentativo, fallirebbe in silenzio e
         # non verrebbe mai più rimandata.
+        # Off unless the configuration asks for it: on a real mount the site
+        # lives in the mount, which computes every RA/DEC <-> ALT/AZ
+        # conversion from it, and a mount that lost its site declares 0,0
+        # exactly like a simulator - its own state cannot tell the two apart,
+        # so the only safe default is not to write at all.
+        if not config.Config.getBoolean("sync_geographic_coordinates", "telescope"):
+            return
         if self._geo_synced:
             return
         location = EarthLocation(
