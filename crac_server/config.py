@@ -8,8 +8,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-CONFIG_PATH = os.environ.get("CRAC_CONFIG_PATH", os.path.join(os.path.dirname(__file__), 'config.ini'))
-"""Which configuration file gets read, overridable from the environment."""
+DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
+
+
+def _config_path():
+    """Which configuration file gets read, overridable from the environment."""
+    return os.environ.get("CRAC_CONFIG_PATH", DEFAULT_CONFIG_PATH)
 
 
 @lru_cache(maxsize=1)
@@ -31,7 +35,8 @@ def _file_stamp(path):
 
 def _get_parser():
     """config.ini parsed once, and parsed again only when it changes on disk."""
-    return _parse(CONFIG_PATH, _file_stamp(CONFIG_PATH))
+    path = _config_path()
+    return _parse(path, _file_stamp(path))
 
 
 class Config:

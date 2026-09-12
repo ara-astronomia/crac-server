@@ -94,7 +94,7 @@ class TestConfigIsReadOnceFromDisk(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.path = os.path.join(directory.name, "config.ini")
         self._write(interval="10")
-        path_patch = patch("crac_server.config.CONFIG_PATH", self.path)
+        path_patch = patch.dict(os.environ, {"CRAC_CONFIG_PATH": self.path})
         path_patch.start()
         self.addCleanup(path_patch.stop)
 
@@ -149,7 +149,11 @@ class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
     """
 
     def test_the_configuration_comes_from_the_tests_directory(self):
-        self.assertEqual(os.path.join(os.path.dirname(__file__), "config.ini"), config_module.CONFIG_PATH)
+        self.assertEqual(
+            os.path.join(os.path.dirname(__file__), "config.ini"),
+            config_module._config_path(),
+            "run the suite as 'discover -t . -s tests': tests/__init__.py did not run",
+        )
 
     def test_the_values_read_are_the_ones_of_the_tests(self):
         self.assertEqual("http://weather.invalid/current.json", Config.getValue("url", "weather"))
