@@ -33,20 +33,21 @@ class Telescope(TelescopeBase):
         self._uses_raw_socket = False
 
     def __sync_geographic_coordinates(self):
-        # Mount Simulator parte a lat/lon 0°,0° ("null island") finché non
-        # gliela mandiamo esplicitamente: la stessa coppia RA/DEC risulta a
-        # un'altitudine completamente diversa a 0° di quella vista dal
-        # nostro calcolo (fatto sulla posizione reale dell'osservatorio),
-        # facendo atterrare qualunque slew (es. flat) in un punto sbagliato.
-        # Va ritentata (a ogni retrieve(), non una volta sola) perché il
-        # send() qui è fire-and-forget: se il socket del client condiviso
-        # non è ancora pronto al primo tentativo, fallirebbe in silenzio e
-        # non verrebbe mai più rimandata.
-        # Off unless the configuration asks for it: on a real mount the site
-        # lives in the mount, which computes every RA/DEC <-> ALT/AZ
-        # conversion from it, and a mount that lost its site declares 0,0
-        # exactly like a simulator - its own state cannot tell the two apart,
-        # so the only safe default is not to write at all.
+        """Sends the observing site to the mount, off unless the configuration
+        asks for it.
+
+        On a real mount the site lives in the mount and every RA/DEC <-> ALT/AZ
+        conversion it makes starts from there, so writing it from outside
+        invalidates them. A mount that lost its site declares 0,0 exactly like
+        a simulator, so its own state cannot tell the two apart and the only
+        safe default is not to write at all. The test stack turns it on for the
+        Mount Simulator, which starts at "null island" and lands every slew in
+        the wrong place until it gets the site.
+
+        Retried on every retrieve() rather than sent once: send() is
+        fire-and-forget, so a first attempt made before the shared client
+        socket is ready would fail silently and never be sent again.
+        """
         if not config.Config.getBoolean("sync_geographic_coordinates", "telescope"):
             return
         if self._geo_synced:
