@@ -26,7 +26,7 @@ from crac_server.service.cover_mirror_service import CoverMirrorService
 from crac_server.service.geographic_service import GeographicServicer
 from crac_server.service.image_config_service import ImageConfigServicer
 from crac_server.service.ups_service import UpsService
-from crac_server.config import Config
+from crac_server.config import Config, config_path
 import asyncio
 import grpc
 from gpiozero import Device
@@ -36,6 +36,7 @@ logger = logging.getLogger('crac_server.app')
 
 
 async def serve():
+    logger.info(f'Configuration: {config_path()}')
     logger.info(f'GPIO pin factory: {type(Device.pin_factory).__name__}')
     server = grpc.aio.server()
     add_ButtonServicer_to_server(
