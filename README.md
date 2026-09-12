@@ -106,12 +106,16 @@ clonato sul Pi, gira `uv sync`, ricopia `deploy/crac-server.service` in
 `/etc/systemd/system/` solo se e' cambiato (con `daemon-reload`), e riavvia
 il servizio - nessun accesso manuale.
 
-`config.ini` e `.env` non vengono mai toccati dal deploy (`git reset --hard`
-sovrascrive solo file tracciati che sono effettivamente cambiati; `.env` e'
-untracked e git non lo tocca mai). I valori che devono differire dal
-default committato in `config.ini` vanno messi in `.env` (override via
-`{SEZIONE}_{CHIAVE}`, vedi `crac_server/config.py`), non editati a mano in
-`config.ini` sul Pi.
+`config.ini` e' tracciato, quindi il deploy lo riporta al contenuto del repo:
+i valori che sul Pi devono differire dal default committato vanno messi in
+`.env` (override via `{SEZIONE}_{CHIAVE}`, vedi `crac_server/config.py`), non
+editati a mano nel file sul Pi. `.env` e' untracked e il deploy non lo tocca
+mai.
+
+Fuori dal Pi - sviluppo in locale, stack Docker - serve `SERVER_GPIO_MOCK=on`:
+il default committato pilota il GPIO vero, e senza override gpiozero cerca
+hardware che non c'e' e il processo non parte. `.env.example` lo contiene gia',
+lo stack di test lo passa nel suo `docker-compose.yml`.
 
 Log del servizio: `journalctl -u crac-server -f`.
 
