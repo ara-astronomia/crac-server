@@ -151,7 +151,7 @@ class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
     def test_the_configuration_comes_from_the_tests_directory(self):
         self.assertEqual(
             os.path.join(os.path.dirname(__file__), "config.ini"),
-            config_module._config_path(),
+            config_module.config_path(),
             "run the suite from the root as 'python -m unittest discover': tests/__init__.py did not run",
         )
 
