@@ -14,9 +14,9 @@ from crac_protobuf.telescope_pb2 import (
 from crac_protobuf.chart_pb2 import (
     WeatherStatus,  # type: ignore
 )
-from crac_server.component.roof import ROOF
-from crac_server.component.telescope import TELESCOPE
-from crac_server.component.weather import WEATHER
+from crac_server.component.roof import roof
+from crac_server.component.telescope import telescope
+from crac_server.component.weather import weather
 from crac_server.config import Config
 from crac_server.converter.curtains_converter import CurtainsConverter, CurtainsMediator
 from crac_server.converter.weather_converter import WeatherConverter
@@ -24,7 +24,6 @@ from crac_server.handler.handler import AbstractHandler
 
 
 logger = logging.getLogger(__name__)
-block_on_unspecified = Config.getRequiredBoolean("block_on_unspecified", "weather")
 
 
 class AbstractCurtainsHandler(AbstractHandler):
@@ -36,7 +35,7 @@ class AbstractCurtainsHandler(AbstractHandler):
 
 class CurtainsRoofHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
-        roof_is_opened = ROOF.get_status() is RoofStatus.ROOF_OPENED
+        roof_is_opened = roof().get_status() is RoofStatus.ROOF_OPENED
 
         if not roof_is_opened:
             mediator.button_east.disable()
@@ -56,12 +55,12 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
         ):
             logger.debug(f"In turn on or check action {mediator.action}")
             weather_converter = WeatherConverter()
-            weather_response = weather_converter.convert(WEATHER)
+            weather_response = weather_converter.convert(weather())
             logger.debug(f"Weather status: {weather_response.status}")
             logger.debug(f"Weather charts: {weather_response.charts}")
             logger.debug(f"In weather status {weather_response.status}")
             if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
-                block_on_unspecified and 
+                Config.getRequiredBoolean("block_on_unspecified", "weather") and 
                 weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
                 ):
                 logger.info(f"In status danger or unspecified {weather_response.status}")
@@ -72,7 +71,7 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
 
 class CurtainsTelescopeHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:    
-        if not TELESCOPE.polling:
+        if not telescope().polling:
             mediator.button_east.disable()
             mediator.button_west.disable()
             mediator.is_disabled = True
@@ -114,8 +113,8 @@ class CurtainsCalibrationHandler(AbstractCurtainsHandler):
         
         # TODO check if manual calibration is needed and in case create a story for it
         # elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
-        #     CURTAIN_EAST.manual_reset()
-        #     CURTAIN_WEST.manual_reset()
+        #     curtain_east().manual_reset()
+        #     curtain_west().manual_reset()
 
         return super().handle(mediator)
 
@@ -123,7 +122,7 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
 
         # Non eseguire movimenti se le tende sono disabilitate
-        if not mediator.is_disabled and TELESCOPE.speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
+        if not mediator.is_disabled and telescope().speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
             steps = self.__calculate_curtains_steps()
             mediator.button_east.move(steps["east"])
             mediator.button_west.move(steps["west"])
@@ -137,8 +136,8 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
             to based on the given Coordinates
         """
 
-        aa_coords = TELESCOPE.aa_coords
-        status = TELESCOPE.status
+        aa_coords = telescope().aa_coords
+        status = telescope().status
         steps = {}
         logger.debug("Telescope status %s", status)
         n_step_corsa = Config.getInt('n_step_corsa', "encoder_step")
@@ -151,13 +150,13 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
             # When telescope is parked, bring curtains down to 0
             steps["west"] = 0
             steps["east"] = 0
-        elif TELESCOPE.is_below_curtains_area(aa_coords.alt):
+        elif telescope().is_below_curtains_area(aa_coords.alt):
             #   keep both curtains to 0
             steps["west"] = 0
             steps["east"] = 0
 
             #   else if higher to east_max_height e ovest_max_height
-        elif TELESCOPE.is_above_curtains_area(aa_coords.alt, Config.getInt("max_est", "tende"), Config.getInt("max_west", "tende")) or not TELESCOPE.is_within_curtains_area():
+        elif telescope().is_above_curtains_area(aa_coords.alt, Config.getInt("max_est", "tende"), Config.getInt("max_west", "tende")) or not telescope().is_within_curtains_area():
             #   move both curtains max open
             steps["west"] = n_step_corsa
             steps["east"] = n_step_corsa

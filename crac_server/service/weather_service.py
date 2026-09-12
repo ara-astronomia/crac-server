@@ -18,11 +18,11 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
     TelescopeStatus,  # type: ignore
 )
-from crac_server.component.button_control import SWITCHES
-from crac_server.component.curtains.factory_curtain import CURTAIN_EAST, CURTAIN_WEST
-from crac_server.component.roof import ROOF
-from crac_server.component.telescope import TELESCOPE
-from crac_server.component.weather import WEATHER
+from crac_server.component.button_control import switches
+from crac_server.component.curtains.factory_curtain import curtain_east, curtain_west
+from crac_server.component.roof import roof
+from crac_server.component.telescope import telescope
+from crac_server.component.weather import weather
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.converter.weather_converter import WeatherConverter
 
@@ -40,7 +40,7 @@ class WeatherService(WeatherServicer):
 
     async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         try:
-            response = await asyncio.to_thread(self.weather_converter.convert, WEATHER)
+            response = await asyncio.to_thread(self.weather_converter.convert, weather())
         except UnreachableThresholdError:
             raise
         except Exception:
@@ -51,7 +51,7 @@ class WeatherService(WeatherServicer):
 
         if (
             response.status == WeatherStatus.WEATHER_STATUS_DANGER and
-            TELESCOPE.polling and 
+            telescope().polling and 
             self.t == None
         ):
             logger.info("weather in danger status - block crac")
@@ -75,36 +75,36 @@ class WeatherService(WeatherServicer):
     def _close_crac(self, loop: asyncio.AbstractEventLoop):
         with self.lock:
             logger.info("weather in danger status - send telescope in park")
-            TELESCOPE.queue_park()
+            telescope().queue_park()
             
-            while TELESCOPE.status > TelescopeStatus.SECURE:
+            while telescope().status > TelescopeStatus.SECURE:
                 logger.info("weather in danger status - waiting for telescope in park")
                 sleep(1)
-            logger.info(f"weather in danger status - telescope is in status {TELESCOPE.status}")
+            logger.info(f"weather in danger status - telescope is in status {telescope().status}")
             
-            while CURTAIN_EAST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
+            while curtain_east().get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
                 sleep(1)
-                logger.info(f"weather in danger status - curtain east is in status {CURTAIN_EAST.get_status()}")
+                logger.info(f"weather in danger status - curtain east is in status {curtain_east().get_status()}")
             logger.info("weather in danger status - disable east curt")
-            CURTAIN_EAST.disable()
+            curtain_east().disable()
         
-            while CURTAIN_WEST.get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
+            while curtain_west().get_status() in (CurtainStatus.CURTAIN_OPENING, CurtainStatus.CURTAIN_CLOSING):
                 sleep(1)
-                logger.info(f"weather in danger status - curtain west is in status {CURTAIN_WEST.get_status()}")
+                logger.info(f"weather in danger status - curtain west is in status {curtain_west().get_status()}")
             logger.info("weather in danger status - disable west curt")
-            CURTAIN_WEST.disable()
+            curtain_west().disable()
             
             while (
-                CURTAIN_EAST.get_status() is not CurtainStatus.CURTAIN_DISABLED or 
-                CURTAIN_WEST.get_status() is not CurtainStatus.CURTAIN_DISABLED
+                curtain_east().get_status() is not CurtainStatus.CURTAIN_DISABLED or 
+                curtain_west().get_status() is not CurtainStatus.CURTAIN_DISABLED
             ):
                 sleep(1)
             logger.info("weather in danger status - close the roof")
-            if asyncio.run_coroutine_threadsafe(ROOF.close(), loop).result():
+            if asyncio.run_coroutine_threadsafe(roof().close(), loop).result():
                 logger.info("weather in danger status - the roof is closed")
             else:
                 logger.error("weather in danger status - the roof did not close")
 
             logger.info("weather in danger status - switch off telescope button")
-            TELESCOPE.polling_end()
-            SWITCHES[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
+            telescope().polling_end()
+            switches()[ButtonType.Name(ButtonType.TELE_SWITCH)].off()

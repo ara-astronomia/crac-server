@@ -10,14 +10,14 @@ from crac_protobuf.roof_pb2 import (
     RoofResponse,  # type: ignore
     RoofStatus,  # type: ignore
 )
-from crac_server.component.roof import ROOF
+from crac_server.component.roof import roof
 from crac_server.component.roof.roof_control import RoofControl
 
 class RoofMediator:
     def __init__(self, request: RoofRequest) -> None:
         self.request = request
         self._action = request.action
-        self._button = ROOF
+        self._button = roof()
         self._status = self.button.get_status()
         self._is_disabled = False
 

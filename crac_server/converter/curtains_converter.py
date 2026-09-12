@@ -15,8 +15,8 @@ from crac_protobuf.curtains_pb2 import (
 )
 from crac_server.component.curtains.curtains import Curtain
 from crac_server.component.curtains.factory_curtain import (
-    CURTAIN_EAST,
-    CURTAIN_WEST,
+    curtain_east,
+    curtain_west,
 )
 
 
@@ -27,8 +27,8 @@ class CurtainsMediator:
     def __init__(self, request: CurtainsRequest) -> None:
         self.request = request
         self._action = request.action
-        self._button_east = CURTAIN_EAST
-        self._button_west = CURTAIN_WEST
+        self._button_east = curtain_east()
+        self._button_west = curtain_west()
         self._status_east = self.button_east.get_status()
         self._status_west = self.button_west.get_status()
         self._steps_east = self.button_east.steps()
