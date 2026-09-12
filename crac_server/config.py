@@ -9,19 +9,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 CONFIG_PATH = os.environ.get("CRAC_CONFIG_PATH", os.path.join(os.path.dirname(__file__), 'config.ini'))
-"""
-Which configuration file gets read. It is an environment variable because the
-components read Config while being imported - the test suite has to redirect it
-before importing anything, and there is no later moment to do it in.
-"""
+"""Which configuration file gets read, overridable from the environment."""
 
 
 @lru_cache(maxsize=1)
 def _parse(path, stamp):
-    """
-    The stamp is never read: it is there to make the cache miss, and reparse,
-    when the file behind path changes.
-    """
+    """The stamp is not read: it makes the cache miss when the file changes."""
     parser = configparser.ConfigParser()
     parser.read(path)
     return parser

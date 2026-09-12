@@ -93,20 +93,16 @@ tests/                      # rispecchia la struttura di crac_server/
   del ciclo interno di retrieve() farebbe crescere la coda senza limite,
   ritardando i comandi reali (park/flat) dietro job ridondanti.
 - **La suite va lanciata con `-t .`**: `tests/__init__.py` e' il setup
-  globale (pin factory mock e `config.ini` dei test), e viene eseguito solo
-  se `tests` viene importato come package. Con `discover -s tests` e basta,
-  unittest prende `tests/` come top level: i moduli diventano
-  `component.roof.test_...`, il `tests/__init__.py` non gira e i test
-  leggono la configurazione di produzione.
-- **La suite legge `tests/config.ini`, non `crac_server/config.ini`**: i
-  componenti costruiscono i loro singleton all'import leggendo `Config` -
-  `crac_server/__init__.py` lo fa addirittura per decidere se montare il
-  GPIO finto - quindi la configurazione va sostituita prima che il primo
-  modulo entri, e l'unico punto abbastanza presto e' `CRAC_CONFIG_PATH`
-  impostata in `tests/__init__.py`.
-  Una chiave nuova usata dal codice va aggiunta anche li', altrimenti i
-  test falliscono con `KeyError`. Un test che vuole un valore suo continua
-  a fare `patch` su `Config` come fanno quelli dell'UPS.
+  globale (pin factory mock e configurazione dei test) e gira solo se
+  `tests` viene importato come package. Con `discover -s tests` e basta,
+  unittest prende `tests/` come top level e quel setup non viene eseguito.
+- **La suite legge `tests/config.ini`**, scelto da `CRAC_CONFIG_PATH` in
+  `tests/__init__.py`: i componenti leggono `Config` mentre vengono
+  importati - `crac_server/__init__.py` lo fa per decidere se montare il
+  GPIO finto - quindi piu' tardi non c'e' momento utile. Una chiave nuova
+  usata dal codice va aggiunta anche li', altrimenti i test falliscono con
+  `KeyError`. Un test che vuole un valore suo fa `patch` su `Config`, come
+  quelli dell'UPS.
 - **Test roof**: serve `Device.pin_factory.reset()` in `setUpClass`/
   `tearDown` - un singolo eager (`ROOF` in `component/roof/__init__.py`,
   istanziato all'import) riserva il pin GPIO mock prima ancora che parta

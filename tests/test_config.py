@@ -85,10 +85,8 @@ class TestGetRequiredBoolean(unittest.TestCase):
 
 class TestConfigIsReadOnceFromDisk(unittest.TestCase):
     """
-    Every getter used to build a Config of its own, reparsing config.ini from
-    disk: 54 reads for a single weather response. The file is parsed once and
-    parsed again only when it changes, so editing it on a running server keeps
-    taking effect without a restart.
+    config.ini is parsed once and parsed again only when it changes on disk, so
+    that editing it on a running server keeps taking effect.
     """
 
     def setUp(self):
@@ -145,12 +143,9 @@ class TestConfigIsReadOnceFromDisk(unittest.TestCase):
 
 class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
     """
-    Components build their singletons while being imported, reading Config
-    right there: any test importing one of them inherits whatever config.ini
-    happens to say today - thresholds, but also which telescope driver gets
-    loaded and whether the GPIO is mocked. tests/__init__.py points the
-    loading at tests/config.ini instead, and these two fail if it stops
-    doing so.
+    The suite reads tests/config.ini: components read Config while being
+    imported, so a test that imports one would otherwise take the deployed
+    configuration - thresholds, telescope driver and GPIO mock included.
     """
 
     def test_the_configuration_comes_from_the_tests_directory(self):

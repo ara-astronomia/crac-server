@@ -1,10 +1,6 @@
 """
-Test suite setup, run before any test module is imported.
-
-Two things get replaced here, both because the components reach for them while
-being imported and a test has no chance to do it later: the GPIO pin factory,
-which becomes the gpiozero mock, and the configuration file, which becomes the
-one living next to the tests instead of the deployed config.ini.
+Suite setup: mock GPIO and the configuration next to the tests, both in place
+before any component gets imported.
 """
 
 import os
