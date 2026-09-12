@@ -157,3 +157,26 @@ class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
 
     def test_the_values_read_are_the_ones_of_the_tests(self):
         self.assertEqual("http://weather.invalid/current.json", Config.getValue("url", "weather"))
+
+
+class TestTheTestsConfigurationCoversTheDeployedOne(unittest.TestCase):
+    """
+    Values here are the tests' own, but a key the code reads has to exist in
+    both files: a section or a key added to the deployed config.ini and missing
+    from the tests one would only show up as a KeyError inside some other test.
+    """
+
+    def test_no_section_or_key_of_the_deployed_configuration_is_missing(self):
+        deployed = configparser.ConfigParser()
+        deployed.read(config_module.DEFAULT_CONFIG_PATH)
+        tested = configparser.ConfigParser()
+        tested.read(os.path.join(os.path.dirname(__file__), "config.ini"))
+
+        missing = [
+            f"{section}.{key}"
+            for section in deployed.sections()
+            for key in deployed[section]
+            if not tested.has_option(section, key)
+        ]
+
+        self.assertEqual([], missing, "keys to add to tests/config.ini")
