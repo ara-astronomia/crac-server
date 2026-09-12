@@ -29,12 +29,14 @@ from crac_server.service.ups_service import UpsService
 from crac_server.config import Config
 import asyncio
 import grpc
+from gpiozero import Device
 
 
 logger = logging.getLogger('crac_server.app')
 
 
 async def serve():
+    logger.info(f'GPIO pin factory: {type(Device.pin_factory).__name__}')
     server = grpc.aio.server()
     add_ButtonServicer_to_server(
         ButtonService(), server
