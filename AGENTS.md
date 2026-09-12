@@ -10,7 +10,7 @@ luci, e copertura a petali dello specchio. Espone RPC consumate da
 ```bash
 uv sync                          # installa dipendenze
 python -m crac_server.app        # avvia il server gRPC (porta 50051)
-python -m unittest discover -t . -s tests   # suite di test (unittest, NON pytest)
+python -m unittest discover           # suite di test (unittest, NON pytest)
 autopep8 --in-place --recursive crac_server/   # format
 python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/*.proto  # rigenera stub protobuf, quando cambia crac-protobuf
 ```
@@ -92,10 +92,11 @@ tests/                      # rispecchia la struttura di crac_server/
   (vedi `queue_set_speed`) - senza dedup, un client che pollasse più spesso
   del ciclo interno di retrieve() farebbe crescere la coda senza limite,
   ritardando i comandi reali (park/flat) dietro job ridondanti.
-- **La suite va lanciata con `-t .`**: `tests/__init__.py` e' il setup
-  globale (pin factory mock e configurazione dei test) e gira solo se
-  `tests` viene importato come package. Con `discover -s tests` e basta,
-  unittest prende `tests/` come top level e quel setup non viene eseguito.
+- **La suite va lanciata dalla root** (`python -m unittest discover`):
+  `tests/__init__.py` e' il setup globale (pin factory mock e configurazione
+  dei test) e gira solo se `tests` viene importato come package. Con
+  `discover -s tests` unittest prende `tests/` come top level, quel setup non
+  viene eseguito e due test lo dicono fallendo.
 - **La suite legge `tests/config.ini`**, scelto da `CRAC_CONFIG_PATH` in
   `tests/__init__.py`: i componenti leggono `Config` mentre vengono
   importati - `crac_server/__init__.py` lo fa per decidere se montare il

@@ -152,7 +152,7 @@ class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
         self.assertEqual(
             os.path.join(os.path.dirname(__file__), "config.ini"),
             config_module._config_path(),
-            "run the suite as 'discover -t . -s tests': tests/__init__.py did not run",
+            "run the suite from the root as 'python -m unittest discover': tests/__init__.py did not run",
         )
 
     def test_the_values_read_are_the_ones_of_the_tests(self):
