@@ -1,18 +1,48 @@
 import configparser
-from distutils.util import strtobool
-from dotenv import load_dotenv
 import os
+from distutils.util import strtobool
+from functools import lru_cache
+
+from dotenv import load_dotenv
 
 
 load_dotenv()
+
+DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
+
+
+def config_path():
+    """Which configuration file gets read, overridable from the environment."""
+    return os.environ.get("CRAC_CONFIG_PATH", DEFAULT_CONFIG_PATH)
+
+
+@lru_cache(maxsize=1)
+def _parse(path, stamp):
+    """The stamp is not read: it makes the cache miss when the file changes."""
+    parser = configparser.ConfigParser()
+    parser.read(path)
+    return parser
+
+
+def _file_stamp(path):
+    """Modification time and size of the file, None when it is not there."""
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
+
+
+def _get_parser():
+    """config.ini parsed once, and parsed again only when it changes on disk."""
+    path = config_path()
+    return _parse(path, _file_stamp(path))
 
 
 class Config:
 
     def __init__(self):
-        self.configparser = configparser.ConfigParser()
-        configpath = os.path.join(os.path.dirname(__file__), 'config.ini')
-        self.configparser.read(configpath)
+        self.configparser = _get_parser()
 
     @staticmethod
     def getValue(key, section='automazione'):

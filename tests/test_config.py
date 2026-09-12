@@ -1,5 +1,11 @@
+import configparser
+import os
+import tempfile
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
+
+from crac_server import config as config_module
 from crac_server.config import Config
 
 
@@ -75,3 +81,102 @@ class TestGetRequiredBoolean(unittest.TestCase):
         with patch("crac_server.config.Config.getValue", side_effect=KeyError("weather")):
             with self.assertRaises(KeyError):
                 Config.getRequiredBoolean("block_on_unspecified", "weather")
+
+
+class TestConfigIsReadOnceFromDisk(unittest.TestCase):
+    """
+    config.ini is parsed once and parsed again only when it changes on disk, so
+    that editing it on a running server keeps taking effect.
+    """
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.path = os.path.join(directory.name, "config.ini")
+        self._write(interval="10")
+        path_patch = patch.dict(os.environ, {"CRAC_CONFIG_PATH": self.path})
+        path_patch.start()
+        self.addCleanup(path_patch.stop)
+
+    def _write(self, interval):
+        with open(self.path, "w") as config_file:
+            config_file.write(f"[roof_board]\nroof_timeout = {interval}\nswitch_roof = 4\ngpio_mock = on\n")
+
+    @contextmanager
+    def _counting_reads(self):
+        reads = []
+        real_read = configparser.ConfigParser.read
+
+        def counted_read(parser, *args, **kwargs):
+            reads.append(args)
+            return real_read(parser, *args, **kwargs)
+
+        with patch.object(configparser.ConfigParser, "read", counted_read):
+            yield reads
+
+    def test_many_keys_cost_a_single_parse(self):
+        with self._counting_reads() as reads:
+            for _ in range(20):
+                Config.getInt("roof_timeout", "roof_board")
+                Config.getValue("switch_roof", "roof_board")
+                Config.getBoolean("gpio_mock", "roof_board")
+
+        self.assertEqual(1, len(reads))
+
+    def test_a_changed_file_is_parsed_again(self):
+        self.assertEqual(10, Config.getInt("roof_timeout", "roof_board"))
+
+        self._write(interval="50")
+        stat = os.stat(self.path)
+        os.utime(self.path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+        self.assertEqual(50, Config.getInt("roof_timeout", "roof_board"))
+
+    def test_an_untouched_file_is_not_parsed_again(self):
+        Config.getInt("roof_timeout", "roof_board")
+
+        with self._counting_reads() as reads:
+            Config.getInt("roof_timeout", "roof_board")
+
+        self.assertEqual([], reads)
+
+
+class TestTheSuiteRunsOnItsOwnConfig(unittest.TestCase):
+    """
+    The suite reads tests/config.ini: components read Config while being
+    imported, so a test that imports one would otherwise take the deployed
+    configuration - thresholds, telescope driver and GPIO mock included.
+    """
+
+    def test_the_configuration_comes_from_the_tests_directory(self):
+        self.assertEqual(
+            os.path.join(os.path.dirname(__file__), "config.ini"),
+            config_module.config_path(),
+            "run the suite as 'discover -t . -s tests': tests/__init__.py did not run",
+        )
+
+    def test_the_values_read_are_the_ones_of_the_tests(self):
+        self.assertEqual("http://weather.invalid/current.json", Config.getValue("url", "weather"))
+
+
+class TestTheTestsConfigurationCoversTheDeployedOne(unittest.TestCase):
+    """
+    Values here are the tests' own, but a key the code reads has to exist in
+    both files: a section or a key added to the deployed config.ini and missing
+    from the tests one would only show up as a KeyError inside some other test.
+    """
+
+    def test_no_section_or_key_of_the_deployed_configuration_is_missing(self):
+        deployed = configparser.ConfigParser()
+        deployed.read(config_module.DEFAULT_CONFIG_PATH)
+        tested = configparser.ConfigParser()
+        tested.read(os.path.join(os.path.dirname(__file__), "config.ini"))
+
+        missing = [
+            f"{section}.{key}"
+            for section in deployed.sections()
+            for key in deployed[section]
+            if not tested.has_option(section, key)
+        ]
+
+        self.assertEqual([], missing, "keys to add to tests/config.ini")
