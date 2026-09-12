@@ -1,7 +1,7 @@
 import configparser
 import os
 from distutils.util import strtobool
-from threading import Lock
+from functools import lru_cache
 
 from dotenv import load_dotenv
 
@@ -15,43 +15,30 @@ components read Config while being imported - the test suite has to redirect it
 before importing anything, and there is no later moment to do it in.
 """
 
-_parser = None
-_parsed_from = None
-_parse_lock = Lock()
+
+@lru_cache(maxsize=1)
+def _parse(path, stamp):
+    """
+    The stamp is never read: it is there to make the cache miss, and reparse,
+    when the file behind path changes.
+    """
+    parser = configparser.ConfigParser()
+    parser.read(path)
+    return parser
 
 
-def _file_stamp():
-    """
-    Identity of the file on disk: path, modification time and size. A missing
-    file has a stamp of its own, so that it gets picked up as soon as it
-    appears instead of being parsed over and over.
-    """
+def _file_stamp(path):
+    """Modification time and size of the file, None when it is not there."""
     try:
-        stat = os.stat(CONFIG_PATH)
+        stat = os.stat(path)
     except OSError:
-        return (CONFIG_PATH, None, None)
-    return (CONFIG_PATH, stat.st_mtime_ns, stat.st_size)
+        return None
+    return (stat.st_mtime_ns, stat.st_size)
 
 
 def _get_parser():
-    """
-    config.ini parsed once and kept in memory, parsed again only when the file
-    changes on disk. Every getter used to parse it from scratch - 54 parses for
-    a single weather response - and a parse costs about a millisecond against
-    the microseconds of a stat. Editing the file on a running server keeps
-    taking effect without a restart, which is how thresholds and log levels get
-    changed on the test stack.
-    """
-    global _parser, _parsed_from
-    stamp = _file_stamp()
-    if _parser is not None and _parsed_from == stamp:
-        return _parser
-    with _parse_lock:
-        if _parser is None or _parsed_from != stamp:
-            parser = configparser.ConfigParser()
-            parser.read(CONFIG_PATH)
-            _parser, _parsed_from = parser, stamp
-    return _parser
+    """config.ini parsed once, and parsed again only when it changes on disk."""
+    return _parse(CONFIG_PATH, _file_stamp(CONFIG_PATH))
 
 
 class Config:
