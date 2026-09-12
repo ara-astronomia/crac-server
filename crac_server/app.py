@@ -26,6 +26,12 @@ from crac_server.service.cover_mirror_service import CoverMirrorService
 from crac_server.service.geographic_service import GeographicServicer
 from crac_server.service.image_config_service import ImageConfigServicer
 from crac_server.service.ups_service import UpsService
+from crac_server.component.button_control import switches
+from crac_server.component.cover_mirror import cover_mirror
+from crac_server.component.curtains.factory_curtain import curtain_east, curtain_west
+from crac_server.component.roof import roof
+from crac_server.component.telescope import telescope
+from crac_server.component.weather import weather
 from crac_server.config import Config, config_path
 import asyncio
 import grpc
@@ -35,9 +41,20 @@ from gpiozero import Device
 logger = logging.getLogger('crac_server.app')
 
 
-async def serve():
+def build_components():
+    """
+    Build every component up front, so that hardware or configuration missing
+    shows up while starting instead of on the first request that needs it.
+    """
     logger.info(f'Configuration: {config_path()}')
+    Device.ensure_pin_factory()
     logger.info(f'GPIO pin factory: {type(Device.pin_factory).__name__}')
+    for build in (roof, curtain_east, curtain_west, telescope, weather, switches, cover_mirror):
+        build()
+
+
+async def serve():
+    build_components()
     server = grpc.aio.server()
     add_ButtonServicer_to_server(
         ButtonService(), server

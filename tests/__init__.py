@@ -1,6 +1,6 @@
 """
-Suite setup: mock GPIO and the configuration next to the tests, both in place
-before any component gets imported.
+Suite setup: the gpiozero mock and the configuration living next to the tests,
+both in place before any component gets built.
 """
 
 import os
