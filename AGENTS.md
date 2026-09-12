@@ -10,7 +10,7 @@ luci, e copertura a petali dello specchio. Espone RPC consumate da
 ```bash
 uv sync                          # installa dipendenze
 python -m crac_server.app        # avvia il server gRPC (porta 50051)
-python -m unittest discover           # suite di test (unittest, NON pytest)
+python -m unittest discover -t . -s tests   # suite di test (unittest, NON pytest)
 autopep8 --in-place --recursive crac_server/   # format
 python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/*.proto  # rigenera stub protobuf, quando cambia crac-protobuf
 ```
