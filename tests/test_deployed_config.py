@@ -22,8 +22,8 @@ class TestTheDeployedConfiguration(unittest.TestCase):
 
     def test_the_environment_example_does_not_enable_the_fake_gpio(self):
         """
-        .env.example is meant to be copied into .env, on the Pi as well: an
-        enabled mock in there would reach the observatory.
+        .env.example is meant to be copied into .env, in production as well:
+        an enabled mock in there would reach the observatory.
         """
         with open(os.path.join(REPOSITORY, ".env.example")) as example:
             enabled = [
