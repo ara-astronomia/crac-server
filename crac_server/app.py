@@ -31,6 +31,7 @@ from crac_server.component.cover_mirror import cover_mirror
 from crac_server.component.curtains.factory_curtain import curtain_east, curtain_west
 from crac_server.component.roof import roof
 from crac_server.component.telescope import telescope
+from crac_server.component.ups import ups
 from crac_server.component.weather import weather
 from crac_server.config import Config, config_path
 import asyncio
@@ -49,7 +50,7 @@ def build_components():
     logger.info(f'Configuration: {config_path()}')
     Device.ensure_pin_factory()
     logger.info(f'GPIO pin factory: {type(Device.pin_factory).__name__}')
-    for build in (roof, curtain_east, curtain_west, telescope, weather, switches, cover_mirror):
+    for build in (roof, curtain_east, curtain_west, telescope, weather, switches, cover_mirror, ups):
         build()
 
 

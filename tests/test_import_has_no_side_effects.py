@@ -12,9 +12,11 @@ MODULES = (
     "crac_server.component.weather",
     "crac_server.component.cover_mirror",
     "crac_server.component.button_control",
+    "crac_server.component.ups",
     "crac_server.handler.roof_handler",
     "crac_server.handler.curtains_handler",
     "crac_server.service.roof_service",
+    "crac_server.service.ups_service",
 )
 
 
