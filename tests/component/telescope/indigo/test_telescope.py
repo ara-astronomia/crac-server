@@ -23,20 +23,14 @@ class TestIndigoTelescope(unittest.TestCase):
         self.mock_client.get_property.side_effect = get_property
 
     def _sent_property_names(self):
-        """Names of the properties sent to INDIGO, in order.
-
-        Each script is a single-entry mapping of vector type to its body,
-        e.g. {"newSwitchVector": {"name": "MOUNT_PARK", ...}}.
-        """
+        """Names of the properties sent to INDIGO, in order."""
         return [vector["name"] for script in self.sent_scripts for vector in script.values()]
 
     def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
-        """The operator connects the mount from the INDIGO panel, not crac."""
         self.mock_client.connect_device.assert_not_called()
         self.assertFalse(self.telescope._uses_raw_socket)
 
     def test_geographic_coordinates_are_never_sent_to_the_mount(self):
-        """The observatory site is read from the mount, never written to it."""
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
@@ -45,8 +39,6 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
 
     def test_retrieve_reconnects_device_on_every_cycle(self):
-        """A client reconnection empties the property cache, so the device is
-        re-connected on every cycle or it stays stuck forever."""
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
@@ -56,8 +48,6 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(self.mock_client.connect_device.call_count, 2)
 
     def test_retrieve_refuses_when_device_not_connected_on_indigo(self):
-        """Until the operator connects the mount on INDIGO the telescope is
-        reported as LOST, never as connected."""
         self.mock_client.is_device_connected.return_value = False
         eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.assertIsNone(eq_coords)
@@ -79,9 +69,6 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(speed, TelescopeSpeed.SPEED_TRACKING)
 
     def test_retrieve_speed_not_tracking_when_tracking_off_and_state_ok(self):
-        """indigo_mount_simulator.c only ever uses "Ok"/"Busy"/"Alert" for
-        MOUNT_EQUATORIAL_COORDINATES: idle with tracking off still reads
-        "Ok", so the tracking property alone tells the two apart."""
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok", "items": [{"name": "RA", "value": 5.0}, {"name": "DEC", "value": 10.0}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 20.0}, {"name": "AZ", "value": 30.0}]},
@@ -122,10 +109,7 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(items, {"PARKED": True, "UNPARKED": False})
 
     def _stub_park_properties(self, extra: dict | None = None):
-        """Stub a park slew that completes at once: Busy on the first read,
-        meaning the command was taken in charge, then Ok, so that
-        __wait_for_slew_completion returns instead of hitting its timeout.
-        """
+        """Stub a park slew that completes at once: Busy, then Ok."""
         states = iter([{"state": "Busy"}, {"state": "Ok"}])
         props = dict(extra or {})
 
@@ -137,12 +121,6 @@ class TestIndigoTelescope(unittest.TestCase):
         self.mock_client.get_property.side_effect = get_property
 
     def test_park_does_not_unpark_first(self):
-        """indigo_mount_lx200 (TeenAstro) drops MOUNT_PARK while the mount
-        still reads parked/parking/homing, yet echoes PARKED=true anyway,
-        since indigo_property_copy_values runs before that guard. Unparking
-        is asynchronous, so an UNPARK sent right before a PARK lands in
-        exactly that case: park goes out on its own.
-        """
         self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
         parks = [
@@ -152,27 +130,16 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(parks, [{"PARKED": True, "UNPARKED": False}])
 
     def test_park_does_not_send_tracking_off(self):
-        """Parking already stops tracking, on the simulator and on a real
-        mount alike, and a MOUNT_TRACKING command reaching a parked mount is
-        refused with the property in Alert, or hits the hardware mid-park.
-        """
         self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_NOT_TRACKING)
         self.assertNotIn("MOUNT_TRACKING", self._sent_property_names())
 
     def test_park_does_not_write_park_position_when_mount_has_none(self):
-        """On a real mount MOUNT_PARK_POSITION does not exist: the park
-        position lives in the mount, and writing it would be pure noise."""
         self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
         self.assertNotIn("MOUNT_PARK_POSITION", self._sent_property_names())
 
     def test_park_syncs_park_position_before_parking_when_supported(self):
-        """The Mount Simulator exposes MOUNT_PARK_POSITION and starts from a
-        park position of its own: it is aligned to the configured
-        park_alt/park_az before parking, and only while the mount is
-        unparked, since the driver refuses the write on a parked one.
-        """
         self._stub_park_properties({
             "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
             "MOUNT_PARK": {"items": [{"name": "PARKED", "value": False}]},
@@ -190,15 +157,6 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertNotIn("MOUNT_PARK_POSITION", self._sent_property_names())
 
     def test_set_speed_sends_on_coordinates_set_as_switch_vector_even_when_not_tracking(self):
-        """MOUNT_ON_COORDINATES_SET is a switch property, not a number one:
-        sent as a newNumberVector the driver ignores it and the slew of
-        MOUNT_EQUATORIAL_COORDINATES never fires. It goes out for
-        SPEED_NOT_TRACKING too, the real case of flat() in this
-        configuration: indigo_mount_simulator.c implements only the TRACK and
-        SYNC branches for movement, so TRACK is what produces a slew,
-        whatever tracking is wanted on arrival, which MOUNT_TRACKING governs
-        on its own.
-        """
         self.telescope.set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
         coord_set = next(s["newSwitchVector"] for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_ON_COORDINATES_SET")
         items = {i["name"]: i["value"] for i in coord_set["items"]}
@@ -214,8 +172,6 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertIn("MOUNT_PARK", names_in_order)
         self.assertIn("MOUNT_ON_COORDINATES_SET", names_in_order)
         self.assertIn("MOUNT_EQUATORIAL_COORDINATES", names_in_order)
-        # the driver reads MOUNT_ON_COORDINATES_SET.TRACK at the very moment
-        # it receives the new coordinates, so both have to reach it first
         self.assertLess(
             names_in_order.index("MOUNT_PARK"),
             names_in_order.index("MOUNT_EQUATORIAL_COORDINATES"),
@@ -226,12 +182,6 @@ class TestIndigoTelescope(unittest.TestCase):
         )
 
     def test_flat_turns_tracking_off_only_after_slew_completes(self):
-        """indigo_mount_simulator.c turns MOUNT_TRACKING back on by itself as
-        soon as a slew ends, so tracking is switched off again only once the
-        state leaves Busy. The leading "Ok" stands for the cache not yet
-        updated right after the coordinates go out, which is why Busy is
-        awaited before waiting for Ok.
-        """
         states = iter([{"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"}])
 
         self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: next(states)

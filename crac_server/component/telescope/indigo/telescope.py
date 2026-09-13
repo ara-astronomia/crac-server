@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 class Telescope(TelescopeBase):
 
-    # default port 7624
     def __init__(self, hostname=config.Config.getValue("hostname", "telescope"), port=config.Config.getInt("port", "telescope")) -> None:
         """Build the driver without touching the mount.
 
@@ -39,21 +38,13 @@ class Telescope(TelescopeBase):
         point, those are the only time-invariant equatorial coordinates
         (alt/az = f(HA, dec, lat), so the same HA/dec always lands on the
         same alt/az, unlike RA which has to be recomputed at every instant).
-        Synced once, from park() and never eagerly: from then on the native
-        park uses it on its own at every request.
+        Synced once, from park() and never eagerly, and only while the mount
+        is unparked: the driver refuses the write on a parked one.
         """
         if self._park_position_synced:
             return
-        # only for drivers that expose a writable park position (the Mount
-        # Simulator): on a real mount (indigo_mount_lx200 / TeenAstro)
-        # MOUNT_PARK_POSITION does not exist, the park position lives in the
-        # mount, and writing it would be pure noise towards the hardware
-        if not self._client.get_property(self._name, "MOUNT_PARK_POSITION", timeout=0):
+        if not self.__mount_exposes_a_park_position():
             return
-        # indigo_mount_simulator.c refuses writes to MOUNT_PARK_POSITION
-        # while the mount is parked, as it already does for
-        # MOUNT_EQUATORIAL_COORDINATES, and the simulator starts parked: the
-        # sync happens at the first park that follows a real movement
         if self.__retrieve_status_park():
             return
         obstime = datetime.utcnow()
@@ -78,10 +69,14 @@ class Telescope(TelescopeBase):
                         }
                     }
                     )
-        # no CONFIG_SAVE: an indigo_server restart clears
-        # _park_position_synced on reconnection (see retrieve()) and the
-        # position goes out again at the next park, so persisting it to disk
-        # would add nothing
+
+    def __mount_exposes_a_park_position(self) -> bool:
+        """True only where the park position is writable, the Mount Simulator.
+
+        On a real mount it lives in the mount and MOUNT_PARK_POSITION does not
+        exist at all.
+        """
+        return bool(self._client.get_property(self._name, "MOUNT_PARK_POSITION", timeout=0))
 
     def sync(self, started_at: datetime):
         """Not supported on INDIGO: the mount knows where it points.
@@ -93,6 +88,12 @@ class Telescope(TelescopeBase):
         logger.warning("[Telescope] SYNC is not supported on INDIGO, nothing was sent to the mount")
 
     def set_speed(self, speed: TelescopeSpeed):
+        """Set tracking, then ask for a slew on the next coordinates.
+
+        MOUNT_ON_COORDINATES_SET is a switch property: sent as a number vector
+        the driver ignores it. TRACK is what produces a slew, whatever tracking
+        is wanted on arrival.
+        """
         tracking_on = speed is not TelescopeSpeed.SPEED_NOT_TRACKING
         self.__call(
                     {"newSwitchVector":
@@ -106,13 +107,6 @@ class Telescope(TelescopeBase):
                         }
                     )
 
-        # MOUNT_ON_COORDINATES_SET is a switch property (TRACK/SYNC/SLEW),
-        # not a number one: sent as a newNumberVector the driver silently
-        # ignores it and the slew logic of MOUNT_EQUATORIAL_COORDINATES never
-        # fires. indigo_mount_simulator.c implements only the TRACK and SYNC
-        # branches for movement, SLEW moves nothing, so TRACK is always what
-        # produces a slew, whatever tracking is wanted on arrival, which
-        # MOUNT_TRACKING above governs on its own
         self.__call(
                     {"newSwitchVector":
                         {
@@ -135,7 +129,8 @@ class Telescope(TelescopeBase):
         parked/parking/homing, yet echoes PARKED=true back anyway, because
         indigo_property_copy_values runs before that guard. Unparking is
         asynchronous, `parked` stays true for a moment, so an UNPARK sent
-        right before a PARK lands in exactly that case.
+        right before a PARK lands in exactly that case. Tracking is not
+        touched either: parking already stops it.
         """
         self.__sync_park_position()
         self.__call(
@@ -150,11 +145,6 @@ class Telescope(TelescopeBase):
                         }
                     )
 
-        # no MOUNT_TRACKING OFF after the park, `speed` is here only to
-        # honour the signature: parking already stops tracking on the
-        # simulator and on a real mount alike, and the command would reach an
-        # already parked mount, where it is refused with the property in
-        # Alert, or worse hits the hardware mid-park
         self.__wait_for_slew_completion()
 
     def __retrieve_status_park(self) -> bool:
@@ -188,6 +178,11 @@ class Telescope(TelescopeBase):
                     )
 
     def flat(self, speed: TelescopeSpeed):
+        """Move to the configured flat position.
+
+        With tracking off the slew is awaited before switching it off again:
+        the simulator turns it back on by itself as soon as a slew ends.
+        """
         speed=speed
         self.__unpark()
         self.__move(
@@ -199,10 +194,6 @@ class Telescope(TelescopeBase):
                 )
 
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            # indigo_mount_simulator.c turns tracking back on by itself as
-            # soon as a slew ends, when it was off at the start of the slew:
-            # an OFF sent before the mount arrives would be overwritten by
-            # the driver, so it goes out only once the slew is over
             self.__wait_for_slew_completion()
             self.__call(
                             {"newSwitchVector":
@@ -217,14 +208,13 @@ class Telescope(TelescopeBase):
                         )
 
     def __wait_for_slew_completion(self, timeout: float = 60.0):
-        """Block until MOUNT_EQUATORIAL_COORDINATES leaves the Busy state."""
+        """Block until MOUNT_EQUATORIAL_COORDINATES leaves the Busy state.
+
+        Busy is awaited first, on a shorter deadline: right after a command the
+        cache can still hold the previous "Ok", the INDIGO broadcast not having
+        arrived yet.
+        """
         deadline = time.monotonic() + timeout
-        # wait for INDIGO to signal it took the command in charge, state
-        # Busy, first: the very first read can still hit the cached "Ok" from
-        # before the command went out, since the INDIGO broadcast has not
-        # arrived yet, and less than 1ms is enough to read the stale state.
-        # A slew that never turns Busy is a null one, and falls through this
-        # shorter deadline
 
         busy_deadline = min(deadline, time.monotonic() + 5.0)
         while time.monotonic() < busy_deadline:
@@ -246,20 +236,14 @@ class Telescope(TelescopeBase):
         Every coordinate here is read, never written: the site lives in the
         mount and is the reference the mount converts RA/DEC to ALT/AZ
         against, so crac takes MOUNT_HORIZONTAL_COORDINATES as it comes.
+
+        connect_device() belongs in every cycle and not only in __init__: a
+        client reconnection empties the cache, and its result reports that the
+        device state was lost, so one-shot syncs have to be repeated.
         """
-        # the operator connects the telescope from the INDIGO panel, crac
-        # never forces the connection itself (see __init__), so the read is
-        # refused with a clear state until the device is connected there
         if not self._client.is_device_connected(self._name):
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
 
-        # connect_device() is idempotent, a no-op when already connected on
-        # this physical connection, but it belongs in every cycle: a client
-        # reconnection empties the cache, and without this call the device
-        # would never be re-connected nor its properties requested again,
-        # staying stuck forever. Its result, True for a real reconnection,
-        # also says the device state was lost on the INDIGO side, e.g. the
-        # INDIGO server alone was restarted, so one-shot syncs are repeated
         if self._client.connect_device(self._name):
             self._park_position_synced = False
         eq_coords = self.__retrieve_eq_coords()
@@ -297,14 +281,15 @@ class Telescope(TelescopeBase):
                 return TelescopeStatus.EAST
 
     def __move(self, aa_coords: AltazimutalCoords, speed=TelescopeSpeed.SPEED_TRACKING):
+        """Slew to aa_coords, converted to RA/DEC against [geography].
 
+        set_speed() goes out here instead of through the queue: the driver
+        reads MOUNT_ON_COORDINATES_SET at the very moment the coordinates
+        arrive, not at the next polling cycle.
+        """
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug("aa_coords: %s", aa_coords)
         logger.debug("eq_coords: %s", eq_coords)
-        # set_speed() goes out right here, not queued through
-        # queue_set_speed(): the driver reads MOUNT_ON_COORDINATES_SET.TRACK
-        # at the very moment it receives the new MOUNT_EQUATORIAL_COORDINATES,
-        # not at the next polling cycle, up to 5s later
         self.set_speed(speed)
         self.__call(
                     {"newNumberVector":
@@ -319,6 +304,12 @@ class Telescope(TelescopeBase):
                     )
 
     def __retrieve_speed(self) -> TelescopeSpeed:
+        """Map the state of the mount to a TelescopeSpeed.
+
+        indigo_mount_simulator.c never uses "Idle": at rest with tracking off
+        the coordinates still read "Ok", so MOUNT_TRACKING is what tells a
+        resting mount from a tracking one.
+        """
         tracking = self._client.get_property(self._name, "MOUNT_TRACKING", timeout=0)
         coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
 
@@ -333,10 +324,6 @@ class Telescope(TelescopeBase):
         if status_mount_speed == "Ok" and status_mount_track == "ON":
             self._speed_log.record(TelescopeSpeed.SPEED_TRACKING)
             return TelescopeSpeed.SPEED_TRACKING
-        # indigo_mount_simulator.c never uses the "Idle" state for
-        # MOUNT_EQUATORIAL_COORDINATES, only "Ok"/"Busy"/"Alert": idle with
-        # tracking off still reads "Ok", so the tracking property is what
-        # tells a resting mount from a tracking one
         if status_mount_speed == "Ok" and status_mount_track == "OFF":
             self._speed_log.record(TelescopeSpeed.SPEED_NOT_TRACKING)
             return TelescopeSpeed.SPEED_NOT_TRACKING
