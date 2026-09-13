@@ -114,6 +114,7 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertNotEqual(status, TelescopeStatus.PARKED)
 
     def test_park_sends_parked_command(self):
+        self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
         sent = self.sent_scripts[-1]
         self.assertEqual(sent["newSwitchVector"]["name"], "MOUNT_PARK")
@@ -207,7 +208,7 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(tracking_items, {"ON": False, "OFF": True})
 
     def test_flat_unparks_before_moving(self):
-        self._stub_properties({"MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok"}})
+        self._stub_park_properties()
         self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
         names_in_order = self._sent_property_names()
         self.assertIn("MOUNT_PARK", names_in_order)

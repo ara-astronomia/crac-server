@@ -85,6 +85,23 @@ tests/                      # rispecchia la struttura di crac_server/
   nel mount e quella proprietà non esiste nemmeno. Nessun
   `CONFIG_SAVE`/`CONFIG_LOAD`: alla riconnessione `_park_position_synced`
   si azzera e la posizione viene rimandata al primo park utile.
+- **Il sito dell'osservatorio non si scrive mai sul mount**: `GEOGRAPHIC_COORDINATES`
+  si legge, non si manda. Sul mount il sito è il riferimento di ogni conversione
+  che il mount fa, e riscriverlo dall'esterno lo invalida - in produzione ha
+  azzerato lat/lon del TeenAstro. Ne segue un invariante implicito: le ALT/AZ
+  di `MOUNT_HORIZONTAL_COORDINATES` le calcola INDIGO col sito configurato *nel
+  mount*, quindi crac assume che quel sito coincida con `[geography]` di
+  `config.ini`, da cui ricava i target di park e flat. Se i due divergono, il
+  telescopio atterra fuori bersaglio e `_retrieve_status` classifica male i
+  quadranti senza che niente lo segnali. Chi fa divergere il sito: un
+  `indigo_agent_mount` con `AGENT_SITE_DATA_SOURCE = HOST`, che propaga il
+  proprio (0,0 per default) al device che adotta; l'operatore da `/ctrl.html`;
+  un mount riconfigurato.
+- **`sync()` sul driver indigo non fa niente**: logga un warning ed esce. Il
+  razionale ("dichiara al mount dove punta all'accensione") è superato dal park
+  nativo, e dichiarare la posizione sarebbe un'altra scrittura che sovrascrive
+  quello che il mount sa di sé. Resta solo perché è `@abstractmethod` nella
+  classe base.
 - **Dopo il park non si tocca `MOUNT_TRACKING`**: parcheggiare spegne già
   il tracking da solo, e il comando arriverebbe a mount parcheggiato (dove
   viene rifiutato) o in pieno park.

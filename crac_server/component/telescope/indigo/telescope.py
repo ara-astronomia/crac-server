@@ -62,7 +62,6 @@ class Telescope(TelescopeBase):
             az=config.Config.getFloat("park_az", "telescope"),
         )
         eq_coords = self._altaz2radec(aa_coords, obstime=obstime)
-        lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         lst = Time(obstime).sidereal_time("apparent", longitude=lon)
         ha = (lst.hour - eq_coords.ra) % 24
@@ -91,6 +90,7 @@ class Telescope(TelescopeBase):
         mount itself holds, and MOUNT_PARK already covers it. The method
         stays only to satisfy the abstract contract.
         """
+        logger.warning("[Telescope] SYNC is not supported on INDIGO, nothing was sent to the mount")
 
     def set_speed(self, speed: TelescopeSpeed):
         tracking_on = speed is not TelescopeSpeed.SPEED_NOT_TRACKING
