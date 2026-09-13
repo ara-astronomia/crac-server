@@ -5,6 +5,14 @@ from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, Teles
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 
+# what the mount declares, deliberately not the site in tests/config.ini
+MOUNT_SITE = {"items": [
+    {"name": "LATITUDE", "value": 45.0},
+    {"name": "LONGITUDE", "value": 9.0},
+    {"name": "ELEVATION", "value": 200.0},
+]}
+
+
 class TestIndigoTelescope(unittest.TestCase):
 
     def setUp(self):
@@ -43,6 +51,40 @@ class TestIndigoTelescope(unittest.TestCase):
         })
         self.telescope.retrieve()
         self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
+
+    def test_site_comes_from_the_mount_not_from_the_configuration(self):
+        """The mount is the single source for the observatory position: it
+        converts RA/DEC to ALT/AZ against the site stored in it, so the park
+        and flat targets crac computes use that one too."""
+        self._stub_properties({"GEOGRAPHIC_COORDINATES": MOUNT_SITE})
+        lat, lon, height = self.telescope._site()
+        self.assertEqual((lat.value, lon.value, height), (45.0, 9.0, 200.0))
+
+    def test_site_raises_when_the_mount_declares_none(self):
+        self._stub_properties({})
+        with self.assertRaises(Exception):
+            self.telescope._site()
+
+    def test_park_position_is_computed_on_the_site_of_the_mount(self):
+        """Two different mount sites give two different park hour angles: the
+        conversion follows the mount, not config.ini."""
+        hour_angles = []
+        for latitude in (45.0, 15.0):
+            self._stub_park_properties({
+                "GEOGRAPHIC_COORDINATES": {"items": [
+                    {"name": "LATITUDE", "value": latitude},
+                    {"name": "LONGITUDE", "value": 9.0},
+                    {"name": "ELEVATION", "value": 200.0},
+                ]},
+                "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
+                "MOUNT_PARK": {"items": [{"name": "PARKED", "value": False}]},
+            })
+            self.sent_scripts.clear()
+            self.telescope._park_position_synced = False
+            self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+            park_position = next(s["newNumberVector"] for s in self.sent_scripts if s["newNumberVector"]["name"] == "MOUNT_PARK_POSITION")
+            hour_angles.append({i["name"]: i["value"] for i in park_position["items"]}["HA"])
+        self.assertNotAlmostEqual(hour_angles[0], hour_angles[1], places=3)
 
     def test_retrieve_reconnects_device_on_every_cycle(self):
         """A client reconnection empties the property cache, so the device is
@@ -127,7 +169,8 @@ class TestIndigoTelescope(unittest.TestCase):
         __wait_for_slew_completion returns instead of hitting its timeout.
         """
         states = iter([{"state": "Busy"}, {"state": "Ok"}])
-        props = dict(extra or {})
+        props = {"GEOGRAPHIC_COORDINATES": MOUNT_SITE}
+        props.update(extra or {})
 
         def get_property(device, name, timeout=2.0):
             if name == "MOUNT_EQUATORIAL_COORDINATES":
@@ -233,10 +276,14 @@ class TestIndigoTelescope(unittest.TestCase):
         awaited before waiting for Ok.
         """
         states = iter([{"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"}])
-        self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: next(states)
+
+        def get_property(device, name, timeout=2.0):
+            return MOUNT_SITE if name == "GEOGRAPHIC_COORDINATES" else next(states)
+
+        self.mock_client.get_property.side_effect = get_property
         with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
             self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
-        self.assertEqual(self.mock_client.get_property.call_count, 4)
+        self.assertEqual(list(states), [], "every coordinate state was read")
         last_tracking = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
