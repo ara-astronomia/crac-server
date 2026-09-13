@@ -100,6 +100,16 @@ tests/                      # rispecchia la struttura di crac_server/
   il cui mount un sito non lo dichiara. Se il mount non lo dichiara mentre è
   connesso, `_site()` solleva: meglio un flat che fallisce di un flat che
   punta male.
+- **L'elevazione dal mount non arriva mai**, ed è una lacuna del driver, non
+  del mount: il firmware TeenAstro la espone (`:Ge#` per leggerla, `:Se#` per
+  scriverla), ma `meade_get_site()` in `indigo_mount_lx200.c` chiede solo
+  `:Gt#`/`:Gg#` e `meade_set_site()` la manda solo ai mount NYX. La proprietà
+  INDIGO tiene quindi l'ultimo valore che qualcuno ci ha scritto, cioè 0 dopo
+  un riavvio di `indigo_server`, e `_site()` usa quello. Sulle alt/az non
+  cambia nulla (astropy senza pressione non modella la rifrazione, e la quota
+  non sposta un oggetto stellare), quindi `[geography] height` resta nel
+  `config.ini` per chi la usa davvero: il calcolo dell'airmass in crac-cloud,
+  via `geographic_service`.
 - **`sync()` sul driver indigo non fa niente**: logga un warning ed esce. Il
   razionale ("dichiara al mount dove punta all'accensione") è superato dal park
   nativo, e dichiarare la posizione sarebbe un'altra scrittura che sovrascrive
