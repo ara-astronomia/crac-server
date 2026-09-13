@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 from crac_protobuf.chart_pb2 import ChartStatus
 from crac_protobuf.ups_pb2 import UpsStatus
-from crac_server.component.ups import UPS
+from crac_server.component.ups import ups
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.service.ups_service import UpsService
 
@@ -126,7 +126,7 @@ class TestUpsListValidation(unittest.TestCase):
 class TestUpsService(unittest.TestCase):
 
     def setUp(self):
-        self._original_status_for = UPS.status_for
+        self._original_status_for = ups().status_for
         self._getfloat_patch = patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect)
         self._getvalue_patch = patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000,cyberpower")
         self._getsection_patch = patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"})
@@ -138,7 +138,7 @@ class TestUpsService(unittest.TestCase):
         self.ups_service = UpsService()
 
     def tearDown(self):
-        UPS.status_for = self._original_status_for
+        ups().status_for = self._original_status_for
         self._getfloat_patch.stop()
         self._getvalue_patch.stop()
         self._getsection_patch.stop()
@@ -148,7 +148,7 @@ class TestUpsService(unittest.TestCase):
         return {"input_voltage": "220", "battery_charge": "80"}
 
     def test_get_status_all_devices_ok(self):
-        UPS.status_for = MagicMock(side_effect=lambda device: self._ok_reading())
+        ups().status_for = MagicMock(side_effect=lambda device: self._ok_reading())
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -157,7 +157,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
 
     def test_get_status_builds_current_chart_when_present(self):
-        UPS.status_for = MagicMock(return_value={**self._ok_reading(), "output_current": "3"})
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "output_current": "3"})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -171,7 +171,7 @@ class TestUpsService(unittest.TestCase):
                 raise ConnectionError("unreachable")
             return self._ok_reading()
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -185,7 +185,7 @@ class TestUpsService(unittest.TestCase):
                 raise KeyError("missing config")
             return self._ok_reading()
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -193,7 +193,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(2, len(response.charts))
 
     def test_get_status_all_devices_fail(self):
-        UPS.status_for = MagicMock(side_effect=ConnectionError("unreachable"))
+        ups().status_for = MagicMock(side_effect=ConnectionError("unreachable"))
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -202,7 +202,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_skips_battery_chart_when_metric_unavailable(self):
-        UPS.status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None})
+        ups().status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -212,7 +212,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(2, len(response.charts))
 
     def test_get_status_skips_voltage_chart_when_metric_unavailable(self):
-        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80"})
+        ups().status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80"})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -222,7 +222,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(2, len(response.charts))
 
     def test_get_status_skips_current_chart_when_metric_unavailable(self):
-        UPS.status_for = MagicMock(return_value={**self._ok_reading(), "output_current": None})
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "output_current": None})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -232,7 +232,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(4, len(response.charts))
 
     def test_get_status_does_not_read_config_for_excluded_metric(self):
-        UPS.status_for = MagicMock(return_value=self._ok_reading())
+        ups().status_for = MagicMock(return_value=self._ok_reading())
 
         def missing_current_config(key, section):
             if section.startswith("output_current"):
@@ -248,7 +248,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(4, len(response.charts))
 
     def test_get_status_reports_a_state_for_every_configured_device(self):
-        UPS.status_for = MagicMock(side_effect=lambda device: self._ok_reading())
+        ups().status_for = MagicMock(side_effect=lambda device: self._ok_reading())
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -265,7 +265,7 @@ class TestUpsService(unittest.TestCase):
                 raise ConnectionError("unreachable")
             return self._ok_reading()
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -283,7 +283,7 @@ class TestUpsService(unittest.TestCase):
                 return {**self._ok_reading(), "battery_charge": "10"}
             return self._ok_reading()
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -301,7 +301,7 @@ class TestUpsService(unittest.TestCase):
                 raise ConnectionError("unreachable")
             return self._ok_reading()
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -317,7 +317,7 @@ class TestUpsService(unittest.TestCase):
                 raise ConnectionError("unreachable")
             return {**self._ok_reading(), "battery_charge": "10"}
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -329,7 +329,7 @@ class TestUpsService(unittest.TestCase):
                 return {**self._ok_reading(), "battery_charge": "N/A"}
             return self._ok_reading()
 
-        UPS.status_for = MagicMock(side_effect=side_effect)
+        ups().status_for = MagicMock(side_effect=side_effect)
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -340,7 +340,7 @@ class TestUpsService(unittest.TestCase):
     def test_get_status_does_not_emit_partial_charts_for_failing_device(self):
         # tensione valida, batteria sporca: il device non deve finire nella
         # risposta a metà (un chart sì e uno no)
-        UPS.status_for = MagicMock(return_value={**self._ok_reading(), "battery_charge": "N/A"})
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "battery_charge": "N/A"})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -348,7 +348,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(0, len(response.charts))
 
     def test_get_status_all_devices_non_numeric(self):
-        UPS.status_for = MagicMock(return_value={**self._ok_reading(), "input_voltage": ""})
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "input_voltage": ""})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -357,7 +357,7 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_device_present_with_no_charts_when_all_metrics_unavailable(self):
-        UPS.status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "output_current": None})
+        ups().status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "output_current": None})
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -373,7 +373,7 @@ class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
     """
 
     def setUp(self):
-        self._original_status_for = UPS.status_for
+        self._original_status_for = ups().status_for
         self._patches = [
             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect),
             patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000"),
@@ -385,12 +385,12 @@ class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
         self.ups_service = UpsService()
 
     def tearDown(self):
-        UPS.status_for = self._original_status_for
+        ups().status_for = self._original_status_for
         for p in self._patches:
             p.stop()
 
     def test_reraises_an_unreachable_threshold_instead_of_blaming_the_device(self):
-        UPS.status_for = MagicMock(return_value={"battery_charge": "80"})
+        ups().status_for = MagicMock(return_value={"battery_charge": "80"})
 
         def unreachable_band(key, section):
             if section == "battery_charge.danger":
@@ -402,7 +402,7 @@ class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
                 self.ups_service.GetStatus(None, None)
 
     def test_still_reports_the_device_as_unreadable_when_the_reading_fails(self):
-        UPS.status_for = MagicMock(side_effect=ConnectionError("unreachable"))
+        ups().status_for = MagicMock(side_effect=ConnectionError("unreachable"))
 
         response = self.ups_service.GetStatus(None, None)
 
@@ -419,7 +419,7 @@ class TestUpsChartLevels(unittest.TestCase):
     """
 
     def setUp(self):
-        self._original_status_for = UPS.status_for
+        self._original_status_for = ups().status_for
         self._patches = [
             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect),
             patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000"),
@@ -431,18 +431,18 @@ class TestUpsChartLevels(unittest.TestCase):
         self.ups_service = UpsService()
 
     def tearDown(self):
-        UPS.status_for = self._original_status_for
+        ups().status_for = self._original_status_for
         for p in self._patches:
             p.stop()
 
     def _chart_status(self, urn_suffix, **reading):
-        UPS.status_for = MagicMock(return_value={"battery_charge": "80", "input_voltage": "220", **reading})
+        ups().status_for = MagicMock(return_value={"battery_charge": "80", "input_voltage": "220", **reading})
         response = self.ups_service.GetStatus(None, None)
         chart = next(c.chart for c in response.charts if c.chart.urn.endswith(urn_suffix))
         return chart.status
 
     def _device_status(self, **reading):
-        UPS.status_for = MagicMock(return_value={"battery_charge": "80", "input_voltage": "220", **reading})
+        ups().status_for = MagicMock(return_value={"battery_charge": "80", "input_voltage": "220", **reading})
         return self.ups_service.GetStatus(None, None).device_states[0].status
 
     def test_battery_inside_each_band(self):

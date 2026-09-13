@@ -19,7 +19,7 @@ class TestRoofWeatherHandler(unittest.TestCase):
         mediator = SimpleNamespace(status=RoofStatus.ROOF_CLOSED, is_disabled=False)
         weather_response = WeatherResponse(status=weather_status)
         with (
-            patch("crac_server.handler.roof_handler.block_on_unspecified", block_on_unspecified),
+            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=block_on_unspecified),
             patch.object(WeatherConverter, "convert", return_value=weather_response),
             patch.object(RoofConverter, "convert", return_value=RoofResponse()),
         ):

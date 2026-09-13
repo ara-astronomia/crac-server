@@ -8,7 +8,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
     TelescopeStatus,  # type: ignore
 )
-from crac_server.component.button_control import SWITCHES
+from crac_server.component.button_control import switches
 from crac_server.handler.handler import AbstractHandler
 from crac_server.converter.telescope_converter import TelescopeConverter, TelescopeMediator
 
@@ -26,7 +26,7 @@ class AbstractTelescopeHandler(AbstractHandler):
 
 class TelescopeSwitchHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
-        if SWITCHES["TELE_SWITCH"].get_status() is ButtonStatus.OFF:
+        if switches()["TELE_SWITCH"].get_status() is ButtonStatus.OFF:
             mediator.connect_is_disabled = True
             mediator.sync_is_disabled = True
             mediator.park_is_disabled = True
@@ -68,7 +68,7 @@ class TelescopeDisconnectHandler(AbstractTelescopeHandler):
 class TelescopeSyncHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if mediator.action is TelescopeAction.SYNC:
-            mediator.button.queue_sync(SWITCHES["TELE_SWITCH"].turned_on_at)
+            mediator.button.queue_sync(switches()["TELE_SWITCH"].turned_on_at)
         
         return super().handle(mediator)
 
@@ -84,7 +84,7 @@ class TelescopeParkHandler(AbstractTelescopeHandler):
 class TelescopeFlatHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if mediator.action is TelescopeAction.FLAT_POSITION:
-            mediator.button.queue_flat(keep_tracking=SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.ON)
+            mediator.button.queue_flat(keep_tracking=switches()["FLAT_LIGHT"].get_status() is ButtonStatus.ON)
 
         return super().handle(mediator)
 
@@ -102,7 +102,7 @@ class TelescopeFlatterHandler(AbstractTelescopeHandler):
         if (
                 mediator.status is TelescopeStatus.FLATTER and
                 mediator.speed is not TelescopeSpeed.SPEED_TRACKING and
-                SWITCHES["FLAT_LIGHT"].get_status() is ButtonStatus.ON
+                switches()["FLAT_LIGHT"].get_status() is ButtonStatus.ON
             ):
             mediator.button.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
 
@@ -113,8 +113,8 @@ class TelescopeAutolightHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if mediator.request.autolight:
             if mediator.speed is TelescopeSpeed.SPEED_SLEWING:
-                SWITCHES["DOME_LIGHT"].on()
+                switches()["DOME_LIGHT"].on()
             else:
-                SWITCHES["DOME_LIGHT"].off()
+                switches()["DOME_LIGHT"].off()
 
         return super().handle(mediator)

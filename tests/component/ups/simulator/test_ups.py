@@ -13,7 +13,7 @@ class TestSimulatorUps(unittest.TestCase):
         if self._had_file:
             with open(self.ups_path) as f:
                 self._original_content = f.read()
-        self.ups = Ups(host="", login="", password="", time_expired=60)
+        self.ups = Ups(host="", port=3493, login="", password="", time_expired=60)
 
     def tearDown(self):
         if self._had_file:

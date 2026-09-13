@@ -1,3 +1,4 @@
+from functools import lru_cache
 from datetime import datetime
 import threading
 from crac_protobuf.button_pb2 import ButtonStatus
@@ -31,9 +32,11 @@ class ButtonControl():
         else:
             return ButtonStatus.OFF
 
-SWITCHES = {
-    "TELE_SWITCH": ButtonControl(Config.getInt("switch_power", "panel_board")),
-    "CCD_SWITCH": ButtonControl(Config.getInt("switch_aux", "panel_board")),
-    "FLAT_LIGHT": ButtonControl(Config.getInt("switch_panel", "panel_board")),
-    "DOME_LIGHT": ButtonControl(Config.getInt("switch_light", "panel_board")),
-}
+@lru_cache(maxsize=1)
+def switches() -> dict[str, ButtonControl]:
+    return {
+        "TELE_SWITCH": ButtonControl(Config.getInt("switch_power", "panel_board")),
+        "CCD_SWITCH": ButtonControl(Config.getInt("switch_aux", "panel_board")),
+        "FLAT_LIGHT": ButtonControl(Config.getInt("switch_panel", "panel_board")),
+        "DOME_LIGHT": ButtonControl(Config.getInt("switch_light", "panel_board")),
+    }

@@ -19,7 +19,7 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
         # Importare questo modulo attiva crac_server.component.roof.__init__,
-        # che crea il singleton ROOF riservando già il pin GPIO del tetto
+        # che crea il singleton roof() riservando già il pin GPIO del tetto
         # (switch_roof) prima ancora che parta il primo test: va rilasciato
         # qui, altrimenti pure il primissimo test fallisce con GPIOPinInUse.
         Device.pin_factory.reset()
