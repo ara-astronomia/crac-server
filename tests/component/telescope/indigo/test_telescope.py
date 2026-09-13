@@ -13,6 +13,8 @@ class TestIndigoTelescope(unittest.TestCase):
         mock_get_client = patcher.start()
         self.mock_client = MagicMock()
         mock_get_client.return_value = self.mock_client
+        self.sent_scripts = []
+        self.mock_client.send.side_effect = lambda script: self.sent_scripts.append(script) or True
         self.telescope = Telescope(hostname="host", port=1)
 
     def _stub_properties(self, props: dict):
@@ -20,58 +22,31 @@ class TestIndigoTelescope(unittest.TestCase):
             return props.get(name)
         self.mock_client.get_property.side_effect = get_property
 
+    def _sent_property_names(self):
+        """Names of the properties sent to INDIGO, in order.
+
+        Each script is a single-entry mapping of vector type to its body,
+        e.g. {"newSwitchVector": {"name": "MOUNT_PARK", ...}}.
+        """
+        return [vector["name"] for script in self.sent_scripts for vector in script.values()]
+
     def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
-        # la connessione va stabilita dall'operatore dal pannello INDIGO
-        # prima che crac la usi, non forzata da crac stesso in __init__.
+        """The operator connects the mount from the INDIGO panel, not crac."""
         self.mock_client.connect_device.assert_not_called()
         self.assertFalse(self.telescope._uses_raw_socket)
 
-    def test_init_syncs_geographic_coordinates(self):
-        # regressione: Mount Simulator parte a lat/lon 0°,0° finché non
-        # gliela mandiamo - la stessa RA/DEC risulta a un'altitudine
-        # completamente diversa da quella vista dal nostro calcolo (fatto
-        # sulla posizione reale dell'osservatorio), facendo atterrare
-        # qualunque slew (es. flat) nel punto sbagliato.
-        sent = [c.args[0] for c in self.mock_client.send.call_args_list]
-        geo = next(s["newNumberVector"] for s in sent if s.get("newNumberVector", {}).get("name") == "GEOGRAPHIC_COORDINATES")
-        items = {i["name"]: i["value"] for i in geo["items"]}
-        # crac_server/config.ini: lat = 42d13.76m, lon = +12d48.69m, height = 465
-        self.assertAlmostEqual(items["LATITUDE"], 42.229333, places=3)
-        self.assertAlmostEqual(items["LONGITUDE"], 12.8115, places=3)
-        self.assertAlmostEqual(items["ELEVATION"], 465, places=3)
-
-    def test_geographic_coordinates_retried_until_send_succeeds(self):
-        # regressione: il send() in __init__ è fire-and-forget - se il
-        # socket del client condiviso non è ancora pronto al primo
-        # tentativo (stessa race di connect_device), senza ritentare la
-        # sincronizzazione geografica fallirebbe in silenzio per sempre.
-        patcher = patch("crac_server.component.telescope.indigo.telescope.get_indigo_client")
-        mock_get_client = patcher.start()
-        self.addCleanup(patcher.stop)
-        mock_client = MagicMock()
-        mock_client.send.return_value = False
-        mock_get_client.return_value = mock_client
-        telescope = Telescope(hostname="host", port=1)
-        self.assertFalse(telescope._geo_synced)
-
-        mock_client.send.return_value = True
-        mock_client.send.reset_mock()
-        self._stub_properties_for(telescope, mock_client, {
+    def test_geographic_coordinates_are_never_sent_to_the_mount(self):
+        """The observatory site is read from the mount, never written to it."""
+        self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
         })
-        telescope.retrieve()
-        self.assertTrue(telescope._geo_synced)
-        sent_names = [next(iter(c.args[0].values()))["name"] for c in mock_client.send.call_args_list]
-        self.assertIn("GEOGRAPHIC_COORDINATES", sent_names)
-
-    def _stub_properties_for(self, telescope, mock_client, props):
-        mock_client.get_property.side_effect = lambda device, name, timeout=2.0: props.get(name)
+        self.telescope.retrieve()
+        self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
 
     def test_retrieve_reconnects_device_on_every_cycle(self):
-        # non basta farlo in __init__: se il client si riconnette e la cache
-        # si svuota, senza questa richiamata ad ogni retrieve() il device
-        # non verrebbe più ri-connesso e resterebbe bloccato per sempre.
+        """A client reconnection empties the property cache, so the device is
+        re-connected on every cycle or it stays stuck forever."""
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
@@ -81,9 +56,8 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(self.mock_client.connect_device.call_count, 2)
 
     def test_retrieve_refuses_when_device_not_connected_on_indigo(self):
-        # in produzione l'operatore deve collegare il telescopio dal
-        # pannello INDIGO prima che crac lo usi - crac non deve forzare la
-        # connessione da solo, ne' fingere di essere connesso.
+        """Until the operator connects the mount on INDIGO the telescope is
+        reported as LOST, never as connected."""
         self.mock_client.is_device_connected.return_value = False
         eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.assertIsNone(eq_coords)
@@ -105,9 +79,9 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(speed, TelescopeSpeed.SPEED_TRACKING)
 
     def test_retrieve_speed_not_tracking_when_tracking_off_and_state_ok(self):
-        # regressione: indigo_mount_simulator.c non usa mai lo stato "Idle"
-        # per MOUNT_EQUATORIAL_COORDINATES, solo "Ok"/"Busy"/"Alert" - con
-        # tracking spento a riposo lo stato è comunque "Ok", non "Idle".
+        """indigo_mount_simulator.c only ever uses "Ok"/"Busy"/"Alert" for
+        MOUNT_EQUATORIAL_COORDINATES: idle with tracking off still reads
+        "Ok", so the tracking property alone tells the two apart."""
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok", "items": [{"name": "RA", "value": 5.0}, {"name": "DEC", "value": 10.0}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 20.0}, {"name": "AZ", "value": 30.0}]},
@@ -141,15 +115,16 @@ class TestIndigoTelescope(unittest.TestCase):
 
     def test_park_sends_parked_command(self):
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
-        sent = self.mock_client.send.call_args[0][0]
+        sent = self.sent_scripts[-1]
         self.assertEqual(sent["newSwitchVector"]["name"], "MOUNT_PARK")
         items = {i["name"]: i["value"] for i in sent["newSwitchVector"]["items"]}
         self.assertEqual(items, {"PARKED": True, "UNPARKED": False})
 
     def _stub_park_properties(self, extra: dict | None = None):
-        # lo slew di park termina subito: Busy al primo giro (comando preso
-        # in carico), poi Ok - altrimenti __wait_for_slew_completion
-        # aspetterebbe il timeout.
+        """Stub a park slew that completes at once: Busy on the first read,
+        meaning the command was taken in charge, then Ok, so that
+        __wait_for_slew_completion returns instead of hitting its timeout.
+        """
         states = iter([{"state": "Busy"}, {"state": "Ok"}])
         props = dict(extra or {})
 
@@ -159,98 +134,87 @@ class TestIndigoTelescope(unittest.TestCase):
             return props.get(name)
 
         self.mock_client.get_property.side_effect = get_property
-        sent_calls = []
-        self.mock_client.send.side_effect = lambda script: sent_calls.append(script) or True
-        return sent_calls
 
     def test_park_does_not_unpark_first(self):
-        # regressione: indigo_mount_lx200 (TeenAstro) scarta MOUNT_PARK
-        # finché il mount risulta parked/parking/homing, ma echeggia
-        # comunque PARKED=true (indigo_property_copy_values gira prima
-        # della guardia). Mandare UNPARK e subito dopo PARK cadeva sempre in
-        # quel caso - l'unpark è asincrono - lasciando crac in stato PARKED
-        # con il telescopio fermo dov'era.
-        sent_calls = self._stub_park_properties()
+        """indigo_mount_lx200 (TeenAstro) drops MOUNT_PARK while the mount
+        still reads parked/parking/homing, yet echoes PARKED=true anyway,
+        since indigo_property_copy_values runs before that guard. Unparking
+        is asynchronous, so an UNPARK sent right before a PARK lands in
+        exactly that case: park goes out on its own.
+        """
+        self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
         parks = [
             {i["name"]: i["value"] for i in s["newSwitchVector"]["items"]}
-            for s in sent_calls if s.get("newSwitchVector", {}).get("name") == "MOUNT_PARK"
+            for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_PARK"
         ]
         self.assertEqual(parks, [{"PARKED": True, "UNPARKED": False}])
 
     def test_park_does_not_send_tracking_off(self):
-        # parcheggiare spegne gia' il tracking (simulatore e mount reale):
-        # il MOUNT_TRACKING OFF mandato dopo arrivava a mount parcheggiato,
-        # dove viene rifiutato (property in Alert) o - peggio - raggiunge
-        # l'hardware nel mezzo del park.
-        sent_calls = self._stub_park_properties()
+        """Parking already stops tracking, on the simulator and on a real
+        mount alike, and a MOUNT_TRACKING command reaching a parked mount is
+        refused with the property in Alert, or hits the hardware mid-park.
+        """
+        self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_NOT_TRACKING)
-        names = [next(iter(s.values())).get("name") for s in sent_calls]
-        self.assertNotIn("MOUNT_TRACKING", names)
+        self.assertNotIn("MOUNT_TRACKING", self._sent_property_names())
 
     def test_park_does_not_write_park_position_when_mount_has_none(self):
-        # su un mount reale MOUNT_PARK_POSITION non esiste (la posizione di
-        # park vive nel mount): non va scritta, sarebbe solo rumore.
-        sent_calls = self._stub_park_properties()
+        """On a real mount MOUNT_PARK_POSITION does not exist: the park
+        position lives in the mount, and writing it would be pure noise."""
+        self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
-        names = [next(iter(s.values())).get("name") for s in sent_calls]
-        self.assertNotIn("MOUNT_PARK_POSITION", names)
+        self.assertNotIn("MOUNT_PARK_POSITION", self._sent_property_names())
 
     def test_park_syncs_park_position_before_parking_when_supported(self):
-        # il Mount Simulator espone MOUNT_PARK_POSITION e parte da una
-        # posizione di park sua: va allineata alle park_alt/park_az di crac
-        # prima del park, e solo a mount sparcheggiato (da parcheggiato il
-        # driver rifiuta la scrittura).
-        sent_calls = self._stub_park_properties({
+        """The Mount Simulator exposes MOUNT_PARK_POSITION and starts from a
+        park position of its own: it is aligned to the configured
+        park_alt/park_az before parking, and only while the mount is
+        unparked, since the driver refuses the write on a parked one.
+        """
+        self._stub_park_properties({
             "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
             "MOUNT_PARK": {"items": [{"name": "PARKED", "value": False}]},
         })
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
-        names = [next(iter(s.values())).get("name") for s in sent_calls]
+        names = self._sent_property_names()
         self.assertLess(names.index("MOUNT_PARK_POSITION"), names.index("MOUNT_PARK"))
 
     def test_park_skips_park_position_sync_when_already_parked(self):
-        sent_calls = self._stub_park_properties({
+        self._stub_park_properties({
             "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
             "MOUNT_PARK": {"items": [{"name": "PARKED", "value": True}]},
         })
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
-        names = [next(iter(s.values())).get("name") for s in sent_calls]
-        self.assertNotIn("MOUNT_PARK_POSITION", names)
+        self.assertNotIn("MOUNT_PARK_POSITION", self._sent_property_names())
 
     def test_set_speed_sends_on_coordinates_set_as_switch_vector_even_when_not_tracking(self):
-        # regressione: MOUNT_ON_COORDINATES_SET è una proprietà switch, non
-        # number - mandata come newNumberVector il driver la ignora e lo
-        # slew di MOUNT_EQUATORIAL_COORDINATES non scatta mai. E va inviata
-        # anche per SPEED_NOT_TRACKING (il caso reale di flat() in questa
-        # config, dove has_tracking_off_capability=true): indigo_mount_
-        # simulator.c implementa solo i rami TRACK e SYNC per il movimento,
-        # quindi TRACK va selezionato per ottenere lo slew a prescindere dal
-        # tracking continuo richiesto dopo l'arrivo (governato a parte da
-        # MOUNT_TRACKING).
+        """MOUNT_ON_COORDINATES_SET is a switch property, not a number one:
+        sent as a newNumberVector the driver ignores it and the slew of
+        MOUNT_EQUATORIAL_COORDINATES never fires. It goes out for
+        SPEED_NOT_TRACKING too, the real case of flat() in this
+        configuration: indigo_mount_simulator.c implements only the TRACK and
+        SYNC branches for movement, so TRACK is what produces a slew,
+        whatever tracking is wanted on arrival, which MOUNT_TRACKING governs
+        on its own.
+        """
         self.telescope.set_speed(TelescopeSpeed.SPEED_NOT_TRACKING)
-        sent = [c.args[0] for c in self.mock_client.send.call_args_list]
-        coord_set = next(s["newSwitchVector"] for s in sent if s.get("newSwitchVector", {}).get("name") == "MOUNT_ON_COORDINATES_SET")
+        coord_set = next(s["newSwitchVector"] for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_ON_COORDINATES_SET")
         items = {i["name"]: i["value"] for i in coord_set["items"]}
         self.assertEqual(items["TRACK"], True)
-        tracking = next(s["newSwitchVector"] for s in sent if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING")
+        tracking = next(s["newSwitchVector"] for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING")
         tracking_items = {i["name"]: i["value"] for i in tracking["items"]}
         self.assertEqual(tracking_items, {"ON": False, "OFF": True})
 
     def test_flat_unparks_before_moving(self):
         self._stub_properties({"MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok"}})
-        sent_calls = []
-        self.mock_client.send.side_effect = lambda script: sent_calls.append(script) or True
         self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
-        names_in_order = [
-            next(iter(s.values()))["name"] for s in sent_calls
-        ]
+        names_in_order = self._sent_property_names()
         self.assertIn("MOUNT_PARK", names_in_order)
         self.assertIn("MOUNT_ON_COORDINATES_SET", names_in_order)
         self.assertIn("MOUNT_EQUATORIAL_COORDINATES", names_in_order)
-        # l'ordine conta: il driver controlla MOUNT_ON_COORDINATES_SET.TRACK
-        # nello stesso istante in cui riceve il cambio di coordinate, quindi
-        # deve arrivare prima, non dopo (né in coda per il ciclo successivo).
+        # the driver reads MOUNT_ON_COORDINATES_SET.TRACK at the very moment
+        # it receives the new coordinates, so both have to reach it first
         self.assertLess(
             names_in_order.index("MOUNT_PARK"),
             names_in_order.index("MOUNT_EQUATORIAL_COORDINATES"),
@@ -261,20 +225,17 @@ class TestIndigoTelescope(unittest.TestCase):
         )
 
     def test_flat_turns_tracking_off_only_after_slew_completes(self):
-        # regressione: indigo_mount_simulator.c riaccende MOUNT_TRACKING in
-        # automatico appena lo slew finisce (se era spento quando avviato) -
-        # un OFF mandato subito verrebbe sovrascritto. Va aspettato lo stato
-        # non-Busy prima di spegnerlo di nuovo. Il primo stato "Ok" simula
-        # la cache non ancora aggiornata subito dopo l'invio delle
-        # coordinate (misurato: bastava <1ms per leggere lo stato vecchio) -
-        # va aspettato che diventi Busy prima di aspettare che torni Ok,
-        # altrimenti si esce subito leggendo lo stato pre-comando.
+        """indigo_mount_simulator.c turns MOUNT_TRACKING back on by itself as
+        soon as a slew ends, so tracking is switched off again only once the
+        state leaves Busy. The leading "Ok" stands for the cache not yet
+        updated right after the coordinates go out, which is why Busy is
+        awaited before waiting for Ok.
+        """
         states = iter([{"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"}])
         self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: next(states)
         with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
             self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
         self.assertEqual(self.mock_client.get_property.call_count, 4)
-        sent = [c.args[0] for c in self.mock_client.send.call_args_list]
-        last_tracking = [s for s in sent if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
+        last_tracking = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
