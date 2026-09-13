@@ -85,55 +85,12 @@ class Telescope(TelescopeBase):
         # would add nothing
 
     def sync(self, started_at: datetime):
-        """Sync the mount on the park position.
+        """Not supported on INDIGO: the mount knows where it points.
 
-        The three __call below send XML strings, inherited from the "indi"
-        driver this was copied from, not the JSON the INDIGO protocol
-        expects: they reach the server and are discarded.
+        Declaring the park position to the mount would overwrite what the
+        mount itself holds, and MOUNT_PARK already covers it. The method
+        stays only to satisfy the abstract contract.
         """
-        self.__call(
-            f"""
-                <setNumberVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
-                    <oneNumber name="SLEW">
-                        Off
-                    </oneNumeber>
-                    <oneNumber name="TRACK">
-                        Off
-                    </oneNumber>
-                    <oneNumber name="SYNC">
-                        On
-                    </oneNumber>
-                </oneNumberVector>
-            """
-        )
-        eq_coords = self._calculate_eq_coords_of_park_position(started_at)
-        self.__call(
-            f"""
-                <defNumberVector device="{self._name}" name="MOUNT_EQUATORIAL_COORDINATES">
-                    <oneNumber name="DEC">
-                      {eq_coords.dec}
-                    </oneNumber>
-                    <oneNumber name="RA">
-                      {eq_coords.ra}
-                    </oneNumber>
-                </defNumberVector>
-            """
-        )
-        self.__call(
-            f"""
-                <oneNumberVector device="{self._name}" name="MOUNT_ON_COORDINATES_SET">
-                    <oneNumber name="SLEW">
-                        Off
-                    </oneNumber>
-                    <oneNumber name="TRACK">
-                        On
-                    </oneNumber>
-                    <oneNumber name="SYNC">
-                        Off
-                    </oneNumber>
-                </oneNumberVector>
-            """
-        )
 
     def set_speed(self, speed: TelescopeSpeed):
         tracking_on = speed is not TelescopeSpeed.SPEED_NOT_TRACKING
