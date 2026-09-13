@@ -1,8 +1,6 @@
 from datetime import datetime
 from typing import Any
 import time
-from astropy import units as u
-from astropy.coordinates import EarthLocation
 from astropy.time import Time
 from crac_protobuf.telescope_pb2 import (
     EquatorialCoords,
@@ -28,40 +26,8 @@ class Telescope(TelescopeBase):
         # Niente connect_device() qui: la connessione al mount va stabilita
         # dall'operatore dal pannello INDIGO (mount.html/ctrl.html) prima
         # che crac la usi, non forzata da crac stesso - vedi retrieve().
-        self._geo_synced = False
-        self.__sync_geographic_coordinates()
         self._park_position_synced = False
         self._uses_raw_socket = False
-
-    def __sync_geographic_coordinates(self):
-        # Mount Simulator parte a lat/lon 0°,0° ("null island") finché non
-        # gliela mandiamo esplicitamente: la stessa coppia RA/DEC risulta a
-        # un'altitudine completamente diversa a 0° di quella vista dal
-        # nostro calcolo (fatto sulla posizione reale dell'osservatorio),
-        # facendo atterrare qualunque slew (es. flat) in un punto sbagliato.
-        # Va ritentata (non solo in __init__, vedi retrieve()) perché il
-        # send() qui è fire-and-forget: se il socket del client condiviso
-        # non è ancora pronto al primo tentativo, fallirebbe in silenzio e
-        # non verrebbe mai più rimandata.
-        if self._geo_synced:
-            return
-        location = EarthLocation(
-            lat=config.Config.getValue("lat", "geography"),
-            lon=config.Config.getValue("lon", "geography"),
-            height=config.Config.getInt("height", "geography") * u.m,
-        )
-        self._geo_synced = self.__call(
-                    {"newNumberVector":
-                        {
-                            "device": self._name, "name": "GEOGRAPHIC_COORDINATES", "items":
-                            [
-                                { "name": "LATITUDE", "value": location.lat.deg},
-                                { "name": "LONGITUDE", "value": location.lon.deg % 360},
-                                { "name": "ELEVATION", "value": location.height.value}
-                            ]
-                        }
-                    }
-                    )
 
     def __sync_park_position(self):
         # HA/DEC (non alt/az) perché per un punto ad alt/az fissi sono le
@@ -311,6 +277,12 @@ class Telescope(TelescopeBase):
         logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
 
     def retrieve(self) -> tuple:
+        """Read the mount state.
+
+        Every coordinate here is read, never written: the site lives in the
+        mount and is the reference the mount converts RA/DEC to ALT/AZ
+        against, so crac takes MOUNT_HORIZONTAL_COORDINATES as it comes.
+        """
         # In produzione l'osservatore usa il pannello INDIGO direttamente e
         # deve ricordarsi di collegare il telescopio li' prima che crac lo
         # usi: crac non forza piu' la connessione da solo (vedi __init__),
@@ -329,9 +301,7 @@ class Telescope(TelescopeBase):
         # server INDIGO è stato riavviato mentre crac-server restava attivo)
         # - le sincronizzazioni one-shot vanno quindi ripetute.
         if self._client.connect_device(self._name):
-            self._geo_synced = False
             self._park_position_synced = False
-        self.__sync_geographic_coordinates()
         eq_coords = self.__retrieve_eq_coords()
         logger.debug(f"data received from cache: {eq_coords}")
         speed = self.__retrieve_speed()
