@@ -281,23 +281,12 @@ class Telescope(ABC):
         synced_eq_coords = EquatorialCoords(ra=round(eq_coords.ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
         return synced_eq_coords
 
-    def _site(self) -> tuple:
-        """Observatory position used by every coordinate conversion.
-
-        Returned as (lat, lon, height in metres). Drivers whose mount
-        declares its own position override this, so that the conversions
-        crac makes and the ones the mount makes share one reference.
-        """
-        return (
-            config.Config.getValue("lat", "geography"),
-            config.Config.getValue("lon", "geography"),
-            config.Config.getInt("height", "geography"),
-        )
-
     def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         observing_time = Time(timestring)
-        lat, lon, height = self._site()
+        lat = config.Config.getValue("lat", "geography")
+        lon = config.Config.getValue("lon", "geography")
+        height = config.Config.getInt("height", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height*u.m)
         aa = AltAz(location=observing_location, obstime=observing_time)
         equinox = config.Config.getValue("equinox", "geography")
@@ -313,7 +302,9 @@ class Telescope(ABC):
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         time = Time(timestring)
-        lat, lon, height = self._site()
+        lat = config.Config.getValue("lat", "geography")
+        lon = config.Config.getValue("lon", "geography")
+        height = config.Config.getInt("height", "geography")
         equinox = config.Config.getValue("equinox", "geography")
         observing_location = EarthLocation(lat=lat, lon=lon, height=height * u.m)  # type: ignore
         aa = AltAz(location=observing_location, obstime=time)

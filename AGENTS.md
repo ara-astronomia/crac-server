@@ -85,32 +85,25 @@ tests/                      # rispecchia la struttura di crac_server/
   nel mount e quella proprietà non esiste nemmeno. Nessun
   `CONFIG_SAVE`/`CONFIG_LOAD`: alla riconnessione `_park_position_synced`
   si azzera e la posizione viene rimandata al primo park utile.
-- **Il sito dell'osservatorio è quello del mount, e non si scrive mai**:
+- **Il sito dell'osservatorio non si scrive mai sul mount**:
   `GEOGRAPHIC_COORDINATES` si legge, non si manda. Sul mount il sito è il
   riferimento di ogni conversione che il mount fa, e riscriverlo dall'esterno
-  lo invalida - in produzione ha azzerato lat/lon del TeenAstro. Ed è anche
-  l'unica sorgente: `Telescope._site()` del driver indigo legge quella
-  proprietà e la usa per le conversioni di crac, così il target di flat esce
-  nello stesso riferimento in cui rientra la lettura di
-  `MOUNT_HORIZONTAL_COORDINATES`. Con due sorgenti l'errore entrava due volte,
-  su gambe diverse: il mount converte la RA di uno slew in angolo orario con
-  la *propria* longitudine, quindi il tubo finiva altrove e il numero letto
-  non lo descriveva - senza che niente lo segnalasse. `[geography]` in
-  `config.ini` resta il default di `_site()` nella classe base, per i driver
-  il cui mount un sito non lo dichiara. Se il mount non lo dichiara mentre è
-  connesso, `_site()` solleva: meglio un flat che fallisce di un flat che
-  punta male.
-- **L'elevazione dal mount non arriva mai**, ed è una lacuna del driver, non
-  del mount: il firmware TeenAstro la espone (`:Ge#` per leggerla, `:Se#` per
-  scriverla), ma `meade_get_site()` in `indigo_mount_lx200.c` chiede solo
-  `:Gt#`/`:Gg#` e `meade_set_site()` la manda solo ai mount NYX. La proprietà
-  INDIGO tiene quindi l'ultimo valore che qualcuno ci ha scritto, cioè 0 dopo
-  un riavvio di `indigo_server`. Per questo `_site()` prende dal mount solo
-  latitudine e longitudine, e la quota da `[geography] height`: sulle alt/az
-  non cambierebbe nulla comunque (astropy senza pressione non modella la
-  rifrazione, e la quota non sposta un oggetto stellare), ma un 465 vero è
-  meglio di uno 0 finto. La stessa chiave serve al calcolo dell'airmass in
-  crac-cloud, via `geographic_service`, dove invece la quota conta.
+  lo invalida - in produzione ha azzerato lat/lon del TeenAstro. Ne segue un
+  invariante implicito: le ALT/AZ di `MOUNT_HORIZONTAL_COORDINATES` le calcola
+  INDIGO col sito configurato *nel mount*, mentre i target di park e flat li
+  calcola crac con `[geography]` del `config.ini`. I due devono coincidere. Se
+  divergono, il telescopio atterra fuori bersaglio e `_retrieve_status`
+  classifica male i quadranti senza che niente lo segnali. Chi può farli
+  divergere: un `indigo_agent_mount` con `AGENT_SITE_DATA_SOURCE = HOST`, che
+  propaga il proprio (0,0 per default) al device che adotta; l'operatore da
+  `/ctrl.html`; un mount riconfigurato.
+- **La quota del sito dal mount non arriva mai**, ed è una lacuna del driver,
+  non del mount: il firmware TeenAstro la espone (`:Ge#` per leggerla, `:Se#`
+  per scriverla), ma `meade_get_site()` in `indigo_mount_lx200.c` chiede solo
+  `:Gt#`/`:Gg#` e `meade_set_site()` la manda solo ai mount NYX. Irrilevante
+  per le alt/az (astropy senza pressione non modella la rifrazione, e la quota
+  non sposta un oggetto stellare); conta invece per l'airmass, che crac-cloud
+  calcola su `[geography] height` via `geographic_service`.
 - **`sync()` sul driver indigo non fa niente**: logga un warning ed esce. Il
   razionale ("dichiara al mount dove punta all'accensione") è superato dal park
   nativo, e dichiarare la posizione sarebbe un'altra scrittura che sovrascrive

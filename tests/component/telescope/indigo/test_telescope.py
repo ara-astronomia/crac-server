@@ -2,16 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus
-from crac_server import config
 from crac_server.component.telescope.indigo.telescope import Telescope
-
-
-# what the mount declares, deliberately not the site in tests/config.ini
-MOUNT_SITE = {"items": [
-    {"name": "LATITUDE", "value": 45.0},
-    {"name": "LONGITUDE", "value": 9.0},
-    {"name": "ELEVATION", "value": 200.0},
-]}
 
 
 class TestIndigoTelescope(unittest.TestCase):
@@ -52,48 +43,6 @@ class TestIndigoTelescope(unittest.TestCase):
         })
         self.telescope.retrieve()
         self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
-
-    def test_latitude_and_longitude_come_from_the_mount(self):
-        """The mount is the single source for where the observatory is: it
-        converts RA/DEC to ALT/AZ against the site stored in it, so the park
-        and flat targets crac computes use the same latitude and longitude."""
-        self._stub_properties({"GEOGRAPHIC_COORDINATES": MOUNT_SITE})
-        lat, lon, _ = self.telescope._site()
-        self.assertEqual((lat.value, lon.value), (45.0, 9.0))
-
-    def test_height_comes_from_the_configuration(self):
-        """indigo_mount_lx200 never reads the elevation back from the mount,
-        so the INDIGO property carries whatever was last written there."""
-        self._stub_properties({"GEOGRAPHIC_COORDINATES": MOUNT_SITE})
-        _, _, height = self.telescope._site()
-        self.assertEqual(height, config.Config.getInt("height", "geography"))
-        self.assertNotEqual(height, 200.0)
-
-    def test_site_raises_when_the_mount_declares_none(self):
-        self._stub_properties({})
-        with self.assertRaises(Exception):
-            self.telescope._site()
-
-    def test_park_position_is_computed_on_the_site_of_the_mount(self):
-        """Two different mount sites give two different park hour angles: the
-        conversion follows the mount, not config.ini."""
-        hour_angles = []
-        for latitude in (45.0, 15.0):
-            self._stub_park_properties({
-                "GEOGRAPHIC_COORDINATES": {"items": [
-                    {"name": "LATITUDE", "value": latitude},
-                    {"name": "LONGITUDE", "value": 9.0},
-                    {"name": "ELEVATION", "value": 200.0},
-                ]},
-                "MOUNT_PARK_POSITION": {"items": [{"name": "HA", "value": 0}, {"name": "DEC", "value": 0}]},
-                "MOUNT_PARK": {"items": [{"name": "PARKED", "value": False}]},
-            })
-            self.sent_scripts.clear()
-            self.telescope._park_position_synced = False
-            self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
-            park_position = next(s["newNumberVector"] for s in self.sent_scripts if s["newNumberVector"]["name"] == "MOUNT_PARK_POSITION")
-            hour_angles.append({i["name"]: i["value"] for i in park_position["items"]}["HA"])
-        self.assertNotAlmostEqual(hour_angles[0], hour_angles[1], places=3)
 
     def test_retrieve_reconnects_device_on_every_cycle(self):
         """A client reconnection empties the property cache, so the device is
@@ -178,8 +127,7 @@ class TestIndigoTelescope(unittest.TestCase):
         __wait_for_slew_completion returns instead of hitting its timeout.
         """
         states = iter([{"state": "Busy"}, {"state": "Ok"}])
-        props = {"GEOGRAPHIC_COORDINATES": MOUNT_SITE}
-        props.update(extra or {})
+        props = dict(extra or {})
 
         def get_property(device, name, timeout=2.0):
             if name == "MOUNT_EQUATORIAL_COORDINATES":
@@ -286,10 +234,7 @@ class TestIndigoTelescope(unittest.TestCase):
         """
         states = iter([{"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"}])
 
-        def get_property(device, name, timeout=2.0):
-            return MOUNT_SITE if name == "GEOGRAPHIC_COORDINATES" else next(states)
-
-        self.mock_client.get_property.side_effect = get_property
+        self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: next(states)
         with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
             self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
         self.assertEqual(list(states), [], "every coordinate state was read")
