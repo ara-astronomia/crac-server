@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus
+from crac_server import config
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 
@@ -52,13 +53,21 @@ class TestIndigoTelescope(unittest.TestCase):
         self.telescope.retrieve()
         self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
 
-    def test_site_comes_from_the_mount_not_from_the_configuration(self):
-        """The mount is the single source for the observatory position: it
+    def test_latitude_and_longitude_come_from_the_mount(self):
+        """The mount is the single source for where the observatory is: it
         converts RA/DEC to ALT/AZ against the site stored in it, so the park
-        and flat targets crac computes use that one too."""
+        and flat targets crac computes use the same latitude and longitude."""
         self._stub_properties({"GEOGRAPHIC_COORDINATES": MOUNT_SITE})
-        lat, lon, height = self.telescope._site()
-        self.assertEqual((lat.value, lon.value, height), (45.0, 9.0, 200.0))
+        lat, lon, _ = self.telescope._site()
+        self.assertEqual((lat.value, lon.value), (45.0, 9.0))
+
+    def test_height_comes_from_the_configuration(self):
+        """indigo_mount_lx200 never reads the elevation back from the mount,
+        so the INDIGO property carries whatever was last written there."""
+        self._stub_properties({"GEOGRAPHIC_COORDINATES": MOUNT_SITE})
+        _, _, height = self.telescope._site()
+        self.assertEqual(height, config.Config.getInt("height", "geography"))
+        self.assertNotEqual(height, 200.0)
 
     def test_site_raises_when_the_mount_declares_none(self):
         self._stub_properties({})

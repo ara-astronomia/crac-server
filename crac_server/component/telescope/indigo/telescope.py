@@ -39,15 +39,24 @@ class Telescope(TelescopeBase):
         The mount converts RA/DEC to ALT/AZ against the site stored in it,
         and turns the RA of a slew into an hour angle with its own
         longitude: crac computes the park and flat targets against that same
-        site, so that command and reading never fall into two different
-        frames. [geography] in config.ini stays the reference for the
-        drivers whose mount declares nothing.
+        latitude and longitude, so that command and reading never fall into
+        two different frames. [geography] in config.ini stays the reference
+        for the drivers whose mount declares nothing.
+
+        The height keeps coming from the configuration: the mount holds one
+        (`:Ge#` on a TeenAstro) but indigo_mount_lx200 never asks for it, so
+        the INDIGO property carries whatever was last written there, zero on
+        a freshly started server.
         """
         prop = self._client.get_property(self._name, "GEOGRAPHIC_COORDINATES", timeout=0)
         site = {item["name"]: float(item["value"]) for item in (prop or {}).get("items", [])}
-        if not {"LATITUDE", "LONGITUDE", "ELEVATION"} <= site.keys():
+        if not {"LATITUDE", "LONGITUDE"} <= site.keys():
             raise Exception(f"GEOGRAPHIC_COORDINATES not available on {self._name}: {site}")
-        return (site["LATITUDE"] * u.deg, site["LONGITUDE"] * u.deg, site["ELEVATION"])
+        return (
+            site["LATITUDE"] * u.deg,
+            site["LONGITUDE"] * u.deg,
+            config.Config.getInt("height", "geography"),
+        )
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.

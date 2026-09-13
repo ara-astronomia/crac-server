@@ -105,11 +105,12 @@ tests/                      # rispecchia la struttura di crac_server/
   scriverla), ma `meade_get_site()` in `indigo_mount_lx200.c` chiede solo
   `:Gt#`/`:Gg#` e `meade_set_site()` la manda solo ai mount NYX. La proprietà
   INDIGO tiene quindi l'ultimo valore che qualcuno ci ha scritto, cioè 0 dopo
-  un riavvio di `indigo_server`, e `_site()` usa quello. Sulle alt/az non
-  cambia nulla (astropy senza pressione non modella la rifrazione, e la quota
-  non sposta un oggetto stellare), quindi `[geography] height` resta nel
-  `config.ini` per chi la usa davvero: il calcolo dell'airmass in crac-cloud,
-  via `geographic_service`.
+  un riavvio di `indigo_server`. Per questo `_site()` prende dal mount solo
+  latitudine e longitudine, e la quota da `[geography] height`: sulle alt/az
+  non cambierebbe nulla comunque (astropy senza pressione non modella la
+  rifrazione, e la quota non sposta un oggetto stellare), ma un 465 vero è
+  meglio di uno 0 finto. La stessa chiave serve al calcolo dell'airmass in
+  crac-cloud, via `geographic_service`, dove invece la quota conta.
 - **`sync()` sul driver indigo non fa niente**: logga un warning ed esce. Il
   razionale ("dichiara al mount dove punta all'accensione") è superato dal park
   nativo, e dichiarare la posizione sarebbe un'altra scrittura che sovrascrive
