@@ -13,6 +13,7 @@ from crac_server.component.telescope.telescope import Telescope as TelescopeBase
 from crac_server.status_log import ErrorCause
 import json
 import logging
+import socket
 logger = logging.getLogger(__name__)
 
 COORDINATES_AT_REST = ("Ok", "Idle")
@@ -219,6 +220,10 @@ class Telescope(TelescopeBase):
         Busy is awaited first, on a shorter deadline: right after a command the
         cache can still hold the previous "Ok", the INDIGO broadcast not having
         arrived yet.
+
+        Reconnects between polls: a slew is the one window this driver is
+        actually asked to stay off the bus for, so it cannot be the one place
+        where it sits on a single connection for up to a minute.
         """
         deadline = time.monotonic() + timeout
 
@@ -228,13 +233,24 @@ class Telescope(TelescopeBase):
             if coords and coords.get("state") == "Busy":
                 break
             time.sleep(0.1)
+            self.__reconnect()
 
         while time.monotonic() < deadline:
             coords = self.__property(self.__enumerate(), "MOUNT_EQUATORIAL_COORDINATES")
             if coords and coords.get("state") != "Busy":
                 return
             time.sleep(0.3)
+            self.__reconnect()
         logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
+
+    def __reconnect(self):
+        """Close and reopen the socket of this polling cycle."""
+        if getattr(self, "s", None) is not None:
+            self.s.close()
+        try:
+            self.s = socket.create_connection((self._hostname, self._port), timeout=2)
+        except OSError as e:
+            logger.error(f"[Telescope] Reconnect error: {e}")
 
     def retrieve(self) -> tuple:
         """Read the mount state.
@@ -407,6 +423,8 @@ class Telescope(TelescopeBase):
         while time.monotonic() < deadline:
             try:
                 data = self.s.recv(65536)
+            except TimeoutError:
+                continue
             except OSError:
                 break
             if not data:

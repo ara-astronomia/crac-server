@@ -18,13 +18,30 @@ class TestIndigoTelescope(unittest.TestCase):
         self._properties = {}
         self._coordinate_states = None
         self._answered = False
-        socket = MagicMock()
-        socket.sendall.side_effect = lambda payload: self.sent_scripts.append(json.loads(payload))
-        socket.recv.side_effect = self._answer
-        self.telescope.s = socket
+        self.reconnections = 0
+        self.telescope.s = self._new_socket()
+        create_connection_patcher = patch(
+            "crac_server.component.telescope.indigo.telescope.socket.create_connection",
+            side_effect=self._on_reconnect,
+        )
+        self.addCleanup(create_connection_patcher.stop)
+        create_connection_patcher.start()
         sleep_patcher = patch("crac_server.component.telescope.indigo.telescope.time.sleep")
         self.addCleanup(sleep_patcher.stop)
         sleep_patcher.start()
+
+    def _new_socket(self):
+        socket = MagicMock()
+        socket.sendall.side_effect = lambda payload: self.sent_scripts.append(json.loads(payload))
+        socket.recv.side_effect = self._answer
+        return socket
+
+    def _on_reconnect(self, *args, **kwargs):
+        """A real socket.create_connection() would dial the network here:
+        stand in with a fresh fake socket, and count the call - used by the
+        tests that check __wait_for_slew_completion() reconnects mid-wait."""
+        self.reconnections += 1
+        return self._new_socket()
 
     def _answer(self, _size):
         """INDIGO answers an enumeration with the def vectors of the device,
@@ -94,6 +111,18 @@ class TestIndigoTelescope(unittest.TestCase):
         self.telescope.retrieve()
         self.telescope.retrieve()
         self.assertEqual(len(self._enumerations()), 2)
+
+    def test_enumerate_keeps_reading_past_a_single_timeout(self):
+        """A gap between two chunks of the same answer is not "no more data
+        coming": only a closed socket or a real error is."""
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        data = "".join(json.dumps(vector) for vector in self._vectors()).encode("utf-8")
+        self.telescope.s.recv.side_effect = [TimeoutError("timed out"), data, OSError("timed out")]
+        eq_coords, *_ = self.telescope.retrieve()
+        self.assertEqual((eq_coords.ra, eq_coords.dec), (1, 2))
 
     def test_a_mount_at_rest_on_idle_coordinates_is_not_an_error(self):
         self._stub_properties({
@@ -189,6 +218,17 @@ class TestIndigoTelescope(unittest.TestCase):
         parked = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_PARK"][-1]
         items = {i["name"]: i["value"] for i in parked["newSwitchVector"]["items"]}
         self.assertEqual(items, {"PARKED": True, "UNPARKED": False})
+
+    def test_wait_for_slew_reconnects_between_polls(self):
+        """A slew is the one window a mount lock-up has been observed in
+        production: the connection must not sit idle on the bus across
+        several polls, unlike the rest of the cycle."""
+        self._stub_properties({"MOUNT_PARK": {"items": [{"name": "PARKED", "value": False}]}})
+        self._coordinate_states = iter([
+            {"state": "Ok"}, {"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"},
+        ])
+        self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+        self.assertEqual(self.reconnections, 2)
 
     def test_park_does_not_unpark_first(self):
         self._stub_park_properties()
