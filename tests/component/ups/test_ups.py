@@ -12,7 +12,7 @@ ALL_METRICS = {
 
 class FakeUps(Ups):
     def __init__(self, raw):
-        super().__init__(host="", login="", password="", time_expired=60)
+        super().__init__(host="", port=3493, login="", password="", time_expired=60)
         self._raw = raw
 
     def _read(self, device: str) -> dict[str, str]:

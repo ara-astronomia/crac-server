@@ -24,7 +24,7 @@ class TestCurtainsWeatherHandler(unittest.TestCase):
         )
         weather_response = WeatherResponse(status=weather_status)
         with (
-            patch("crac_server.handler.curtains_handler.block_on_unspecified", block_on_unspecified),
+            patch("crac_server.handler.curtains_handler.Config.getRequiredBoolean", return_value=block_on_unspecified),
             patch.object(WeatherConverter, "convert", return_value=weather_response),
             patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
         ):

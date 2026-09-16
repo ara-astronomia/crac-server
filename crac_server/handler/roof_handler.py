@@ -13,11 +13,11 @@ from crac_protobuf.chart_pb2 import (
     WeatherStatus,  # type: ignore
 )
 from crac_server.component.curtains.factory_curtain import (
-    CURTAIN_EAST, 
-    CURTAIN_WEST,
+    curtain_east, 
+    curtain_west,
 )
-from crac_server.component.telescope import TELESCOPE
-from crac_server.component.weather import WEATHER
+from crac_server.component.telescope import telescope
+from crac_server.component.weather import weather
 from crac_server.converter.roof_converter import (
     RoofConverter, 
     RoofMediator,
@@ -28,7 +28,6 @@ from crac_server.config import Config
 
 
 logger = logging.getLogger(__name__)
-block_on_unspecified = Config.getRequiredBoolean("block_on_unspecified", "weather")
 
 class AbstractButtonHandler(AbstractHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
@@ -42,10 +41,10 @@ class RoofWeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
         if mediator.status is RoofStatus.ROOF_CLOSED:
             weather_converter = WeatherConverter()
-            weather_response = weather_converter.convert(WEATHER)
+            weather_response = weather_converter.convert(weather())
             logger.debug(f"In weather status {weather_response.status}")
             if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
-                block_on_unspecified and 
+                Config.getRequiredBoolean("block_on_unspecified", "weather") and 
                 weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
             ):
                 logger.info(f"In status danger or unspecified {weather_response.status}")
@@ -66,8 +65,8 @@ class RoofTelescopeHandler(AbstractButtonHandler):
 
     def __telescope_is_secure(self):
         return (
-            TELESCOPE.status <= TelescopeStatus.SECURE and
-            TELESCOPE.polling
+            telescope().status <= TelescopeStatus.SECURE and
+            telescope().polling
         )
 
 class RoofCurtainsHandler(AbstractButtonHandler):
@@ -83,8 +82,8 @@ class RoofCurtainsHandler(AbstractButtonHandler):
 
     def __curtains_are_secure(self):
         return (
-            CURTAIN_EAST.get_status() is CurtainStatus.CURTAIN_DISABLED and 
-            CURTAIN_WEST.get_status() is CurtainStatus.CURTAIN_DISABLED
+            curtain_east().get_status() is CurtainStatus.CURTAIN_DISABLED and 
+            curtain_west().get_status() is CurtainStatus.CURTAIN_DISABLED
         )
 
 class RoofHandler(AbstractButtonHandler):
