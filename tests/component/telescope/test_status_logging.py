@@ -1,6 +1,5 @@
 import logging
 import unittest
-from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus
 from crac_server.status_log import ErrorCause
@@ -12,10 +11,6 @@ class TestTelescopeStatusLogging(unittest.TestCase):
     LOGGER = "crac_server.component.telescope.telescope"
 
     def setUp(self):
-        patcher = patch("crac_server.component.telescope.indigo.telescope.get_indigo_client")
-        self.addCleanup(patcher.stop)
-        mock_get_client = patcher.start()
-        mock_get_client.return_value = MagicMock()
         self.telescope = Telescope(hostname="host", port=1)
 
     def test_lost_is_logged_once_as_unreachable(self):
@@ -59,17 +54,18 @@ class TestTelescopeSpeedLogging(unittest.TestCase):
     LOGGER = "crac_server.component.telescope.telescope"
 
     def setUp(self):
-        patcher = patch("crac_server.component.telescope.indigo.telescope.get_indigo_client")
-        self.addCleanup(patcher.stop)
-        mock_get_client = patcher.start()
-        self.mock_client = MagicMock()
-        mock_get_client.return_value = self.mock_client
         self.telescope = Telescope(hostname="host", port=1)
+        self._root = []
 
     def _stub_properties(self, props: dict):
-        def get_property(device, name, timeout=2.0):
-            return props.get(name)
-        self.mock_client.get_property.side_effect = get_property
+        """The vectors INDIGO answers an enumeration with."""
+        self._root = [
+            {"defNumberVector": {"device": self.telescope._name, "name": name, **prop}}
+            for name, prop in props.items()
+        ]
+
+    def _speed(self):
+        return self.telescope._Telescope__retrieve_speed(self._root)
 
     def _tracking_on(self):
         return {"items": [{"name": "ON", "value": True}]}
@@ -80,8 +76,8 @@ class TestTelescopeSpeedLogging(unittest.TestCase):
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Alert"},
         })
         with self.assertLogs(self.LOGGER, level="ERROR") as captured:
-            self.telescope._Telescope__retrieve_speed()
-            self.telescope._Telescope__retrieve_speed()
+            self._speed()
+            self._speed()
         self.assertEqual(len(captured.records), 1)
         message = captured.records[0].getMessage()
         self.assertIn("[Telescope speed]", message)
@@ -91,18 +87,18 @@ class TestTelescopeSpeedLogging(unittest.TestCase):
     def test_unreadable_properties_are_logged_as_unreachable(self):
         self._stub_properties({})
         with self.assertLogs(self.LOGGER, level="ERROR") as captured:
-            self.telescope._Telescope__retrieve_speed()
+            self._speed()
         self.assertIn(ErrorCause.DEVICE_UNREACHABLE, captured.records[0].getMessage())
 
     def test_recovery_is_logged_at_info(self):
         self._stub_properties({})
-        self.telescope._Telescope__retrieve_speed()
+        self._speed()
         self._stub_properties({
             "MOUNT_TRACKING": self._tracking_on(),
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok"},
         })
         with self.assertLogs(self.LOGGER, level="INFO") as captured:
-            self.telescope._Telescope__retrieve_speed()
+            self._speed()
         self.assertEqual(captured.records[0].levelno, logging.INFO)
         self.assertIn("SPEED_TRACKING", captured.records[0].getMessage())
 
@@ -112,11 +108,11 @@ class TestTelescopeSpeedLogging(unittest.TestCase):
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok"},
         })
         with self.assertNoLogs(self.LOGGER, level="INFO"):
-            self.telescope._Telescope__retrieve_speed()
+            self._speed()
 
     def test_the_speed_log_does_not_silence_the_status_log(self):
         self._stub_properties({})
-        self.telescope._Telescope__retrieve_speed()
+        self._speed()
         with self.assertLogs(self.LOGGER, level="ERROR") as captured:
             self.telescope.status = TelescopeStatus.LOST
         self.assertEqual(len(captured.records), 1)

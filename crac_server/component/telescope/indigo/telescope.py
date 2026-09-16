@@ -10,10 +10,14 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_server import config
 from crac_server.component.telescope.telescope import Telescope as TelescopeBase
-from crac_server.component.client.indigo import get_indigo_client
 from crac_server.status_log import ErrorCause
+import json
 import logging
 logger = logging.getLogger(__name__)
+
+COORDINATES_AT_REST = ("Ok", "Idle")
+READ_WINDOW = 1.0
+READ_CHUNK_TIMEOUT = 0.3
 
 
 class Telescope(TelescopeBase):
@@ -30,9 +34,8 @@ class Telescope(TelescopeBase):
         port = config.Config.getInt("port", "telescope") if port is None else port
         super().__init__(hostname=hostname, port=port)
         self._name = config.Config.getValue("name", "indigo")
-        self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
-        self._uses_raw_socket = False
+        self._uses_raw_socket = True
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.
@@ -79,7 +82,7 @@ class Telescope(TelescopeBase):
         On a real mount it lives in the mount and MOUNT_PARK_POSITION does not
         exist at all.
         """
-        return bool(self._client.get_property(self._name, "MOUNT_PARK_POSITION", timeout=0))
+        return bool(self.__property(self.__enumerate(), "MOUNT_PARK_POSITION"))
 
     def sync(self, started_at: datetime):
         """Not supported on INDIGO: the mount knows where it points.
@@ -150,8 +153,8 @@ class Telescope(TelescopeBase):
 
         self.__wait_for_slew_completion()
 
-    def __retrieve_status_park(self) -> bool:
-        prop = self._client.get_property(self._name, "MOUNT_PARK", timeout=0)
+    def __retrieve_status_park(self, root: list | None = None) -> bool:
+        prop = self.__property(root if root is not None else self.__enumerate(), "MOUNT_PARK")
         if not prop:
             return False
         for park in prop.get("items", []):
@@ -221,13 +224,13 @@ class Telescope(TelescopeBase):
 
         busy_deadline = min(deadline, time.monotonic() + 5.0)
         while time.monotonic() < busy_deadline:
-            coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
+            coords = self.__property(self.__enumerate(), "MOUNT_EQUATORIAL_COORDINATES")
             if coords and coords.get("state") == "Busy":
                 break
             time.sleep(0.1)
 
         while time.monotonic() < deadline:
-            coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
+            coords = self.__property(self.__enumerate(), "MOUNT_EQUATORIAL_COORDINATES")
             if coords and coords.get("state") != "Busy":
                 return
             time.sleep(0.3)
@@ -236,34 +239,37 @@ class Telescope(TelescopeBase):
     def retrieve(self) -> tuple:
         """Read the mount state.
 
+        One enumeration per cycle answers everything: coordinates, tracking
+        and park state are read from the same answer, so the mount is asked
+        once and the connection can be closed right after.
+
         Every coordinate here is read, never written: the site lives in the
         mount and is the reference the mount converts RA/DEC to ALT/AZ
         against, so crac takes MOUNT_HORIZONTAL_COORDINATES as it comes.
 
-        connect_device() belongs in every cycle and not only in __init__: a
-        client reconnection empties the cache, and its result reports that the
-        device state was lost, so one-shot syncs have to be repeated.
+        A device the operator has not connected from the INDIGO panel reports
+        no CONNECTION at all, and crac declares it lost instead of connecting
+        it itself.
         """
-        if not self._client.is_device_connected(self._name):
+        root = self.__enumerate()
+        if not self.__device_is_connected(root):
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
 
-        if self._client.connect_device(self._name):
-            self._park_position_synced = False
-        eq_coords = self.__retrieve_eq_coords()
-        logger.debug(f"data received from cache: {eq_coords}")
-        speed = self.__retrieve_speed()
-        logger.debug(f"data received from cache: {speed}")
-        aa_coords = self.__retrieve_aa_coords()
-        logger.debug(f"data received from cache: {aa_coords}")
-        status = self._retrieve_status(aa_coords)
-        logger.debug(f"data received from cache: {status}")
+        eq_coords = self.__retrieve_eq_coords(root)
+        logger.debug(f"data received from indigo: {eq_coords}")
+        speed = self.__retrieve_speed(root)
+        logger.debug(f"data received from indigo: {speed}")
+        aa_coords = self.__retrieve_aa_coords(root)
+        logger.debug(f"data received from indigo: {aa_coords}")
+        status = self._retrieve_status(aa_coords, root)
+        logger.debug(f"data received from indigo: {status}")
 
         return (eq_coords, aa_coords, speed, status)
 
-    def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
+    def _retrieve_status(self, aa_coords: AltazimutalCoords, root: list | None = None) -> TelescopeStatus:
         if not self._polling:
             return TelescopeStatus.DISCONNECTED
-        elif self.__retrieve_status_park():
+        elif self.__retrieve_status_park(root):
             return TelescopeStatus.PARKED
         elif self.__within_flat_alt_range(aa_coords.alt) and self.__within_flat_az_range(aa_coords.az):
             return TelescopeStatus.FLATTER
@@ -306,15 +312,16 @@ class Telescope(TelescopeBase):
                     }
                     )
 
-    def __retrieve_speed(self) -> TelescopeSpeed:
+    def __retrieve_speed(self, root: list) -> TelescopeSpeed:
         """Map the state of the mount to a TelescopeSpeed.
 
-        indigo_mount_simulator.c never uses "Idle": at rest with tracking off
-        the coordinates still read "Ok", so MOUNT_TRACKING is what tells a
-        resting mount from a tracking one.
+        The state of the coordinates says whether a slew is under way, and
+        MOUNT_TRACKING tells a resting mount from a tracking one: at rest
+        indigo_mount_simulator.c reports "Ok" and indigo_mount_lx200 "Idle",
+        and neither is a fault.
         """
-        tracking = self._client.get_property(self._name, "MOUNT_TRACKING", timeout=0)
-        coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
+        tracking = self.__property(root, "MOUNT_TRACKING")
+        coords = self.__property(root, "MOUNT_EQUATORIAL_COORDINATES")
 
         status_mount_track = None
         if tracking:
@@ -324,10 +331,10 @@ class Telescope(TelescopeBase):
 
         status_mount_speed = coords.get("state") if coords else None
 
-        if status_mount_speed == "Ok" and status_mount_track == "ON":
+        if status_mount_speed in COORDINATES_AT_REST and status_mount_track == "ON":
             self._speed_log.record(TelescopeSpeed.SPEED_TRACKING)
             return TelescopeSpeed.SPEED_TRACKING
-        if status_mount_speed == "Ok" and status_mount_track == "OFF":
+        if status_mount_speed in COORDINATES_AT_REST and status_mount_track == "OFF":
             self._speed_log.record(TelescopeSpeed.SPEED_NOT_TRACKING)
             return TelescopeSpeed.SPEED_NOT_TRACKING
         if status_mount_speed == "Busy":
@@ -341,8 +348,8 @@ class Telescope(TelescopeBase):
         )
         return TelescopeSpeed.SPEED_ERROR
 
-    def __retrieve_eq_coords(self) -> EquatorialCoords:
-        prop = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES")
+    def __retrieve_eq_coords(self, root: list) -> EquatorialCoords:
+        prop = self.__property(root, "MOUNT_EQUATORIAL_COORDINATES")
         ra, dec = None, None
         if prop:
             for coord in prop.get("items", []):
@@ -355,8 +362,8 @@ class Telescope(TelescopeBase):
             return EquatorialCoords(ra=ra, dec=dec)
         raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
-    def __retrieve_aa_coords(self) -> AltazimutalCoords:
-        prop = self._client.get_property(self._name, "MOUNT_HORIZONTAL_COORDINATES")
+    def __retrieve_aa_coords(self, root: list) -> AltazimutalCoords:
+        prop = self.__property(root, "MOUNT_HORIZONTAL_COORDINATES")
         alt, az = None, None
         if prop:
             for coord in prop.get("items", []):
@@ -370,4 +377,76 @@ class Telescope(TelescopeBase):
         raise Exception(f"ALT or AZ not present. ALT: {alt}, AZ: {az}")
 
     def __call(self, script) -> bool:
-        return self._client.send(script)
+        """Write one script on the connection of this cycle.
+
+        The polling loop opens that connection before every cycle and closes
+        it after (_uses_raw_socket), so nothing of crac stays subscribed to
+        the bus between one read and the next.
+        """
+        if getattr(self, "s", None) is None:
+            return False
+        try:
+            self.s.sendall(json.dumps(script).encode("utf-8") + b"\n")
+            return True
+        except OSError as e:
+            logger.error(f"[Telescope] Send error: {e}")
+            return False
+
+    def __enumerate(self) -> list:
+        """Ask the device for its properties and return the vectors it answers.
+
+        The trailing newline is what makes INDIGO parse the request: without
+        it the enumeration is never answered on the same connection.
+        """
+        if not self.__call({"getProperties": {"version": 512, "device": self._name}}):
+            return []
+        decoder = json.JSONDecoder()
+        deadline = time.monotonic() + READ_WINDOW
+        self.s.settimeout(READ_CHUNK_TIMEOUT)
+        buffer, vectors = "", []
+        while time.monotonic() < deadline:
+            try:
+                data = self.s.recv(65536)
+            except OSError:
+                break
+            if not data:
+                break
+            buffer += data.decode("utf-8", errors="ignore")
+            while True:
+                buffer = buffer.lstrip()
+                if not buffer:
+                    break
+                try:
+                    message, index = decoder.raw_decode(buffer)
+                except json.JSONDecodeError:
+                    break
+                buffer = buffer[index:]
+                vectors.append(message)
+        return vectors
+
+    def __device_is_connected(self, root: list) -> bool:
+        """Whether INDIGO reports the device as connected, without ever
+        connecting it: on the telescope that is the operator's move, from the
+        INDIGO panel, and never crac's."""
+        prop = self.__property(root, "CONNECTION")
+        if not prop:
+            return False
+        for item in prop.get("items", []):
+            if item.get("name") == "CONNECTED":
+                return bool(item.get("value"))
+        return False
+
+    @staticmethod
+    def __property(root: list, name: str) -> dict | None:
+        """The last vector named `name` in an answer, whatever its type.
+
+        Matching on the name and not on defNumberVector/defSwitchVector keeps
+        one lookup for every property, and an update that arrives inside the
+        same read window wins over the definition that preceded it.
+        """
+        found = None
+        for message in root:
+            for key, vector in message.items():
+                if key[:3] in ("def", "set") and vector.get("name") == name:
+                    found = vector
+        return found

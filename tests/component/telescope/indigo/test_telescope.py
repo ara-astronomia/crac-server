@@ -1,3 +1,5 @@
+import itertools
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -5,30 +7,102 @@ from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, Teles
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 
+CONNECTED = {"items": [{"name": "CONNECTED", "value": True}]}
+
+
 class TestIndigoTelescope(unittest.TestCase):
 
     def setUp(self):
-        patcher = patch("crac_server.component.telescope.indigo.telescope.get_indigo_client")
-        self.addCleanup(patcher.stop)
-        mock_get_client = patcher.start()
-        self.mock_client = MagicMock()
-        mock_get_client.return_value = self.mock_client
-        self.sent_scripts = []
-        self.mock_client.send.side_effect = lambda script: self.sent_scripts.append(script) or True
         self.telescope = Telescope(hostname="host", port=1)
+        self.sent_scripts = []
+        self._properties = {}
+        self._coordinate_states = None
+        self._answered = False
+        socket = MagicMock()
+        socket.sendall.side_effect = lambda payload: self.sent_scripts.append(json.loads(payload))
+        socket.recv.side_effect = self._answer
+        self.telescope.s = socket
+        sleep_patcher = patch("crac_server.component.telescope.indigo.telescope.time.sleep")
+        self.addCleanup(sleep_patcher.stop)
+        sleep_patcher.start()
 
-    def _stub_properties(self, props: dict):
-        def get_property(device, name, timeout=2.0):
-            return props.get(name)
-        self.mock_client.get_property.side_effect = get_property
+    def _answer(self, _size):
+        """INDIGO answers an enumeration with the def vectors of the device,
+        and the read ends on the next recv, where a real socket times out."""
+        if self._answered:
+            self._answered = False
+            raise OSError("timed out")
+        self._answered = True
+        return "".join(json.dumps(vector) for vector in self._vectors()).encode("utf-8")
+
+    def _vectors(self):
+        properties = dict(self._properties)
+        if self._coordinate_states is not None:
+            coordinates = dict(properties.get("MOUNT_EQUATORIAL_COORDINATES", {"items": []}))
+            coordinates.update(next(self._coordinate_states))
+            properties["MOUNT_EQUATORIAL_COORDINATES"] = coordinates
+        return [
+            {"defNumberVector": {
+                "device": self.telescope._name,
+                "name": name,
+                "state": prop.get("state", "Ok"),
+                "items": prop.get("items", []),
+            }}
+            for name, prop in properties.items()
+        ]
+
+    def _stub_properties(self, props: dict, connected: bool = True):
+        self._properties = dict(props)
+        if connected:
+            self._properties.setdefault("CONNECTION", CONNECTED)
+
+    def _stub_park_properties(self, extra: dict | None = None):
+        """Stub a park slew that completes at once: Busy, then Ok."""
+        self._stub_properties(dict(extra or {}))
+        self._coordinate_states = itertools.cycle([{"state": "Busy"}, {"state": "Ok"}])
 
     def _sent_property_names(self):
-        """Names of the properties sent to INDIGO, in order."""
-        return [vector["name"] for script in self.sent_scripts for vector in script.values()]
+        """Names of the properties written to the mount, in order."""
+        return [
+            vector["name"]
+            for script in self.sent_scripts
+            for key, vector in script.items()
+            if key.startswith("new")
+        ]
 
-    def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
-        self.mock_client.connect_device.assert_not_called()
-        self.assertFalse(self.telescope._uses_raw_socket)
+    def _enumerations(self):
+        return [script for script in self.sent_scripts if "getProperties" in script]
+
+    def test_init_neither_connects_the_device_nor_talks_to_indigo(self):
+        self.assertEqual(self.sent_scripts, [])
+        self.assertTrue(self.telescope._uses_raw_socket)
+
+    def test_one_enumeration_answers_the_whole_cycle(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        self.telescope.retrieve()
+        self.assertEqual(len(self.sent_scripts), 1)
+        self.assertEqual(self.sent_scripts[0]["getProperties"]["device"], self.telescope._name)
+
+    def test_every_cycle_asks_the_device_again(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        self.telescope.retrieve()
+        self.telescope.retrieve()
+        self.assertEqual(len(self._enumerations()), 2)
+
+    def test_a_mount_at_rest_on_idle_coordinates_is_not_an_error(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Idle", "items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": False}]},
+        })
+        _, _, speed, _ = self.telescope.retrieve()
+        self.assertEqual(speed, TelescopeSpeed.SPEED_NOT_TRACKING)
 
     def test_geographic_coordinates_are_never_sent_to_the_mount(self):
         self._stub_properties({
@@ -38,25 +112,16 @@ class TestIndigoTelescope(unittest.TestCase):
         self.telescope.retrieve()
         self.assertNotIn("GEOGRAPHIC_COORDINATES", self._sent_property_names())
 
-    def test_retrieve_reconnects_device_on_every_cycle(self):
-        self._stub_properties({
-            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
-            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
-        })
-        self.telescope.retrieve()
-        self.telescope.retrieve()
-        self.assertEqual(self.mock_client.connect_device.call_count, 2)
-
     def test_retrieve_refuses_when_device_not_connected_on_indigo(self):
-        self.mock_client.is_device_connected.return_value = False
+        self._stub_properties({}, connected=False)
         eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.assertIsNone(eq_coords)
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.LOST)
-        self.mock_client.connect_device.assert_not_called()
+        self.assertEqual(self._sent_property_names(), [])
 
-    def test_retrieve_reads_coordinates_and_speed_from_cache(self):
+    def test_retrieve_reads_coordinates_and_speed_from_the_answer(self):
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok", "items": [{"name": "RA", "value": 5.0}, {"name": "DEC", "value": 10.0}]},
             "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 20.0}, {"name": "AZ", "value": 30.0}]},
@@ -78,7 +143,25 @@ class TestIndigoTelescope(unittest.TestCase):
         _, _, speed, _ = self.telescope.retrieve()
         self.assertEqual(speed, TelescopeSpeed.SPEED_NOT_TRACKING)
 
-    def test_retrieve_raises_when_coordinates_not_yet_cached(self):
+    def test_a_slewing_mount_reports_slewing(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Busy", "items": [{"name": "RA", "value": 5.0}, {"name": "DEC", "value": 10.0}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 20.0}, {"name": "AZ", "value": 30.0}]},
+            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": True}]},
+        })
+        _, _, speed, _ = self.telescope.retrieve()
+        self.assertEqual(speed, TelescopeSpeed.SPEED_SLEWING)
+
+    def test_coordinates_in_alert_are_a_speed_error(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Alert", "items": [{"name": "RA", "value": 5.0}, {"name": "DEC", "value": 10.0}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 20.0}, {"name": "AZ", "value": 30.0}]},
+            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": True}]},
+        })
+        _, _, speed, _ = self.telescope.retrieve()
+        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
+
+    def test_retrieve_raises_when_coordinates_are_missing_from_the_answer(self):
         self._stub_properties({})
         with self.assertRaises(Exception):
             self.telescope.retrieve()
@@ -103,22 +186,9 @@ class TestIndigoTelescope(unittest.TestCase):
     def test_park_sends_parked_command(self):
         self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
-        sent = self.sent_scripts[-1]
-        self.assertEqual(sent["newSwitchVector"]["name"], "MOUNT_PARK")
-        items = {i["name"]: i["value"] for i in sent["newSwitchVector"]["items"]}
+        parked = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_PARK"][-1]
+        items = {i["name"]: i["value"] for i in parked["newSwitchVector"]["items"]}
         self.assertEqual(items, {"PARKED": True, "UNPARKED": False})
-
-    def _stub_park_properties(self, extra: dict | None = None):
-        """Stub a park slew that completes at once: Busy, then Ok."""
-        states = iter([{"state": "Busy"}, {"state": "Ok"}])
-        props = dict(extra or {})
-
-        def get_property(device, name, timeout=2.0):
-            if name == "MOUNT_EQUATORIAL_COORDINATES":
-                return next(states, {"state": "Ok"})
-            return props.get(name)
-
-        self.mock_client.get_property.side_effect = get_property
 
     def test_park_does_not_unpark_first(self):
         self._stub_park_properties()
@@ -182,12 +252,13 @@ class TestIndigoTelescope(unittest.TestCase):
         )
 
     def test_flat_turns_tracking_off_only_after_slew_completes(self):
-        states = iter([{"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"}])
-
-        self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: next(states)
-        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
-            self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
-        self.assertEqual(list(states), [], "every coordinate state was read")
+        self._stub_park_properties()
+        self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
+        names = self._sent_property_names()
         last_tracking = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
+        self.assertGreater(
+            len(names) - 1 - names[::-1].index("MOUNT_TRACKING"),
+            names.index("MOUNT_EQUATORIAL_COORDINATES"),
+        )
