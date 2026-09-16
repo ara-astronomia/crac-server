@@ -12,15 +12,21 @@ class TestIndigoClient(unittest.TestCase):
         patcher.start()
         self.client = IndigoClient(hostname="test-host", port=1234)
         self.client._socket = MagicMock()
+        self.sent = []
+        self.client._socket.sendall.side_effect = self.sent.append
 
-    def test_keepalive_ping_sends_get_properties(self):
-        # regressione: INDIGO chiude lato server le connessioni client
-        # silenziose per troppo tempo (misurato: timeout di lettura ~5s,
-        # log "N -> // timeout" seguito da "Detach client"/"Closed"). Un
-        # client che parla solo su azione utente va tenuto vivo attivamente.
-        self.client._send_keepalive_ping()
-        sent = self.client._socket.sendall.call_args[0][0]
-        self.assertIn(b'"getProperties"', sent)
+    def test_is_device_connected_reads_the_cache_without_asking_indigo(self):
+        self.client._handle_message({
+            "defSwitchVector": {"device": "Dev", "name": "CONNECTION",
+                                "items": [{"name": "CONNECTED", "value": True}]}
+        })
+        self.assertTrue(self.client.is_device_connected("Dev"))
+        self.assertEqual(self.sent, [])
+
+    def test_is_device_connected_asks_once_when_the_cache_is_empty(self):
+        self.assertFalse(self.client.is_device_connected("Dev", timeout=0))
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn(b'"CONNECTION"', self.sent[0])
 
     def test_connect_clears_read_timeout_after_connecting(self):
         # regressione: create_connection(timeout=5) lascia il timeout attivo

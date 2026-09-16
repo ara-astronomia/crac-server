@@ -9,12 +9,6 @@ from crac_server.status_log import ErrorCause, StatusLogger
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 1.0
-# INDIGO chiude lato server le connessioni client silenziose da troppo
-# tempo (misurato: timeout di lettura di ~5s, log "N -> // timeout" seguito
-# da "Detach client"/"Closed"). Un client che si limita ad ascoltare, senza
-# mai inviare nulla di suo finché l'utente non agisce, viene quindi chiuso
-# periodicamente: serve un keep-alive attivo, ben sotto quei 5s di margine.
-KEEPALIVE_INTERVAL = 2.0
 CONNECTION_PROPERTY = {
     "name": "CONNECTION",
     "items": [
@@ -48,20 +42,6 @@ class IndigoClient:
         self._running = True
         self._thread = threading.Thread(target=self._read_loop, daemon=True)
         self._thread.start()
-        self._keepalive_thread = threading.Thread(target=self._keepalive_loop, daemon=True)
-        self._keepalive_thread.start()
-
-    def _keepalive_loop(self):
-        while self._running:
-            time.sleep(KEEPALIVE_INTERVAL)
-            self._send_keepalive_ping()
-
-    def _send_keepalive_ping(self):
-        # getProperties senza filtro "device" è un ping innocuo e valido
-        # per INDIGO indipendentemente da quali device siano connessi -
-        # serve solo a generare traffico in uscita per non far scattare
-        # il timeout di lettura lato server.
-        self.send({"getProperties": {"version": 512}})
 
     def _connect(self):
         try:
@@ -210,12 +190,16 @@ class IndigoClient:
         return sent
 
     def is_device_connected(self, device: str, timeout: float = 3.0) -> bool:
-        """Verifica se il device risulta gia' connesso lato INDIGO, senza
-        mai forzarne la connessione (a differenza di connect_device()): usata
-        dal telescopio, dove la connessione va stabilita dall'operatore dal
-        pannello INDIGO prima che crac la usi, non innescata da crac stesso."""
-        self.send({"getProperties": {"version": 512, "device": device, "name": "CONNECTION"}})
-        prop = self.get_property(device, "CONNECTION", timeout=timeout)
+        """Tell whether INDIGO already holds the device connected, without
+        ever connecting it (unlike connect_device()): the telescope is
+        connected by the operator from the INDIGO panel, never by crac.
+
+        The request goes out only while CONNECTION is missing from the cache:
+        INDIGO pushes every later change on its own."""
+        prop = self.get_property(device, "CONNECTION", timeout=0)
+        if prop is None:
+            self.send({"getProperties": {"version": 512, "device": device, "name": "CONNECTION"}})
+            prop = self.get_property(device, "CONNECTION", timeout=timeout)
         if not prop:
             return False
         for item in prop.get("items", []):
