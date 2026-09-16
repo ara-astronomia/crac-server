@@ -15,6 +15,8 @@ from crac_server.status_log import ErrorCause
 import logging
 logger = logging.getLogger(__name__)
 
+COORDINATES_AT_REST = ("Ok", "Idle")
+
 
 class Telescope(TelescopeBase):
 
@@ -309,9 +311,10 @@ class Telescope(TelescopeBase):
     def __retrieve_speed(self) -> TelescopeSpeed:
         """Map the state of the mount to a TelescopeSpeed.
 
-        indigo_mount_simulator.c never uses "Idle": at rest with tracking off
-        the coordinates still read "Ok", so MOUNT_TRACKING is what tells a
-        resting mount from a tracking one.
+        The state of the coordinates says whether a slew is under way, and
+        MOUNT_TRACKING tells a resting mount from a tracking one: at rest
+        indigo_mount_simulator.c reports "Ok" and indigo_mount_lx200 "Idle",
+        and neither is a fault.
         """
         tracking = self._client.get_property(self._name, "MOUNT_TRACKING", timeout=0)
         coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
@@ -324,10 +327,10 @@ class Telescope(TelescopeBase):
 
         status_mount_speed = coords.get("state") if coords else None
 
-        if status_mount_speed == "Ok" and status_mount_track == "ON":
+        if status_mount_speed in COORDINATES_AT_REST and status_mount_track == "ON":
             self._speed_log.record(TelescopeSpeed.SPEED_TRACKING)
             return TelescopeSpeed.SPEED_TRACKING
-        if status_mount_speed == "Ok" and status_mount_track == "OFF":
+        if status_mount_speed in COORDINATES_AT_REST and status_mount_track == "OFF":
             self._speed_log.record(TelescopeSpeed.SPEED_NOT_TRACKING)
             return TelescopeSpeed.SPEED_NOT_TRACKING
         if status_mount_speed == "Busy":

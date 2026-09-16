@@ -31,6 +31,15 @@ class TestIndigoTelescope(unittest.TestCase):
             self.telescope.queue_park()
         self.assertIn("park queued", logs.output[0])
 
+    def test_a_mount_at_rest_on_idle_coordinates_is_not_an_error(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Idle", "items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": False}]},
+        })
+        _, _, speed, _ = self.telescope.retrieve()
+        self.assertEqual(speed, TelescopeSpeed.SPEED_NOT_TRACKING)
+
     def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
         self.mock_client.connect_device.assert_not_called()
         self.assertFalse(self.telescope._uses_raw_socket)
