@@ -146,12 +146,7 @@ class IndigoClient:
         with self._socket_lock:
             sock = self._socket
         if sock is None:
-            # Non e' un guasto: il socket lo apre il thread di lettura in modo
-            # asincrono, quindi un send() partito subito dopo la creazione del
-            # client lo trova ancora None. Il chiamante riceve False e ritenta,
-            # e una connessione davvero fallita e' gia' loggata a ERROR da
-            # _connect(). Vedi issue sulla connessione iniziale del device.
-            logger.debug("[IndigoClient] Cannot send, not connected")
+            logger.warning(f"[IndigoClient] Dropped {self._describe(script)}, not connected")
             return False
         try:
             payload = json.dumps(script).encode("utf-8") + b"\n"

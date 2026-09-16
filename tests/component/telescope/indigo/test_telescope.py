@@ -26,6 +26,11 @@ class TestIndigoTelescope(unittest.TestCase):
         """Names of the properties sent to INDIGO, in order."""
         return [vector["name"] for script in self.sent_scripts for vector in script.values()]
 
+    def test_a_queued_command_says_so(self):
+        with self.assertLogs("crac_server.component.telescope.telescope", level="INFO") as logs:
+            self.telescope.queue_park()
+        self.assertIn("park queued", logs.output[0])
+
     def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
         self.mock_client.connect_device.assert_not_called()
         self.assertFalse(self.telescope._uses_raw_socket)

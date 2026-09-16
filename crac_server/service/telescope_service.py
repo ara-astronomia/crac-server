@@ -1,4 +1,5 @@
 import logging
+from crac_protobuf.telescope_pb2 import TelescopeAction  # type: ignore
 from crac_protobuf.telescope_pb2_grpc import TelescopeServicer
 from crac_server.converter.telescope_converter import TelescopeMediator
 from crac_server.handler.telescope_handler import (
@@ -16,10 +17,17 @@ from crac_server.handler.telescope_handler import (
 
 logger = logging.getLogger(__name__)
 
+ACTIONS_THAT_ONLY_READ_THE_STATE = (
+    TelescopeAction.TELESCOPE_DEFAULT_ACTION,
+    TelescopeAction.CHECK_TELESCOPE,
+)
+
 
 class TelescopeService(TelescopeServicer):
     async def SetAction(self, request, context):
         logger.debug("TelescopeRequest TelescopeService" + str(request))
+        if request.action not in ACTIONS_THAT_ONLY_READ_THE_STATE:
+            logger.info(f"[TelescopeService] {TelescopeAction.Name(request.action)} requested")
         telescope_mediator = TelescopeMediator(request)
 
         telescope_switch_handler = TelescopeSwitchHandler()

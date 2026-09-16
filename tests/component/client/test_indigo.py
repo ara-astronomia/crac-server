@@ -96,6 +96,12 @@ class TestIndigoClient(unittest.TestCase):
         self.client._socket = None
         self.assertFalse(self.client.send({"foo": "bar"}))
 
+    def test_a_command_dropped_for_lack_of_connection_is_logged(self):
+        self.client._socket = None
+        with self.assertLogs("crac_server.component.client.indigo", level="WARNING") as logs:
+            self.client.send({"newSwitchVector": {"device": "Dev", "name": "MOUNT_PARK"}})
+        self.assertIn("newSwitchVector Dev MOUNT_PARK", logs.output[0])
+
     def test_connect_device_sends_connection_and_get_properties_once(self):
         # deve inviare entrambe: il solo CONNECTION non basta se il device
         # risultava già connesso lato INDIGO (indigo_ignore_connection_change
