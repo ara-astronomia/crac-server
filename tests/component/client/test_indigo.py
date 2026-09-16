@@ -81,6 +81,11 @@ class TestIndigoClient(unittest.TestCase):
         self.assertIn(b'"device": "Dev"', sent)
         self.assertTrue(sent.endswith(b"\n"))
 
+    def test_send_logs_every_call_to_indigo_at_info(self):
+        with self.assertLogs("crac_server.component.client.indigo", level="INFO") as logs:
+            self.client.send({"getProperties": {"version": 512, "device": "Dev", "name": "CONNECTION"}})
+        self.assertIn("getProperties Dev CONNECTION", logs.output[0])
+
     def test_send_returns_false_and_drops_socket_on_error(self):
         self.client._socket.sendall.side_effect = OSError("boom")
         result = self.client.send({"foo": "bar"})

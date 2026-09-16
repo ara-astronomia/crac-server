@@ -155,13 +155,22 @@ class IndigoClient:
             return False
         try:
             payload = json.dumps(script).encode("utf-8") + b"\n"
-            logger.debug(f"[IndigoClient] Sending {len(payload)} bytes: {payload[:200]}")
+            logger.info(f"[IndigoClient] Sending {self._describe(script)}")
             sock.sendall(payload)
             return True
         except OSError as e:
             logger.error(f"[IndigoClient] Send error: {e}")
             self._drop_socket(sock)
             return False
+
+    @staticmethod
+    def _describe(script: dict) -> str:
+        """The operation and the property it targets, e.g. "getProperties
+        Mount LX200 CONNECTION": one readable line per call, so what crac
+        asks INDIGO stays countable in the log at INFO."""
+        operation, vector = next(iter(script.items()))
+        fields = vector if isinstance(vector, dict) else {}
+        return " ".join(str(part) for part in (operation, fields.get("device"), fields.get("name")) if part)
 
     def connect_device(self, device: str) -> bool:
         """Connette il device e ne richiede le proprietà, una sola volta per
