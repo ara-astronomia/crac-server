@@ -38,6 +38,13 @@ class TestIndigoClient(unittest.TestCase):
             self.client._connect()
         mock_socket.settimeout.assert_called_once_with(None)
 
+    def test_seconds_since_last_message_is_infinite_before_anything_arrives(self):
+        self.assertEqual(self.client.seconds_since_last_message(), float("inf"))
+
+    def test_seconds_since_last_message_resets_on_any_message_from_any_device(self):
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "P", "items": []}})
+        self.assertLess(self.client.seconds_since_last_message(), 1.0)
+
     def test_handle_message_caches_def_vector(self):
         self.client._handle_message({
             "defSwitchVector": {"device": "Dev", "name": "AUX_COVER", "items": [{"name": "OPEN", "value": True}]}

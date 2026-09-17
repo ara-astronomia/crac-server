@@ -205,3 +205,37 @@ class TestIndigoTelescope(unittest.TestCase):
         last_tracking = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
+
+    def test_slew_timeout_with_unmoving_coordinates_logs_a_suspected_indigo_stall(self):
+        self.mock_client.get_property.side_effect = lambda device, name, timeout=0: {
+            "state": "Busy", "items": [{"name": "RA", "value": 1.0}, {"name": "DEC", "value": 2.0}]
+        }
+        self.mock_client.seconds_since_last_message.return_value = 0.5
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"), \
+             self.assertLogs("crac_server.component.telescope.indigo.telescope", level="WARNING") as logs:
+            self.telescope._Telescope__wait_for_slew_completion(0.05)
+        self.assertIn("likely an INDIGO-side stall", logs.output[-1])
+        self.assertIn("only this device", logs.output[-1])
+
+    def test_slew_timeout_blames_the_whole_bus_when_nothing_at_all_arrived(self):
+        self.mock_client.get_property.side_effect = lambda device, name, timeout=0: {
+            "state": "Busy", "items": [{"name": "RA", "value": 1.0}, {"name": "DEC", "value": 2.0}]
+        }
+        self.mock_client.seconds_since_last_message.return_value = 30.0
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"), \
+             self.assertLogs("crac_server.component.telescope.indigo.telescope", level="WARNING") as logs:
+            self.telescope._Telescope__wait_for_slew_completion(0.05)
+        self.assertIn("the whole bus", logs.output[-1])
+
+    def test_slew_timeout_with_moving_coordinates_keeps_the_generic_error(self):
+        ra = {"value": 1.0}
+
+        def get_property(device, name, timeout=0):
+            ra["value"] += 0.001
+            return {"state": "Busy", "items": [{"name": "RA", "value": ra["value"]}, {"name": "DEC", "value": 2.0}]}
+
+        self.mock_client.get_property.side_effect = get_property
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"), \
+             self.assertLogs("crac_server.component.telescope.indigo.telescope", level="ERROR") as logs:
+            self.telescope._Telescope__wait_for_slew_completion(0.05)
+        self.assertIn("giving up waiting", logs.output[-1])

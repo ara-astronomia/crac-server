@@ -36,6 +36,7 @@ class IndigoClient:
         # riconnessione più recente può azzerare per errore quello nuovo.
         self._socket_lock = threading.Lock()
         self._properties = {}
+        self._last_message_at = 0.0
         self._connected_devices = set()
         self._status_log = StatusLogger(logger, "IndigoClient")
         self._lock = threading.Lock()
@@ -118,6 +119,8 @@ class IndigoClient:
                 self._handle_message(message)
 
     def _handle_message(self, message: dict):
+        with self._lock:
+            self._last_message_at = time.monotonic()
         for key, vector in message.items():
             if key[:3] not in ("def", "set"):
                 continue
@@ -210,6 +213,19 @@ class IndigoClient:
             if item.get("name") == "CONNECTED":
                 return bool(item.get("value"))
         return False
+
+    def seconds_since_last_message(self) -> float:
+        """How long ago this client last heard anything from INDIGO, on any
+        device: near zero while the bus is alive, growing when something -
+        the driver stuck writing to some other slow client under the global
+        bus lock, a network issue - has stopped it from publishing at all.
+        Lets a caller tell "the whole bus went quiet" from "only my device
+        did"."""
+        with self._lock:
+            last = self._last_message_at
+        if last == 0.0:
+            return float("inf")
+        return time.monotonic() - last
 
     def get_property(self, device: str, name: str, timeout: float = 2.0) -> dict | None:
         """Legge una proprietà dalla cache, attendendo brevemente se non è

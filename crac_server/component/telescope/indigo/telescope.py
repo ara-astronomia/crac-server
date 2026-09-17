@@ -228,12 +228,38 @@ class Telescope(TelescopeBase):
                 break
             time.sleep(0.1)
 
+        baseline = self.__coords_values(coords) if coords else None
         while time.monotonic() < deadline:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
             if coords and coords.get("state") != "Busy":
                 return
             time.sleep(0.3)
-        logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
+
+        if baseline is not None and coords and self.__coords_values(coords) == baseline:
+            self.__log_suspected_indigo_stall(timeout)
+        else:
+            logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
+
+    def __log_suspected_indigo_stall(self, timeout: float):
+        """RA/DEC never moved for the whole wait: not a real hang of the
+        mount, which would still show through a state change even stuck in
+        Alert, but INDIGO's own driver thread stalling under its global bus
+        lock while writing to some other slow client (bus_mutex/json_mutex,
+        capped at 5s per client by SO_SNDTIMEO - see
+        analisi-blocco-montatura-indigo-2026-09-17.md).
+        """
+        quiet = self._client.seconds_since_last_message()
+        where = "the whole bus" if quiet > 5.0 else "only this device"
+        logger.warning(
+            f"[Telescope] Slew did not complete within {timeout}s and RA/DEC never moved - "
+            f"likely an INDIGO-side stall, not a real mount hang ({where} silent for {quiet:.0f}s). "
+            'Check `ss -tn "sport = :7624"` on the INDIGO host for a client with a growing send queue.'
+        )
+
+    @staticmethod
+    def __coords_values(coords: dict) -> tuple:
+        values = {item.get("name"): item.get("value") for item in coords.get("items", [])}
+        return (values.get("RA"), values.get("DEC"))
 
     def retrieve(self) -> tuple:
         """Read the mount state.
