@@ -13,6 +13,11 @@ class TestIndigoTelescope(unittest.TestCase):
         mock_get_client = patcher.start()
         self.mock_client = MagicMock()
         mock_get_client.return_value = self.mock_client
+        # a bare MagicMock's __gt__ would make `seconds_since_last_message()
+        # > STALE_CONNECTION_SECONDS` truthy by default, forcing every test
+        # through the reconnect branch - a fresh connection is the normal
+        # case, so it's the sane default here.
+        self.mock_client.seconds_since_last_message.return_value = 0.0
         self.sent_scripts = []
         self.mock_client.send.side_effect = lambda script: self.sent_scripts.append(script) or True
         self.telescope = Telescope(hostname="host", port=1)
@@ -69,6 +74,23 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.LOST)
         self.mock_client.connect_device.assert_not_called()
+
+    def test_retrieve_forces_a_reconnect_when_the_socket_looks_stale(self):
+        self.mock_client.seconds_since_last_message.return_value = 20.0
+        eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        self.mock_client.reconnect.assert_called_once()
+        self.assertIsNone(eq_coords)
+        self.assertIsNone(aa_coords)
+        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
+        self.assertEqual(status, TelescopeStatus.LOST)
+
+    def test_retrieve_does_not_reconnect_when_the_socket_is_fresh(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        self.telescope.retrieve()
+        self.mock_client.reconnect.assert_not_called()
 
     def test_retrieve_reads_coordinates_and_speed_from_cache(self):
         self._stub_properties({

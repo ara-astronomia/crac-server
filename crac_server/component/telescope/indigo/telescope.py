@@ -16,6 +16,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 COORDINATES_AT_REST = ("Ok", "Idle")
+# indigo_mount_lx200's position timer publishes every 0.5-1s while the
+# device is connected, unconditionally (indigo_update_property() in this
+# INDIGO version writes to every client regardless of whether the value
+# changed) - a silence well past that, on a socket the device still claims
+# to be connected on, means the connection itself is suspect, not the mount.
+STALE_CONNECTION_SECONDS = 15.0
 
 
 class Telescope(TelescopeBase):
@@ -273,6 +279,15 @@ class Telescope(TelescopeBase):
         device state was lost, so one-shot syncs have to be repeated.
         """
         if not self._client.is_device_connected(self._name):
+            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+
+        if self._client.seconds_since_last_message() > STALE_CONNECTION_SECONDS:
+            logger.warning(
+                f"[Telescope] Nothing received on the INDIGO connection for over "
+                f"{STALE_CONNECTION_SECONDS:.0f}s while the device reports connected - "
+                "the socket may be silently dead, forcing a reconnect"
+            )
+            self._client.reconnect()
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
 
         if self._client.connect_device(self._name):

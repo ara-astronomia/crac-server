@@ -38,6 +38,21 @@ class TestIndigoClient(unittest.TestCase):
             self.client._connect()
         mock_socket.settimeout.assert_called_once_with(None)
 
+    def test_reconnect_closes_the_socket_and_clears_the_cache(self):
+        self.client._handle_message({
+            "defSwitchVector": {"device": "Dev", "name": "CONNECTION",
+                                "items": [{"name": "CONNECTED", "value": True}]}
+        })
+        stale_socket = self.client._socket
+        self.client._connected_devices.add("Dev")
+
+        self.client.reconnect()
+
+        stale_socket.close.assert_called_once()
+        self.assertIsNone(self.client._socket)
+        self.assertIsNone(self.client.get_property("Dev", "CONNECTION", timeout=0))
+        self.assertEqual(self.client._connected_devices, set())
+
     def test_seconds_since_last_message_is_infinite_before_anything_arrives(self):
         self.assertEqual(self.client.seconds_since_last_message(), float("inf"))
 

@@ -214,6 +214,30 @@ class IndigoClient:
                 return bool(item.get("value"))
         return False
 
+    def reconnect(self):
+        """Force the shared connection closed and its cache cleared, so the
+        read loop reopens it from a clean slate.
+
+        Used when the socket looks silently dead: a TCP session that stays
+        nominally open but has stopped delivering anything doesn't raise
+        OSError on its own, and recv() with no timeout would just wait
+        forever - see seconds_since_last_message(). Clearing the cache
+        matters as much as closing the socket: is_device_connected() only
+        asks INDIGO again while CONNECTION is missing, so a stale cached
+        CONNECTED=true would otherwise survive the reconnect unquestioned.
+        """
+        with self._socket_lock:
+            sock = self._socket
+            self._socket = None
+        with self._lock:
+            self._properties.clear()
+            self._connected_devices.clear()
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+
     def seconds_since_last_message(self) -> float:
         """How long ago this client last heard anything from INDIGO, on any
         device: near zero while the bus is alive, growing when something -
