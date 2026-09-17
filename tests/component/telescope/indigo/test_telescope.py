@@ -75,14 +75,16 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(status, TelescopeStatus.LOST)
         self.mock_client.connect_device.assert_not_called()
 
-    def test_retrieve_forces_a_reconnect_when_the_socket_looks_stale(self):
-        self.mock_client.seconds_since_last_message.return_value = 20.0
+    def test_retrieve_disconnects_when_the_socket_looks_stale(self):
+        self.telescope._polling = True
+        self.mock_client.seconds_since_last_message.return_value = 10.0
         eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.mock_client.reconnect.assert_called_once()
         self.assertIsNone(eq_coords)
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
-        self.assertEqual(status, TelescopeStatus.LOST)
+        self.assertEqual(status, TelescopeStatus.DISCONNECTED)
+        self.assertFalse(self.telescope._polling)
 
     def test_retrieve_does_not_reconnect_when_the_socket_is_fresh(self):
         self._stub_properties({

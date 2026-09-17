@@ -19,9 +19,11 @@ COORDINATES_AT_REST = ("Ok", "Idle")
 # indigo_mount_lx200's position timer publishes every 0.5-1s while the
 # device is connected, unconditionally (indigo_update_property() in this
 # INDIGO version writes to every client regardless of whether the value
-# changed) - a silence well past that, on a socket the device still claims
-# to be connected on, means the connection itself is suspect, not the mount.
-STALE_CONNECTION_SECONDS = 15.0
+# changed). 5s of total silence is already one full stall cycle - it's also
+# indigo_server_tcp.c's own SO_SNDTIMEO, the longest a single write to a
+# client can legitimately take - so past that the connection is dead, not
+# just slow.
+STALE_CONNECTION_SECONDS = 5.0
 
 
 class Telescope(TelescopeBase):
@@ -285,10 +287,16 @@ class Telescope(TelescopeBase):
             logger.warning(
                 f"[Telescope] Nothing received on the INDIGO connection for over "
                 f"{STALE_CONNECTION_SECONDS:.0f}s while the device reports connected - "
-                "the socket may be silently dead, forcing a reconnect"
+                "treating the connection as dead: stopping polling, the operator has "
+                "to reconnect from crac-cloud"
             )
             self._client.reconnect()
-            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+            # Not polling_end(): that joins self.t, and this runs on self.t
+            # itself (retrieve() is called from __read()'s own loop) - a
+            # thread cannot join itself. Setting the flag directly lets
+            # __read()'s own loop condition end it on the next check.
+            self._polling = False
+            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
         if self._client.connect_device(self._name):
             self._park_position_synced = False
