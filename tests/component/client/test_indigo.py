@@ -1,3 +1,4 @@
+import socket
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -48,10 +49,25 @@ class TestIndigoClient(unittest.TestCase):
 
         self.client.reconnect()
 
+        # shutdown() before close(): a thread blocked in recv() with no
+        # timeout on this socket isn't guaranteed to wake up from close()
+        # alone (unspecified by POSIX, often a no-op on Linux for a fd
+        # closed from a different thread) - shutdown() reliably does.
+        stale_socket.shutdown.assert_called_once_with(socket.SHUT_RDWR)
         stale_socket.close.assert_called_once()
+        call_order = [c[0] for c in stale_socket.method_calls]
+        self.assertEqual(call_order, ["shutdown", "close"])
         self.assertIsNone(self.client._socket)
         self.assertIsNone(self.client.get_property("Dev", "CONNECTION", timeout=0))
         self.assertEqual(self.client._connected_devices, set())
+        self.assertEqual(self.client.seconds_since_last_message("Dev"), float("inf"))
+
+    def test_seconds_since_last_message_can_be_asked_about_one_device(self):
+        self.client._handle_message({
+            "defSwitchVector": {"device": "Dev", "name": "P", "items": []}
+        })
+        self.assertLess(self.client.seconds_since_last_message("Dev"), 1.0)
+        self.assertEqual(self.client.seconds_since_last_message("OtherDev"), float("inf"))
 
     def test_seconds_since_last_message_is_infinite_before_anything_arrives(self):
         self.assertEqual(self.client.seconds_since_last_message(), float("inf"))

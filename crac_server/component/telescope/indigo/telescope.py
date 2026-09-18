@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+import threading
 import time
 from astropy.time import Time
 from crac_protobuf.telescope_pb2 import (
@@ -257,7 +258,7 @@ class Telescope(TelescopeBase):
         analisi-blocco-montatura-indigo-2026-09-17.md).
         """
         quiet = self._client.seconds_since_last_message()
-        where = "the whole bus" if quiet > 5.0 else "only this device"
+        where = "the whole bus" if quiet > STALE_CONNECTION_SECONDS else "only this device"
         logger.warning(
             f"[Telescope] Slew did not complete within {timeout}s and RA/DEC never moved - "
             f"likely an INDIGO-side stall, not a real mount hang ({where} silent for {quiet:.0f}s). "
@@ -283,19 +284,21 @@ class Telescope(TelescopeBase):
         if not self._client.is_device_connected(self._name):
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
 
-        if self._client.seconds_since_last_message() > STALE_CONNECTION_SECONDS:
+        if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
             logger.warning(
-                f"[Telescope] Nothing received on the INDIGO connection for over "
+                f"[Telescope] Nothing received about {self._name} for over "
                 f"{STALE_CONNECTION_SECONDS:.0f}s while the device reports connected - "
                 "treating the connection as dead: stopping polling, the operator has "
                 "to reconnect from crac-cloud"
             )
             self._client.reconnect()
-            # Not polling_end(): that joins self.t, and this runs on self.t
-            # itself (retrieve() is called from __read()'s own loop) - a
-            # thread cannot join itself. Setting the flag directly lets
-            # __read()'s own loop condition end it on the next check.
-            self._polling = False
+            # Not a direct self._polling = False: retrieve() runs on self.t,
+            # and polling_end() calls self.t.join() - a thread cannot join
+            # itself. Running polling_end() from a throwaway thread reuses
+            # its existing stop-and-join instead of a second, unsynchronized
+            # way to flip the same flag, which a concurrent polling_start()
+            # could otherwise race into starting a second worker thread.
+            threading.Thread(target=self.polling_end, daemon=True).start()
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
         if self._client.connect_device(self._name):

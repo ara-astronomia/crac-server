@@ -5,6 +5,19 @@ from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, Teles
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 
+class ImmediateThread:
+    """Stand-in for threading.Thread that runs its target synchronously on
+    .start() - retrieve() dispatches the stale-connection shutdown to a
+    throwaway thread precisely so it isn't self.t joining itself, but a
+    test has no reason to depend on real scheduling to observe the result."""
+
+    def __init__(self, target, daemon=True):
+        self._target = target
+
+    def start(self):
+        self._target()
+
+
 class TestIndigoTelescope(unittest.TestCase):
 
     def setUp(self):
@@ -78,13 +91,23 @@ class TestIndigoTelescope(unittest.TestCase):
     def test_retrieve_disconnects_when_the_socket_looks_stale(self):
         self.telescope._polling = True
         self.mock_client.seconds_since_last_message.return_value = 10.0
-        eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
+             patch.object(self.telescope, "polling_end") as mock_polling_end:
+            eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.mock_client.reconnect.assert_called_once()
         self.assertIsNone(eq_coords)
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.DISCONNECTED)
-        self.assertFalse(self.telescope._polling)
+        mock_polling_end.assert_called_once()
+
+    def test_retrieve_checks_staleness_of_this_device_not_the_whole_bus(self):
+        self.telescope._polling = True
+        self.mock_client.seconds_since_last_message.return_value = 10.0
+        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
+             patch.object(self.telescope, "polling_end"):
+            self.telescope.retrieve()
+        self.mock_client.seconds_since_last_message.assert_called_with(self.telescope._name)
 
     def test_retrieve_does_not_reconnect_when_the_socket_is_fresh(self):
         self._stub_properties({

@@ -37,6 +37,7 @@ class IndigoClient:
         self._socket_lock = threading.Lock()
         self._properties = {}
         self._last_message_at = 0.0
+        self._last_message_at_by_device = {}
         self._connected_devices = set()
         self._status_log = StatusLogger(logger, "IndigoClient")
         self._lock = threading.Lock()
@@ -119,8 +120,9 @@ class IndigoClient:
                 self._handle_message(message)
 
     def _handle_message(self, message: dict):
+        now = time.monotonic()
         with self._lock:
-            self._last_message_at = time.monotonic()
+            self._last_message_at = now
         for key, vector in message.items():
             if key[:3] not in ("def", "set"):
                 continue
@@ -129,6 +131,7 @@ class IndigoClient:
             if not device or not name:
                 continue
             with self._lock:
+                self._last_message_at_by_device[device] = now
                 existing = self._properties.get((device, name))
                 self._properties[(device, name)] = self._merge_property(existing, vector)
 
@@ -232,21 +235,34 @@ class IndigoClient:
         with self._lock:
             self._properties.clear()
             self._connected_devices.clear()
+            self._last_message_at_by_device.clear()
         if sock is not None:
+            # shutdown() before close(): _read_loop is parked in recv() with
+            # no timeout, possibly on this very socket. Closing a fd from a
+            # different thread while another thread blocks in a syscall on
+            # it is unspecified by POSIX, and on Linux often does not wake
+            # that recv() at all - shutdown() acts on the connection itself,
+            # not just this thread's reference to the fd, and reliably does.
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             try:
                 sock.close()
             except OSError:
                 pass
 
-    def seconds_since_last_message(self) -> float:
-        """How long ago this client last heard anything from INDIGO, on any
-        device: near zero while the bus is alive, growing when something -
-        the driver stuck writing to some other slow client under the global
-        bus lock, a network issue - has stopped it from publishing at all.
-        Lets a caller tell "the whole bus went quiet" from "only my device
-        did"."""
+    def seconds_since_last_message(self, device: str | None = None) -> float:
+        """How long ago this client last heard anything from INDIGO: from
+        `device` specifically if given, from any device at all otherwise.
+        Near zero while that traffic is alive, growing when something - the
+        driver stuck writing to some other slow client under the global bus
+        lock, a network issue - has stopped it from arriving. The device-less
+        reading alone can't tell "only this device went quiet" from "the
+        whole bus did": another device chattering on the same shared client
+        keeps it fresh even while this one has gone silent."""
         with self._lock:
-            last = self._last_message_at
+            last = self._last_message_at_by_device.get(device, 0.0) if device else self._last_message_at
         if last == 0.0:
             return float("inf")
         return time.monotonic() - last
