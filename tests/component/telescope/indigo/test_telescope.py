@@ -88,9 +88,14 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(status, TelescopeStatus.LOST)
         self.mock_client.connect_device.assert_not_called()
 
-    def test_retrieve_disconnects_when_the_socket_looks_stale(self):
+    def _stub_staleness(self, device_quiet: float, bus_quiet: float):
+        def seconds_since_last_message(device=None):
+            return device_quiet if device else bus_quiet
+        self.mock_client.seconds_since_last_message.side_effect = seconds_since_last_message
+
+    def test_retrieve_reconnects_the_shared_client_when_the_whole_bus_is_dead(self):
         self.telescope._polling = True
-        self.mock_client.seconds_since_last_message.return_value = 10.0
+        self._stub_staleness(device_quiet=10.0, bus_quiet=10.0)
         with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
              patch.object(self.telescope, "polling_end") as mock_polling_end:
             eq_coords, aa_coords, speed, status = self.telescope.retrieve()
@@ -101,13 +106,31 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(status, TelescopeStatus.DISCONNECTED)
         mock_polling_end.assert_called_once()
 
-    def test_retrieve_checks_staleness_of_this_device_not_the_whole_bus(self):
+    def test_retrieve_disconnects_without_touching_the_shared_client_when_only_this_device_is_dead(self):
         self.telescope._polling = True
-        self.mock_client.seconds_since_last_message.return_value = 10.0
+        self._stub_staleness(device_quiet=10.0, bus_quiet=0.0)
         with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
-             patch.object(self.telescope, "polling_end"):
+             patch.object(self.telescope, "polling_end") as mock_polling_end:
+            eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        self.mock_client.reconnect.assert_not_called()
+        self.assertIsNone(eq_coords)
+        self.assertIsNone(aa_coords)
+        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
+        self.assertEqual(status, TelescopeStatus.DISCONNECTED)
+        mock_polling_end.assert_called_once()
+
+    def test_retrieve_checks_staleness_of_this_device_first(self):
+        self._stub_staleness(device_quiet=0.0, bus_quiet=10.0)
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
+             patch.object(self.telescope, "polling_end") as mock_polling_end:
             self.telescope.retrieve()
-        self.mock_client.seconds_since_last_message.assert_called_with(self.telescope._name)
+        self.mock_client.reconnect.assert_not_called()
+        mock_polling_end.assert_not_called()
+        self.mock_client.seconds_since_last_message.assert_any_call(self.telescope._name)
 
     def test_retrieve_does_not_reconnect_when_the_socket_is_fresh(self):
         self._stub_properties({
