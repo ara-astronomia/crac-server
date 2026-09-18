@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+import threading
 import time
 from astropy.time import Time
 from crac_protobuf.telescope_pb2 import (
@@ -14,6 +15,16 @@ from crac_server.component.client.indigo import get_indigo_client
 from crac_server.status_log import ErrorCause
 import logging
 logger = logging.getLogger(__name__)
+
+COORDINATES_AT_REST = ("Ok", "Idle")
+# indigo_mount_lx200's position timer publishes every 0.5-1s while the
+# device is connected, unconditionally (indigo_update_property() in this
+# INDIGO version writes to every client regardless of whether the value
+# changed). 5s of total silence is already one full stall cycle - it's also
+# indigo_server_tcp.c's own SO_SNDTIMEO, the longest a single write to a
+# client can legitimately take - so past that the connection is dead, not
+# just slow.
+STALE_CONNECTION_SECONDS = 5.0
 
 
 class Telescope(TelescopeBase):
@@ -226,12 +237,38 @@ class Telescope(TelescopeBase):
                 break
             time.sleep(0.1)
 
+        baseline = self.__coords_values(coords) if coords else None
         while time.monotonic() < deadline:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
             if coords and coords.get("state") != "Busy":
                 return
             time.sleep(0.3)
-        logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
+
+        if baseline is not None and coords and self.__coords_values(coords) == baseline:
+            self.__log_suspected_indigo_stall(timeout)
+        else:
+            logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
+
+    def __log_suspected_indigo_stall(self, timeout: float):
+        """RA/DEC never moved for the whole wait: not a real hang of the
+        mount, which would still show through a state change even stuck in
+        Alert, but INDIGO's own driver thread stalling under its global bus
+        lock while writing to some other slow client (bus_mutex/json_mutex,
+        capped at 5s per client by SO_SNDTIMEO - see
+        analisi-blocco-montatura-indigo-2026-09-17.md).
+        """
+        quiet = self._client.seconds_since_last_message()
+        where = "the whole bus" if quiet > STALE_CONNECTION_SECONDS else "only this device"
+        logger.warning(
+            f"[Telescope] Slew did not complete within {timeout}s and RA/DEC never moved - "
+            f"likely an INDIGO-side stall, not a real mount hang ({where} silent for {quiet:.0f}s). "
+            'Check `ss -tn "sport = :7624"` on the INDIGO host for a client with a growing send queue.'
+        )
+
+    @staticmethod
+    def __coords_values(coords: dict) -> tuple:
+        values = {item.get("name"): item.get("value") for item in coords.get("items", [])}
+        return (values.get("RA"), values.get("DEC"))
 
     def retrieve(self) -> tuple:
         """Read the mount state.
@@ -246,6 +283,39 @@ class Telescope(TelescopeBase):
         """
         if not self._client.is_device_connected(self._name):
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+
+        if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
+            bus_quiet = self._client.seconds_since_last_message()
+            if bus_quiet > STALE_CONNECTION_SECONDS:
+                # The whole shared socket looks dead, not just this device -
+                # worth reconnecting, and every other consumer of this same
+                # client (e.g. the mirror cover) is equally silent already,
+                # so clearing its cache costs them nothing they still had.
+                logger.warning(
+                    f"[Telescope] Nothing at all received on the INDIGO connection for over "
+                    f"{bus_quiet:.0f}s - treating the shared connection as dead and reconnecting it"
+                )
+                self._client.reconnect()
+            else:
+                # Only this device has gone quiet while the rest of the bus
+                # is fine - reconnecting the shared client wouldn't fix an
+                # INDIGO-side problem specific to this device, and would
+                # needlessly flush the cache of every other consumer of the
+                # same client (the mirror cover, notably).
+                logger.warning(
+                    f"[Telescope] Nothing received about {self._name} for over "
+                    f"{STALE_CONNECTION_SECONDS:.0f}s while the rest of the INDIGO bus is still "
+                    "talking - treating the connection as dead: stopping polling, the operator "
+                    "has to reconnect from crac-cloud"
+                )
+            # Not a direct self._polling = False: retrieve() runs on self.t,
+            # and polling_end() calls self.t.join() - a thread cannot join
+            # itself. Running polling_end() from a throwaway thread reuses
+            # its existing stop-and-join instead of a second, unsynchronized
+            # way to flip the same flag, which a concurrent polling_start()
+            # could otherwise race into starting a second worker thread.
+            threading.Thread(target=self.polling_end, daemon=True).start()
+            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
         if self._client.connect_device(self._name):
             self._park_position_synced = False
@@ -309,9 +379,10 @@ class Telescope(TelescopeBase):
     def __retrieve_speed(self) -> TelescopeSpeed:
         """Map the state of the mount to a TelescopeSpeed.
 
-        indigo_mount_simulator.c never uses "Idle": at rest with tracking off
-        the coordinates still read "Ok", so MOUNT_TRACKING is what tells a
-        resting mount from a tracking one.
+        The state of the coordinates says whether a slew is under way, and
+        MOUNT_TRACKING tells a resting mount from a tracking one: at rest
+        indigo_mount_simulator.c reports "Ok" and indigo_mount_lx200 "Idle",
+        and neither is a fault.
         """
         tracking = self._client.get_property(self._name, "MOUNT_TRACKING", timeout=0)
         coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
@@ -324,10 +395,10 @@ class Telescope(TelescopeBase):
 
         status_mount_speed = coords.get("state") if coords else None
 
-        if status_mount_speed == "Ok" and status_mount_track == "ON":
+        if status_mount_speed in COORDINATES_AT_REST and status_mount_track == "ON":
             self._speed_log.record(TelescopeSpeed.SPEED_TRACKING)
             return TelescopeSpeed.SPEED_TRACKING
-        if status_mount_speed == "Ok" and status_mount_track == "OFF":
+        if status_mount_speed in COORDINATES_AT_REST and status_mount_track == "OFF":
             self._speed_log.record(TelescopeSpeed.SPEED_NOT_TRACKING)
             return TelescopeSpeed.SPEED_NOT_TRACKING
         if status_mount_speed == "Busy":

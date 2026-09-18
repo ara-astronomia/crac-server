@@ -1,3 +1,4 @@
+import socket
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -12,15 +13,21 @@ class TestIndigoClient(unittest.TestCase):
         patcher.start()
         self.client = IndigoClient(hostname="test-host", port=1234)
         self.client._socket = MagicMock()
+        self.sent = []
+        self.client._socket.sendall.side_effect = self.sent.append
 
-    def test_keepalive_ping_sends_get_properties(self):
-        # regressione: INDIGO chiude lato server le connessioni client
-        # silenziose per troppo tempo (misurato: timeout di lettura ~5s,
-        # log "N -> // timeout" seguito da "Detach client"/"Closed"). Un
-        # client che parla solo su azione utente va tenuto vivo attivamente.
-        self.client._send_keepalive_ping()
-        sent = self.client._socket.sendall.call_args[0][0]
-        self.assertIn(b'"getProperties"', sent)
+    def test_is_device_connected_reads_the_cache_without_asking_indigo(self):
+        self.client._handle_message({
+            "defSwitchVector": {"device": "Dev", "name": "CONNECTION",
+                                "items": [{"name": "CONNECTED", "value": True}]}
+        })
+        self.assertTrue(self.client.is_device_connected("Dev"))
+        self.assertEqual(self.sent, [])
+
+    def test_is_device_connected_asks_once_when_the_cache_is_empty(self):
+        self.assertFalse(self.client.is_device_connected("Dev", timeout=0))
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn(b'"CONNECTION"', self.sent[0])
 
     def test_connect_clears_read_timeout_after_connecting(self):
         # regressione: create_connection(timeout=5) lascia il timeout attivo
@@ -31,6 +38,43 @@ class TestIndigoClient(unittest.TestCase):
         with patch("crac_server.component.client.indigo.socket.create_connection", return_value=mock_socket):
             self.client._connect()
         mock_socket.settimeout.assert_called_once_with(None)
+
+    def test_reconnect_closes_the_socket_and_clears_the_cache(self):
+        self.client._handle_message({
+            "defSwitchVector": {"device": "Dev", "name": "CONNECTION",
+                                "items": [{"name": "CONNECTED", "value": True}]}
+        })
+        stale_socket = self.client._socket
+        self.client._connected_devices.add("Dev")
+
+        self.client.reconnect()
+
+        # shutdown() before close(): a thread blocked in recv() with no
+        # timeout on this socket isn't guaranteed to wake up from close()
+        # alone (unspecified by POSIX, often a no-op on Linux for a fd
+        # closed from a different thread) - shutdown() reliably does.
+        stale_socket.shutdown.assert_called_once_with(socket.SHUT_RDWR)
+        stale_socket.close.assert_called_once()
+        call_order = [c[0] for c in stale_socket.method_calls]
+        self.assertEqual(call_order, ["shutdown", "close"])
+        self.assertIsNone(self.client._socket)
+        self.assertIsNone(self.client.get_property("Dev", "CONNECTION", timeout=0))
+        self.assertEqual(self.client._connected_devices, set())
+        self.assertEqual(self.client.seconds_since_last_message("Dev"), float("inf"))
+
+    def test_seconds_since_last_message_can_be_asked_about_one_device(self):
+        self.client._handle_message({
+            "defSwitchVector": {"device": "Dev", "name": "P", "items": []}
+        })
+        self.assertLess(self.client.seconds_since_last_message("Dev"), 1.0)
+        self.assertEqual(self.client.seconds_since_last_message("OtherDev"), float("inf"))
+
+    def test_seconds_since_last_message_is_infinite_before_anything_arrives(self):
+        self.assertEqual(self.client.seconds_since_last_message(), float("inf"))
+
+    def test_seconds_since_last_message_resets_on_any_message_from_any_device(self):
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "P", "items": []}})
+        self.assertLess(self.client.seconds_since_last_message(), 1.0)
 
     def test_handle_message_caches_def_vector(self):
         self.client._handle_message({
@@ -75,6 +119,11 @@ class TestIndigoClient(unittest.TestCase):
         self.assertIn(b'"device": "Dev"', sent)
         self.assertTrue(sent.endswith(b"\n"))
 
+    def test_send_logs_every_call_to_indigo_at_info(self):
+        with self.assertLogs("crac_server.component.client.indigo", level="INFO") as logs:
+            self.client.send({"getProperties": {"version": 512, "device": "Dev", "name": "CONNECTION"}})
+        self.assertIn("getProperties Dev CONNECTION", logs.output[0])
+
     def test_send_returns_false_and_drops_socket_on_error(self):
         self.client._socket.sendall.side_effect = OSError("boom")
         result = self.client.send({"foo": "bar"})
@@ -84,6 +133,12 @@ class TestIndigoClient(unittest.TestCase):
     def test_send_without_connection_returns_false(self):
         self.client._socket = None
         self.assertFalse(self.client.send({"foo": "bar"}))
+
+    def test_a_command_dropped_for_lack_of_connection_is_logged(self):
+        self.client._socket = None
+        with self.assertLogs("crac_server.component.client.indigo", level="WARNING") as logs:
+            self.client.send({"newSwitchVector": {"device": "Dev", "name": "MOUNT_PARK"}})
+        self.assertIn("newSwitchVector Dev MOUNT_PARK", logs.output[0])
 
     def test_connect_device_sends_connection_and_get_properties_once(self):
         # deve inviare entrambe: il solo CONNECTION non basta se il device

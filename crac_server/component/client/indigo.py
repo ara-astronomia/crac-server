@@ -9,12 +9,6 @@ from crac_server.status_log import ErrorCause, StatusLogger
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 1.0
-# INDIGO chiude lato server le connessioni client silenziose da troppo
-# tempo (misurato: timeout di lettura di ~5s, log "N -> // timeout" seguito
-# da "Detach client"/"Closed"). Un client che si limita ad ascoltare, senza
-# mai inviare nulla di suo finché l'utente non agisce, viene quindi chiuso
-# periodicamente: serve un keep-alive attivo, ben sotto quei 5s di margine.
-KEEPALIVE_INTERVAL = 2.0
 CONNECTION_PROPERTY = {
     "name": "CONNECTION",
     "items": [
@@ -42,26 +36,14 @@ class IndigoClient:
         # riconnessione più recente può azzerare per errore quello nuovo.
         self._socket_lock = threading.Lock()
         self._properties = {}
+        self._last_message_at = 0.0
+        self._last_message_at_by_device = {}
         self._connected_devices = set()
         self._status_log = StatusLogger(logger, "IndigoClient")
         self._lock = threading.Lock()
         self._running = True
         self._thread = threading.Thread(target=self._read_loop, daemon=True)
         self._thread.start()
-        self._keepalive_thread = threading.Thread(target=self._keepalive_loop, daemon=True)
-        self._keepalive_thread.start()
-
-    def _keepalive_loop(self):
-        while self._running:
-            time.sleep(KEEPALIVE_INTERVAL)
-            self._send_keepalive_ping()
-
-    def _send_keepalive_ping(self):
-        # getProperties senza filtro "device" è un ping innocuo e valido
-        # per INDIGO indipendentemente da quali device siano connessi -
-        # serve solo a generare traffico in uscita per non far scattare
-        # il timeout di lettura lato server.
-        self.send({"getProperties": {"version": 512}})
 
     def _connect(self):
         try:
@@ -138,6 +120,9 @@ class IndigoClient:
                 self._handle_message(message)
 
     def _handle_message(self, message: dict):
+        now = time.monotonic()
+        with self._lock:
+            self._last_message_at = now
         for key, vector in message.items():
             if key[:3] not in ("def", "set"):
                 continue
@@ -146,6 +131,7 @@ class IndigoClient:
             if not device or not name:
                 continue
             with self._lock:
+                self._last_message_at_by_device[device] = now
                 existing = self._properties.get((device, name))
                 self._properties[(device, name)] = self._merge_property(existing, vector)
 
@@ -166,22 +152,26 @@ class IndigoClient:
         with self._socket_lock:
             sock = self._socket
         if sock is None:
-            # Non e' un guasto: il socket lo apre il thread di lettura in modo
-            # asincrono, quindi un send() partito subito dopo la creazione del
-            # client lo trova ancora None. Il chiamante riceve False e ritenta,
-            # e una connessione davvero fallita e' gia' loggata a ERROR da
-            # _connect(). Vedi issue sulla connessione iniziale del device.
-            logger.debug("[IndigoClient] Cannot send, not connected")
+            logger.warning(f"[IndigoClient] Dropped {self._describe(script)}, not connected")
             return False
         try:
             payload = json.dumps(script).encode("utf-8") + b"\n"
-            logger.debug(f"[IndigoClient] Sending {len(payload)} bytes: {payload[:200]}")
+            logger.info(f"[IndigoClient] Sending {self._describe(script)}")
             sock.sendall(payload)
             return True
         except OSError as e:
             logger.error(f"[IndigoClient] Send error: {e}")
             self._drop_socket(sock)
             return False
+
+    @staticmethod
+    def _describe(script: dict) -> str:
+        """The operation and the property it targets, e.g. "getProperties
+        Mount LX200 CONNECTION": one readable line per call, so what crac
+        asks INDIGO stays countable in the log at INFO."""
+        operation, vector = next(iter(script.items()))
+        fields = vector if isinstance(vector, dict) else {}
+        return " ".join(str(part) for part in (operation, fields.get("device"), fields.get("name")) if part)
 
     def connect_device(self, device: str) -> bool:
         """Connette il device e ne richiede le proprietà, una sola volta per
@@ -210,18 +200,72 @@ class IndigoClient:
         return sent
 
     def is_device_connected(self, device: str, timeout: float = 3.0) -> bool:
-        """Verifica se il device risulta gia' connesso lato INDIGO, senza
-        mai forzarne la connessione (a differenza di connect_device()): usata
-        dal telescopio, dove la connessione va stabilita dall'operatore dal
-        pannello INDIGO prima che crac la usi, non innescata da crac stesso."""
-        self.send({"getProperties": {"version": 512, "device": device, "name": "CONNECTION"}})
-        prop = self.get_property(device, "CONNECTION", timeout=timeout)
+        """Tell whether INDIGO already holds the device connected, without
+        ever connecting it (unlike connect_device()): the telescope is
+        connected by the operator from the INDIGO panel, never by crac.
+
+        The request goes out only while CONNECTION is missing from the cache:
+        INDIGO pushes every later change on its own."""
+        prop = self.get_property(device, "CONNECTION", timeout=0)
+        if prop is None:
+            self.send({"getProperties": {"version": 512, "device": device, "name": "CONNECTION"}})
+            prop = self.get_property(device, "CONNECTION", timeout=timeout)
         if not prop:
             return False
         for item in prop.get("items", []):
             if item.get("name") == "CONNECTED":
                 return bool(item.get("value"))
         return False
+
+    def reconnect(self):
+        """Force the shared connection closed and its cache cleared, so the
+        read loop reopens it from a clean slate.
+
+        Used when the socket looks silently dead: a TCP session that stays
+        nominally open but has stopped delivering anything doesn't raise
+        OSError on its own, and recv() with no timeout would just wait
+        forever - see seconds_since_last_message(). Clearing the cache
+        matters as much as closing the socket: is_device_connected() only
+        asks INDIGO again while CONNECTION is missing, so a stale cached
+        CONNECTED=true would otherwise survive the reconnect unquestioned.
+        """
+        with self._socket_lock:
+            sock = self._socket
+            self._socket = None
+        with self._lock:
+            self._properties.clear()
+            self._connected_devices.clear()
+            self._last_message_at_by_device.clear()
+        if sock is not None:
+            # shutdown() before close(): _read_loop is parked in recv() with
+            # no timeout, possibly on this very socket. Closing a fd from a
+            # different thread while another thread blocks in a syscall on
+            # it is unspecified by POSIX, and on Linux often does not wake
+            # that recv() at all - shutdown() acts on the connection itself,
+            # not just this thread's reference to the fd, and reliably does.
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
+                sock.close()
+            except OSError:
+                pass
+
+    def seconds_since_last_message(self, device: str | None = None) -> float:
+        """How long ago this client last heard anything from INDIGO: from
+        `device` specifically if given, from any device at all otherwise.
+        Near zero while that traffic is alive, growing when something - the
+        driver stuck writing to some other slow client under the global bus
+        lock, a network issue - has stopped it from arriving. The device-less
+        reading alone can't tell "only this device went quiet" from "the
+        whole bus did": another device chattering on the same shared client
+        keeps it fresh even while this one has gone silent."""
+        with self._lock:
+            last = self._last_message_at_by_device.get(device, 0.0) if device else self._last_message_at
+        if last == 0.0:
+            return float("inf")
+        return time.monotonic() - last
 
     def get_property(self, device: str, name: str, timeout: float = 2.0) -> dict | None:
         """Legge una proprietà dalla cache, attendendo brevemente se non è

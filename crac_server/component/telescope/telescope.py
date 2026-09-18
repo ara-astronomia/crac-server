@@ -86,17 +86,26 @@ class Telescope(ABC):
     
     def polling_start(self):
         if not self._polling:
+            logger.info("[Telescope] polling started")
             self._polling = True
             self.t = Thread(target=self.__read)
             self.t.start()
     
     def polling_end(self):
         if self._polling:
+            logger.info("[Telescope] polling stopped")
             self._polling = False
             self.t.join()
     
+    def _enqueue(self, **job):
+        """Queue a command for the polling loop, and say so: a command that
+        arrives while the loop is off waits in the queue, and an unannounced
+        wait is indistinguishable from a command that was never sent."""
+        logger.info(f"[Telescope] {job['action'].__name__} queued, {len(self._jobs) + 1} waiting")
+        self._jobs.append(job)
+
     def queue_sync(self, started_at: datetime):
-        self._jobs.append({"action": self.sync, "started_at": started_at})
+        self._enqueue(action=self.sync, started_at=started_at)
     
     def queue_set_speed(self, speed: TelescopeSpeed):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
@@ -108,18 +117,18 @@ class Telescope(ABC):
         # altro job identico, facendo crescere la coda senza limite.
         if any(job.get("action") == self.set_speed and job.get("speed") == speed for job in self._jobs):
             return
-        self._jobs.append({"action": self.set_speed, "speed": speed})
+        self._enqueue(action=self.set_speed, speed=speed)
     
     def queue_park(self):
         # Park ignora sempre la luce flat: un mount nativamente parcheggiato
         # rifiuta comunque qualunque cambio di tracking (vedi indigo driver),
         # quindi tenere il tracking acceso in park non è nemmeno ottenibile.
         speed = TelescopeSpeed.SPEED_NOT_TRACKING if self.has_tracking_off_capability else TelescopeSpeed.SPEED_TRACKING
-        self._jobs.append({"action": self.park, "speed": speed})
+        self._enqueue(action=self.park, speed=speed)
 
     def queue_flat(self, keep_tracking: bool = False):
         speed = TelescopeSpeed.SPEED_TRACKING if keep_tracking or not self.has_tracking_off_capability else TelescopeSpeed.SPEED_NOT_TRACKING
-        self._jobs.append({"action": self.flat, "speed": speed})
+        self._enqueue(action=self.flat, speed=speed)
     
     @property
     def has_tracking_off_capability(self):

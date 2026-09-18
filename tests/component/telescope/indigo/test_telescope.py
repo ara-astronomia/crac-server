@@ -5,6 +5,19 @@ from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, Teles
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 
+class ImmediateThread:
+    """Stand-in for threading.Thread that runs its target synchronously on
+    .start() - retrieve() dispatches the stale-connection shutdown to a
+    throwaway thread precisely so it isn't self.t joining itself, but a
+    test has no reason to depend on real scheduling to observe the result."""
+
+    def __init__(self, target, daemon=True):
+        self._target = target
+
+    def start(self):
+        self._target()
+
+
 class TestIndigoTelescope(unittest.TestCase):
 
     def setUp(self):
@@ -13,6 +26,11 @@ class TestIndigoTelescope(unittest.TestCase):
         mock_get_client = patcher.start()
         self.mock_client = MagicMock()
         mock_get_client.return_value = self.mock_client
+        # a bare MagicMock's __gt__ would make `seconds_since_last_message()
+        # > STALE_CONNECTION_SECONDS` truthy by default, forcing every test
+        # through the reconnect branch - a fresh connection is the normal
+        # case, so it's the sane default here.
+        self.mock_client.seconds_since_last_message.return_value = 0.0
         self.sent_scripts = []
         self.mock_client.send.side_effect = lambda script: self.sent_scripts.append(script) or True
         self.telescope = Telescope(hostname="host", port=1)
@@ -25,6 +43,20 @@ class TestIndigoTelescope(unittest.TestCase):
     def _sent_property_names(self):
         """Names of the properties sent to INDIGO, in order."""
         return [vector["name"] for script in self.sent_scripts for vector in script.values()]
+
+    def test_a_queued_command_says_so(self):
+        with self.assertLogs("crac_server.component.telescope.telescope", level="INFO") as logs:
+            self.telescope.queue_park()
+        self.assertIn("park queued", logs.output[0])
+
+    def test_a_mount_at_rest_on_idle_coordinates_is_not_an_error(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Idle", "items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": False}]},
+        })
+        _, _, speed, _ = self.telescope.retrieve()
+        self.assertEqual(speed, TelescopeSpeed.SPEED_NOT_TRACKING)
 
     def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
         self.mock_client.connect_device.assert_not_called()
@@ -55,6 +87,58 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.LOST)
         self.mock_client.connect_device.assert_not_called()
+
+    def _stub_staleness(self, device_quiet: float, bus_quiet: float):
+        def seconds_since_last_message(device=None):
+            return device_quiet if device else bus_quiet
+        self.mock_client.seconds_since_last_message.side_effect = seconds_since_last_message
+
+    def test_retrieve_reconnects_the_shared_client_when_the_whole_bus_is_dead(self):
+        self.telescope._polling = True
+        self._stub_staleness(device_quiet=10.0, bus_quiet=10.0)
+        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
+             patch.object(self.telescope, "polling_end") as mock_polling_end:
+            eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        self.mock_client.reconnect.assert_called_once()
+        self.assertIsNone(eq_coords)
+        self.assertIsNone(aa_coords)
+        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
+        self.assertEqual(status, TelescopeStatus.DISCONNECTED)
+        mock_polling_end.assert_called_once()
+
+    def test_retrieve_disconnects_without_touching_the_shared_client_when_only_this_device_is_dead(self):
+        self.telescope._polling = True
+        self._stub_staleness(device_quiet=10.0, bus_quiet=0.0)
+        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
+             patch.object(self.telescope, "polling_end") as mock_polling_end:
+            eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        self.mock_client.reconnect.assert_not_called()
+        self.assertIsNone(eq_coords)
+        self.assertIsNone(aa_coords)
+        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
+        self.assertEqual(status, TelescopeStatus.DISCONNECTED)
+        mock_polling_end.assert_called_once()
+
+    def test_retrieve_checks_staleness_of_this_device_first(self):
+        self._stub_staleness(device_quiet=0.0, bus_quiet=10.0)
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
+             patch.object(self.telescope, "polling_end") as mock_polling_end:
+            self.telescope.retrieve()
+        self.mock_client.reconnect.assert_not_called()
+        mock_polling_end.assert_not_called()
+        self.mock_client.seconds_since_last_message.assert_any_call(self.telescope._name)
+
+    def test_retrieve_does_not_reconnect_when_the_socket_is_fresh(self):
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+        })
+        self.telescope.retrieve()
+        self.mock_client.reconnect.assert_not_called()
 
     def test_retrieve_reads_coordinates_and_speed_from_cache(self):
         self._stub_properties({
@@ -191,3 +275,37 @@ class TestIndigoTelescope(unittest.TestCase):
         last_tracking = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
+
+    def test_slew_timeout_with_unmoving_coordinates_logs_a_suspected_indigo_stall(self):
+        self.mock_client.get_property.side_effect = lambda device, name, timeout=0: {
+            "state": "Busy", "items": [{"name": "RA", "value": 1.0}, {"name": "DEC", "value": 2.0}]
+        }
+        self.mock_client.seconds_since_last_message.return_value = 0.5
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"), \
+             self.assertLogs("crac_server.component.telescope.indigo.telescope", level="WARNING") as logs:
+            self.telescope._Telescope__wait_for_slew_completion(0.05)
+        self.assertIn("likely an INDIGO-side stall", logs.output[-1])
+        self.assertIn("only this device", logs.output[-1])
+
+    def test_slew_timeout_blames_the_whole_bus_when_nothing_at_all_arrived(self):
+        self.mock_client.get_property.side_effect = lambda device, name, timeout=0: {
+            "state": "Busy", "items": [{"name": "RA", "value": 1.0}, {"name": "DEC", "value": 2.0}]
+        }
+        self.mock_client.seconds_since_last_message.return_value = 30.0
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"), \
+             self.assertLogs("crac_server.component.telescope.indigo.telescope", level="WARNING") as logs:
+            self.telescope._Telescope__wait_for_slew_completion(0.05)
+        self.assertIn("the whole bus", logs.output[-1])
+
+    def test_slew_timeout_with_moving_coordinates_keeps_the_generic_error(self):
+        ra = {"value": 1.0}
+
+        def get_property(device, name, timeout=0):
+            ra["value"] += 0.001
+            return {"state": "Busy", "items": [{"name": "RA", "value": ra["value"]}, {"name": "DEC", "value": 2.0}]}
+
+        self.mock_client.get_property.side_effect = get_property
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"), \
+             self.assertLogs("crac_server.component.telescope.indigo.telescope", level="ERROR") as logs:
+            self.telescope._Telescope__wait_for_slew_completion(0.05)
+        self.assertIn("giving up waiting", logs.output[-1])
