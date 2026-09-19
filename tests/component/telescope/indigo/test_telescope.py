@@ -151,9 +151,6 @@ class TestIndigoTelescope(unittest.TestCase):
         with patch("crac_server.component.telescope.indigo.telescope.datetime") as mock_datetime:
             mock_datetime.utcnow.return_value = datetime(2026, 9, 19, 15, 29, 43)
             eq_coords, aa_coords, speed, _ = self.telescope.retrieve()
-        # the mount reports RA/DEC in its own apparent equinox, not ICRS/J2000
-        # (crac-server#120): a raw (5.0, 10.0) precesses to this, it is not
-        # an identity passthrough.
         self.assertEqual((eq_coords.ra, eq_coords.dec), (4.9755, 9.96105))
         self.assertEqual((aa_coords.alt, aa_coords.az), (20.0, 30.0))
         self.assertEqual(speed, TelescopeSpeed.SPEED_TRACKING)

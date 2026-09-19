@@ -290,9 +290,11 @@ class Telescope(ABC):
         synced_eq_coords = EquatorialCoords(ra=round(eq_coords.ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
         return synced_eq_coords
 
+    def _to_astropy_time(self, obstime: datetime) -> Time:
+        return Time(obstime.strftime(format="%Y-%m-%d %H:%M:%S"))
+
     def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime, decimal_places: int = 0):
-        timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
-        observing_time = Time(timestring)
+        observing_time = self._to_astropy_time(obstime)
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
@@ -309,8 +311,7 @@ class Telescope(ABC):
         return AltazimutalCoords(alt=alt, az=az)
 
     def _altaz2radec(self, aa_coords: AltazimutalCoords, obstime: datetime, decimal_places: int = 0):
-        timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
-        time = Time(timestring)
+        time = self._to_astropy_time(obstime)
         lat = config.Config.getValue("lat", "geography")
         lon = config.Config.getValue("lon", "geography")
         height = config.Config.getInt("height", "geography")
@@ -330,8 +331,7 @@ class Telescope(ABC):
         """A mount reports RA/DEC in its own apparent equinox (the equinox
         of `obstime`), not ICRS/J2000: every consumer of EquatorialCoords
         (crac-cloud's field images included) assumes the latter."""
-        timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
-        time = Time(timestring)
+        time = self._to_astropy_time(obstime)
         apparent = SkyCoord(ra=eq_coords.ra * u.hourangle, dec=eq_coords.dec * u.deg, frame="fk5", equinox=time)  # type: ignore
         icrs = apparent.transform_to("icrs")
         ra = float(icrs.ra.to(u.hourangle) / u.hourangle)  # type: ignore
