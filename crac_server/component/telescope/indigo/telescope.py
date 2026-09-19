@@ -412,18 +412,18 @@ class Telescope(TelescopeBase):
         )
         return TelescopeSpeed.SPEED_ERROR
 
-    def __retrieve_eq_coords(self) -> EquatorialCoords:
+    def __retrieve_eq_coords(self, obstime: datetime = None) -> EquatorialCoords:
         prop = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES")
         ra, dec = None, None
         if prop:
             for coord in prop.get("items", []):
                 if coord.get("name") == "RA":
-                    ra = round(float(coord["value"]), 5)
+                    ra = float(coord["value"])
                 elif coord.get("name") == "DEC":
-                    dec = round(float(coord["value"]), 5)
+                    dec = float(coord["value"])
 
         if ra is not None and dec is not None:
-            return EquatorialCoords(ra=ra, dec=dec)
+            return self._apparent2icrs(EquatorialCoords(ra=ra, dec=dec), obstime=obstime or datetime.utcnow(), decimal_places=5)
         raise Exception(f"RA or Dec not present. RA: {ra}, DEC: {dec}")
 
     def __retrieve_aa_coords(self) -> AltazimutalCoords:

@@ -1,7 +1,8 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus
+from crac_protobuf.telescope_pb2 import AltazimutalCoords, EquatorialCoords, TelescopeSpeed, TelescopeStatus
 from crac_server.component.telescope.indigo.telescope import Telescope
 
 
@@ -147,10 +148,20 @@ class TestIndigoTelescope(unittest.TestCase):
             "MOUNT_TRACKING": {"items": [{"name": "ON", "value": True}]},
         })
         self.telescope._polling = True
-        eq_coords, aa_coords, speed, _ = self.telescope.retrieve()
-        self.assertEqual((eq_coords.ra, eq_coords.dec), (5.0, 10.0))
+        with patch("crac_server.component.telescope.indigo.telescope.datetime") as mock_datetime:
+            mock_datetime.utcnow.return_value = datetime(2026, 9, 19, 15, 29, 43)
+            eq_coords, aa_coords, speed, _ = self.telescope.retrieve()
+        # the mount reports RA/DEC in its own apparent equinox, not ICRS/J2000
+        # (crac-server#120): a raw (5.0, 10.0) precesses to this, it is not
+        # an identity passthrough.
+        self.assertEqual((eq_coords.ra, eq_coords.dec), (4.9755, 9.96105))
         self.assertEqual((aa_coords.alt, aa_coords.az), (20.0, 30.0))
         self.assertEqual(speed, TelescopeSpeed.SPEED_TRACKING)
+
+    def test_apparent_to_icrs_precesses_the_coordinates(self):
+        eq_coords = EquatorialCoords(ra=5.0, dec=10.0)
+        icrs = self.telescope._apparent2icrs(eq_coords, datetime(2026, 9, 19, 15, 29, 43, tzinfo=timezone.utc), 5)
+        self.assertEqual((icrs.ra, icrs.dec), (4.9755, 9.96105))
 
     def test_retrieve_speed_not_tracking_when_tracking_off_and_state_ok(self):
         self._stub_properties({
