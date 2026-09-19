@@ -39,6 +39,12 @@ class TestIndigoClient(unittest.TestCase):
             self.client._connect()
         mock_socket.settimeout.assert_called_once_with(None)
 
+    def test_connect_clears_the_properties_cache(self):
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "CONNECTION", "items": []}})
+        with patch("crac_server.component.client.indigo.socket.create_connection", return_value=MagicMock()):
+            self.client._connect()
+        self.assertIsNone(self.client.get_property("Dev", "CONNECTION", timeout=0))
+
     def test_reconnect_closes_the_socket_and_clears_the_cache(self):
         self.client._handle_message({
             "defSwitchVector": {"device": "Dev", "name": "CONNECTION",
@@ -108,6 +114,28 @@ class TestIndigoClient(unittest.TestCase):
     def test_handle_message_ignores_unrelated_keys(self):
         self.client._handle_message({"getProperties": {"device": "Dev", "name": "P"}})
         self.assertIsNone(self.client.get_property("Dev", "P", timeout=0))
+
+    def test_handle_message_ignores_a_plain_string_message_key(self):
+        # regressione: INDIGO manda anche {"message": "testo"}, un valore
+        # stringa e non un vector - _handle_message() non deve crashare
+        # provando a fare .get("device") su una stringa.
+        self.client._handle_message({"message": "Server started."})
+
+    def test_delete_property_with_name_removes_only_that_property(self):
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "CONNECTION", "items": []}})
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "AUX_COVER", "items": []}})
+        self.client._handle_message({"deleteProperty": {"device": "Dev", "name": "CONNECTION"}})
+        self.assertIsNone(self.client.get_property("Dev", "CONNECTION", timeout=0))
+        self.assertIsNotNone(self.client.get_property("Dev", "AUX_COVER", timeout=0))
+
+    def test_delete_property_without_name_removes_the_whole_device(self):
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "CONNECTION", "items": []}})
+        self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "AUX_COVER", "items": []}})
+        self.client._handle_message({"defSwitchVector": {"device": "OtherDev", "name": "CONNECTION", "items": []}})
+        self.client._handle_message({"deleteProperty": {"device": "Dev"}})
+        self.assertIsNone(self.client.get_property("Dev", "CONNECTION", timeout=0))
+        self.assertIsNone(self.client.get_property("Dev", "AUX_COVER", timeout=0))
+        self.assertIsNotNone(self.client.get_property("OtherDev", "CONNECTION", timeout=0))
 
     def test_get_property_missing_returns_none_after_timeout(self):
         result = self.client.get_property("Dev", "Missing", timeout=0.05)
