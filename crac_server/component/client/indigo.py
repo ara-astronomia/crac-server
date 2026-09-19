@@ -125,16 +125,16 @@ class IndigoClient:
         with self._lock:
             self._last_message_at = now
         for key, vector in message.items():
-            device = vector.get("device")
-            if not device:
-                continue
             if key == "deleteProperty":
-                self._delete_property(device, vector.get("name"), now)
+                device = vector.get("device")
+                if device:
+                    self._delete_property(device, vector.get("name"), now)
                 continue
             if key[:3] not in ("def", "set"):
                 continue
+            device = vector.get("device")
             name = vector.get("name")
-            if not name:
+            if not device or not name:
                 continue
             with self._lock:
                 self._last_message_at_by_device[device] = now

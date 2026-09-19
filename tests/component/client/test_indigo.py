@@ -115,6 +115,12 @@ class TestIndigoClient(unittest.TestCase):
         self.client._handle_message({"getProperties": {"device": "Dev", "name": "P"}})
         self.assertIsNone(self.client.get_property("Dev", "P", timeout=0))
 
+    def test_handle_message_ignores_a_plain_string_message_key(self):
+        # regressione: INDIGO manda anche {"message": "testo"}, un valore
+        # stringa e non un vector - _handle_message() non deve crashare
+        # provando a fare .get("device") su una stringa.
+        self.client._handle_message({"message": "Server started."})
+
     def test_delete_property_with_name_removes_only_that_property(self):
         self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "CONNECTION", "items": []}})
         self.client._handle_message({"defSwitchVector": {"device": "Dev", "name": "AUX_COVER", "items": []}})
