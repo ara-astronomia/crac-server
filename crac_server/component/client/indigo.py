@@ -58,6 +58,7 @@ class IndigoClient:
             self._status_log.record("CONNECTED")
             with self._lock:
                 self._connected_devices.clear()
+                self._properties.clear()
         except OSError as e:
             self._status_log.record(
                 "DISCONNECTED", ErrorCause.DEVICE_UNREACHABLE,
@@ -124,16 +125,33 @@ class IndigoClient:
         with self._lock:
             self._last_message_at = now
         for key, vector in message.items():
+            device = vector.get("device")
+            if not device:
+                continue
+            if key == "deleteProperty":
+                self._delete_property(device, vector.get("name"), now)
+                continue
             if key[:3] not in ("def", "set"):
                 continue
-            device = vector.get("device")
             name = vector.get("name")
-            if not device or not name:
+            if not name:
                 continue
             with self._lock:
                 self._last_message_at_by_device[device] = now
                 existing = self._properties.get((device, name))
                 self._properties[(device, name)] = self._merge_property(existing, vector)
+
+    def _delete_property(self, device: str, name: str | None, now: float) -> None:
+        """A property gone (`name` given) or a whole device gone (INDIGO
+        omits `name`): either way the cache must stop answering for it,
+        or a removed device keeps reading as whatever it was last seen at."""
+        with self._lock:
+            self._last_message_at_by_device[device] = now
+            if name:
+                self._properties.pop((device, name), None)
+            else:
+                for key in [k for k in self._properties if k[0] == device]:
+                    del self._properties[key]
 
     @staticmethod
     def _merge_property(existing: dict | None, update: dict) -> dict:
