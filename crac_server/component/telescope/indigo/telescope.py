@@ -20,11 +20,12 @@ COORDINATES_AT_REST = ("Ok", "Idle")
 # indigo_mount_lx200's position timer publishes every 0.5-1s while the
 # device is connected, unconditionally (indigo_update_property() in this
 # INDIGO version writes to every client regardless of whether the value
-# changed). 5s of total silence is already one full stall cycle - it's also
-# indigo_server_tcp.c's own SO_SNDTIMEO, the longest a single write to a
-# client can legitimately take - so past that the connection is dead, not
-# just slow.
-STALE_CONNECTION_SECONDS = 5.0
+# changed). indigo_server_tcp.c's own SO_SNDTIMEO caps a single slow client's
+# write at 5s, and INDIGO's global bus lock means that stall can briefly
+# freeze every other client too - a benign, self-resolving condition, not a
+# dead connection. This sits well above that known worst case, so the
+# watchdog only fires on silence INDIGO itself would not call normal.
+STALE_CONNECTION_SECONDS = 15.0
 
 
 class Telescope(TelescopeBase):
@@ -44,7 +45,6 @@ class Telescope(TelescopeBase):
         self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
         self._uses_raw_socket = False
-        self._device_resync_attempted_at = None
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.
@@ -283,7 +283,6 @@ class Telescope(TelescopeBase):
         device state was lost, so one-shot syncs have to be repeated.
         """
         if not self._client.is_device_connected(self._name):
-            self._device_resync_attempted_at = None
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
 
         if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
@@ -293,47 +292,34 @@ class Telescope(TelescopeBase):
                 # worth reconnecting, and every other consumer of this same
                 # client (e.g. the mirror cover) is equally silent already,
                 # so clearing its cache costs them nothing they still had.
+                # No need to also stop polling: the reconnect already leaves
+                # the client healthy, and the next cycle picks up from there.
                 logger.warning(
                     f"[Telescope] Nothing at all received on the INDIGO connection for over "
                     f"{bus_quiet:.0f}s - treating the shared connection as dead and reconnecting it"
                 )
                 self._client.reconnect()
-                self._device_resync_attempted_at = None
-            elif self._device_resync_attempted_at is None:
-                # Only this device has gone quiet while the rest of the bus is
-                # fine, but is_device_connected() just confirmed INDIGO still
-                # has it as CONNECTED - not a real disconnect, so one resync is
-                # worth trying before giving up on it. Reconnecting the shared
-                # client here would be pointless (an INDIGO-side problem
-                # specific to this device) and would needlessly flush the
-                # cache of every other consumer (the mirror cover, notably).
+            else:
+                # Only this device has gone quiet while the rest of the bus
+                # is fine - reconnecting the shared client wouldn't fix an
+                # INDIGO-side problem specific to this device, and would
+                # needlessly flush the cache of every other consumer of the
+                # same client (the mirror cover, notably).
                 logger.warning(
                     f"[Telescope] Nothing received about {self._name} for over "
                     f"{STALE_CONNECTION_SECONDS:.0f}s while the rest of the INDIGO bus is still "
-                    "talking, but INDIGO still reports it connected - requesting a resync "
-                    "before giving up on it"
+                    "talking - treating the connection as dead: stopping polling, the operator "
+                    "has to reconnect from crac-cloud"
                 )
-                self._device_resync_attempted_at = time.monotonic()
-                self._client.send({"getProperties": {"version": 512, "device": self._name}})
-                return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
-            elif time.monotonic() - self._device_resync_attempted_at < STALE_CONNECTION_SECONDS:
-                # Give the resync a full grace window to land before judging it.
-                return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
-            else:
-                logger.warning(
-                    f"[Telescope] {self._name} is still silent after a resync attempt - "
-                    "stopping polling, the operator has to reconnect from crac-cloud"
-                )
-            # Not a direct self._polling = False: retrieve() runs on self.t,
-            # and polling_end() calls self.t.join() - a thread cannot join
-            # itself. Running polling_end() from a throwaway thread reuses
-            # its existing stop-and-join instead of a second, unsynchronized
-            # way to flip the same flag, which a concurrent polling_start()
-            # could otherwise race into starting a second worker thread.
-            threading.Thread(target=self.polling_end, daemon=True).start()
+                # Not a direct self._polling = False: retrieve() runs on self.t,
+                # and polling_end() calls self.t.join() - a thread cannot join
+                # itself. Running polling_end() from a throwaway thread reuses
+                # its existing stop-and-join instead of a second, unsynchronized
+                # way to flip the same flag, which a concurrent polling_start()
+                # could otherwise race into starting a second worker thread.
+                threading.Thread(target=self.polling_end, daemon=True).start()
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
-        self._device_resync_attempted_at = None
         if self._client.connect_device(self._name):
             self._park_position_synced = False
         eq_coords = self.__retrieve_eq_coords()

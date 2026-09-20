@@ -93,9 +93,12 @@ class TestIndigoTelescope(unittest.TestCase):
             return device_quiet if device else bus_quiet
         self.mock_client.seconds_since_last_message.side_effect = seconds_since_last_message
 
-    def test_retrieve_reconnects_the_shared_client_when_the_whole_bus_is_dead(self):
+    def test_retrieve_reconnects_the_shared_client_without_stopping_polling(self):
+        """A reconnect() already leaves the shared client healthy - stopping
+        polling too would force a manual reconnect for a problem the code
+        just fixed on its own."""
         self.telescope._polling = True
-        self._stub_staleness(device_quiet=10.0, bus_quiet=10.0)
+        self._stub_staleness(device_quiet=20.0, bus_quiet=20.0)
         with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
              patch.object(self.telescope, "polling_end") as mock_polling_end:
             eq_coords, aa_coords, speed, status = self.telescope.retrieve()
@@ -104,58 +107,20 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.DISCONNECTED)
-        mock_polling_end.assert_called_once()
+        mock_polling_end.assert_not_called()
 
-    def test_retrieve_resyncs_the_device_before_giving_up_on_it(self):
-        """Only this device is quiet, but is_device_connected() (checked
-        earlier in retrieve()) still says CONNECTED - not a real disconnect,
-        so the first stale reading is a resync attempt, not a give-up."""
+    def test_retrieve_disconnects_without_touching_the_shared_client_when_only_this_device_is_dead(self):
         self.telescope._polling = True
-        self._stub_staleness(device_quiet=10.0, bus_quiet=0.0)
+        self._stub_staleness(device_quiet=20.0, bus_quiet=0.0)
         with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
              patch.object(self.telescope, "polling_end") as mock_polling_end:
             eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.mock_client.reconnect.assert_not_called()
-        mock_polling_end.assert_not_called()
-        resyncs = [s["getProperties"] for s in self.sent_scripts if "name" not in s.get("getProperties", {})]
-        self.assertEqual(resyncs, [{"version": 512, "device": self.telescope._name}])
         self.assertIsNone(eq_coords)
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.DISCONNECTED)
-
-    def test_retrieve_gives_up_when_the_device_stays_silent_past_the_resync_grace_window(self):
-        self.telescope._polling = True
-        self._stub_staleness(device_quiet=10.0, bus_quiet=0.0)
-        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
-             patch.object(self.telescope, "polling_end") as mock_polling_end, \
-             patch("crac_server.component.telescope.indigo.telescope.time.monotonic", side_effect=[100.0, 200.0]):
-            self.telescope.retrieve()
-            mock_polling_end.assert_not_called()
-            eq_coords, aa_coords, speed, status = self.telescope.retrieve()
-        self.mock_client.reconnect.assert_not_called()
         mock_polling_end.assert_called_once()
-        self.assertIsNone(eq_coords)
-        self.assertIsNone(aa_coords)
-        self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
-        self.assertEqual(status, TelescopeStatus.DISCONNECTED)
-
-    def test_retrieve_recovers_on_its_own_once_the_resync_brings_the_device_back(self):
-        self.telescope._polling = True
-        self._stub_staleness(device_quiet=10.0, bus_quiet=0.0)
-        self._stub_properties({
-            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok", "items": [{"name": "RA", "value": 5.0}, {"name": "DEC", "value": 10.0}]},
-            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 20.0}, {"name": "AZ", "value": 30.0}]},
-            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": True}]},
-        })
-        with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
-             patch.object(self.telescope, "polling_end") as mock_polling_end:
-            self.telescope.retrieve()
-            self._stub_staleness(device_quiet=0.0, bus_quiet=0.0)
-            eq_coords, aa_coords, speed, status = self.telescope.retrieve()
-        mock_polling_end.assert_not_called()
-        self.assertIsNotNone(eq_coords)
-        self.assertNotEqual(status, TelescopeStatus.DISCONNECTED)
 
     def test_retrieve_checks_staleness_of_this_device_first(self):
         self._stub_staleness(device_quiet=0.0, bus_quiet=10.0)
