@@ -44,6 +44,7 @@ class Telescope(TelescopeBase):
         self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
         self._uses_raw_socket = False
+        self._device_resync_attempted_at = None
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.
@@ -282,6 +283,7 @@ class Telescope(TelescopeBase):
         device state was lost, so one-shot syncs have to be repeated.
         """
         if not self._client.is_device_connected(self._name):
+            self._device_resync_attempted_at = None
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
 
         if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
@@ -296,17 +298,31 @@ class Telescope(TelescopeBase):
                     f"{bus_quiet:.0f}s - treating the shared connection as dead and reconnecting it"
                 )
                 self._client.reconnect()
-            else:
-                # Only this device has gone quiet while the rest of the bus
-                # is fine - reconnecting the shared client wouldn't fix an
-                # INDIGO-side problem specific to this device, and would
-                # needlessly flush the cache of every other consumer of the
-                # same client (the mirror cover, notably).
+                self._device_resync_attempted_at = None
+            elif self._device_resync_attempted_at is None:
+                # Only this device has gone quiet while the rest of the bus is
+                # fine, but is_device_connected() just confirmed INDIGO still
+                # has it as CONNECTED - not a real disconnect, so one resync is
+                # worth trying before giving up on it. Reconnecting the shared
+                # client here would be pointless (an INDIGO-side problem
+                # specific to this device) and would needlessly flush the
+                # cache of every other consumer (the mirror cover, notably).
                 logger.warning(
                     f"[Telescope] Nothing received about {self._name} for over "
                     f"{STALE_CONNECTION_SECONDS:.0f}s while the rest of the INDIGO bus is still "
-                    "talking - treating the connection as dead: stopping polling, the operator "
-                    "has to reconnect from crac-cloud"
+                    "talking, but INDIGO still reports it connected - requesting a resync "
+                    "before giving up on it"
+                )
+                self._device_resync_attempted_at = time.monotonic()
+                self._client.send({"getProperties": {"version": 512, "device": self._name}})
+                return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
+            elif time.monotonic() - self._device_resync_attempted_at < STALE_CONNECTION_SECONDS:
+                # Give the resync a full grace window to land before judging it.
+                return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
+            else:
+                logger.warning(
+                    f"[Telescope] {self._name} is still silent after a resync attempt - "
+                    "stopping polling, the operator has to reconnect from crac-cloud"
                 )
             # Not a direct self._polling = False: retrieve() runs on self.t,
             # and polling_end() calls self.t.join() - a thread cannot join
@@ -317,6 +333,7 @@ class Telescope(TelescopeBase):
             threading.Thread(target=self.polling_end, daemon=True).start()
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
+        self._device_resync_attempted_at = None
         if self._client.connect_device(self._name):
             self._park_position_synced = False
         eq_coords = self.__retrieve_eq_coords()
