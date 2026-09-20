@@ -20,11 +20,13 @@ COORDINATES_AT_REST = ("Ok", "Idle")
 # indigo_mount_lx200's position timer publishes every 0.5-1s while the
 # device is connected, unconditionally (indigo_update_property() in this
 # INDIGO version writes to every client regardless of whether the value
-# changed). indigo_server_tcp.c's own SO_SNDTIMEO caps a single slow client's
-# write at 5s, and INDIGO's global bus lock means that stall can briefly
-# freeze every other client too - a benign, self-resolving condition, not a
-# dead connection. This sits well above that known worst case, so the
-# watchdog only fires on silence INDIGO itself would not call normal.
+# changed). A single slow client's write is capped at 5s by
+# indigo_server_tcp.c's own SO_SNDTIMEO, and INDIGO's global bus lock means
+# that stall briefly freezes every other client too.
+INDIGO_STALL_SECONDS = 5.0
+# A stall like that is benign and self-resolving, not a dead connection, so
+# the watchdog sits well above it and only fires on silence INDIGO itself
+# would not call normal.
 STALE_CONNECTION_SECONDS = 15.0
 
 
@@ -259,7 +261,7 @@ class Telescope(TelescopeBase):
         analisi-blocco-montatura-indigo-2026-09-17.md).
         """
         quiet = self._client.seconds_since_last_message()
-        where = "the whole bus" if quiet > STALE_CONNECTION_SECONDS else "only this device"
+        where = "the whole bus" if quiet > INDIGO_STALL_SECONDS else "only this device"
         logger.warning(
             f"[Telescope] Slew did not complete within {timeout}s and RA/DEC never moved - "
             f"likely an INDIGO-side stall, not a real mount hang ({where} silent for {quiet:.0f}s). "
