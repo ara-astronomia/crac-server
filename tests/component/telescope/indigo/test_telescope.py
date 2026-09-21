@@ -93,9 +93,12 @@ class TestIndigoTelescope(unittest.TestCase):
             return device_quiet if device else bus_quiet
         self.mock_client.seconds_since_last_message.side_effect = seconds_since_last_message
 
-    def test_retrieve_reconnects_the_shared_client_when_the_whole_bus_is_dead(self):
+    def test_retrieve_reconnects_the_shared_client_without_stopping_polling(self):
+        """A reconnect() already leaves the shared client healthy - stopping
+        polling too would force a manual reconnect for a problem the code
+        just fixed on its own."""
         self.telescope._polling = True
-        self._stub_staleness(device_quiet=10.0, bus_quiet=10.0)
+        self._stub_staleness(device_quiet=20.0, bus_quiet=20.0)
         with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
              patch.object(self.telescope, "polling_end") as mock_polling_end:
             eq_coords, aa_coords, speed, status = self.telescope.retrieve()
@@ -104,11 +107,11 @@ class TestIndigoTelescope(unittest.TestCase):
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.DISCONNECTED)
-        mock_polling_end.assert_called_once()
+        mock_polling_end.assert_not_called()
 
     def test_retrieve_disconnects_without_touching_the_shared_client_when_only_this_device_is_dead(self):
         self.telescope._polling = True
-        self._stub_staleness(device_quiet=10.0, bus_quiet=0.0)
+        self._stub_staleness(device_quiet=20.0, bus_quiet=0.0)
         with patch("crac_server.component.telescope.indigo.telescope.threading.Thread", ImmediateThread), \
              patch.object(self.telescope, "polling_end") as mock_polling_end:
             eq_coords, aa_coords, speed, status = self.telescope.retrieve()

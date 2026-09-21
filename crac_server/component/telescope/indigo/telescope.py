@@ -17,14 +17,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 COORDINATES_AT_REST = ("Ok", "Idle")
-# indigo_mount_lx200's position timer publishes every 0.5-1s while the
-# device is connected, unconditionally (indigo_update_property() in this
-# INDIGO version writes to every client regardless of whether the value
-# changed). 5s of total silence is already one full stall cycle - it's also
-# indigo_server_tcp.c's own SO_SNDTIMEO, the longest a single write to a
-# client can legitimately take - so past that the connection is dead, not
-# just slow.
-STALE_CONNECTION_SECONDS = 5.0
+# A slow client blocks every other one under INDIGO's global bus lock for up
+# to its SO_SNDTIMEO (indigo_server_tcp.c): benign, worth naming in a
+# diagnostic, never worth reacting to. The watchdog sits well above it.
+INDIGO_STALL_SECONDS = 5.0
+STALE_CONNECTION_SECONDS = 15.0
 
 
 class Telescope(TelescopeBase):
@@ -258,7 +255,7 @@ class Telescope(TelescopeBase):
         analisi-blocco-montatura-indigo-2026-09-17.md).
         """
         quiet = self._client.seconds_since_last_message()
-        where = "the whole bus" if quiet > STALE_CONNECTION_SECONDS else "only this device"
+        where = "the whole bus" if quiet > INDIGO_STALL_SECONDS else "only this device"
         logger.warning(
             f"[Telescope] Slew did not complete within {timeout}s and RA/DEC never moved - "
             f"likely an INDIGO-side stall, not a real mount hang ({where} silent for {quiet:.0f}s). "
@@ -287,34 +284,28 @@ class Telescope(TelescopeBase):
         if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
             bus_quiet = self._client.seconds_since_last_message()
             if bus_quiet > STALE_CONNECTION_SECONDS:
-                # The whole shared socket looks dead, not just this device -
-                # worth reconnecting, and every other consumer of this same
-                # client (e.g. the mirror cover) is equally silent already,
-                # so clearing its cache costs them nothing they still had.
+                # The socket is dead, not just this device: every other
+                # consumer is equally silent, so wiping their cache costs
+                # nothing, and the reconnect alone leaves the client healthy.
                 logger.warning(
                     f"[Telescope] Nothing at all received on the INDIGO connection for over "
                     f"{bus_quiet:.0f}s - treating the shared connection as dead and reconnecting it"
                 )
                 self._client.reconnect()
             else:
-                # Only this device has gone quiet while the rest of the bus
-                # is fine - reconnecting the shared client wouldn't fix an
-                # INDIGO-side problem specific to this device, and would
-                # needlessly flush the cache of every other consumer of the
-                # same client (the mirror cover, notably).
+                # Only this device is quiet: reconnecting the shared client
+                # wouldn't fix a problem specific to it, and would flush the
+                # cache of every other consumer for nothing.
                 logger.warning(
                     f"[Telescope] Nothing received about {self._name} for over "
                     f"{STALE_CONNECTION_SECONDS:.0f}s while the rest of the INDIGO bus is still "
                     "talking - treating the connection as dead: stopping polling, the operator "
                     "has to reconnect from crac-cloud"
                 )
-            # Not a direct self._polling = False: retrieve() runs on self.t,
-            # and polling_end() calls self.t.join() - a thread cannot join
-            # itself. Running polling_end() from a throwaway thread reuses
-            # its existing stop-and-join instead of a second, unsynchronized
-            # way to flip the same flag, which a concurrent polling_start()
-            # could otherwise race into starting a second worker thread.
-            threading.Thread(target=self.polling_end, daemon=True).start()
+                # Not self._polling = False: polling_end() joins self.t, and
+                # retrieve() runs on it - a thread cannot join itself. The
+                # throwaway thread reuses its stop-and-join, races included.
+                threading.Thread(target=self.polling_end, daemon=True).start()
             return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
         if self._client.connect_device(self._name):
