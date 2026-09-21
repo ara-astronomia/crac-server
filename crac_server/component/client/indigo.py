@@ -142,12 +142,9 @@ class IndigoClient:
                 self._properties[(device, name)] = self._merge_property(existing, vector)
 
     def _delete_property(self, device: str, name: str | None) -> None:
-        """A property gone (`name` given) or a whole device gone (INDIGO
-        omits `name`): either way the cache must stop answering for it,
-        or a removed device keeps reading as whatever it was last seen at.
-
-        The per-device silence clock is left alone on purpose: a delete says
-        the device stopped having something to say, not that it is alive."""
+        """One property (`name` given) or the whole device (INDIGO omits it):
+        the cache must stop answering for it. The silence clock is left alone:
+        a delete means it stopped talking, not that it is alive."""
         with self._lock:
             if name:
                 self._properties.pop((device, name), None)
