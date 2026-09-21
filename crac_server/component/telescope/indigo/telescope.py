@@ -17,16 +17,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 COORDINATES_AT_REST = ("Ok", "Idle")
-# indigo_mount_lx200's position timer publishes every 0.5-1s while the
-# device is connected, unconditionally (indigo_update_property() in this
-# INDIGO version writes to every client regardless of whether the value
-# changed). A single slow client's write is capped at 5s by
-# indigo_server_tcp.c's own SO_SNDTIMEO, and INDIGO's global bus lock means
-# that stall briefly freezes every other client too.
+# indigo_mount_lx200's position timer publishes every 0.5-1s while the device
+# is connected, unconditionally (indigo_update_property() in this INDIGO
+# version writes to every client regardless of whether the value changed), so
+# silence is measurable. Two lengths of it matter, and they are not the same:
+# indigo_server_tcp.c caps a single slow client's write at 5s (SO_SNDTIMEO)
+# and INDIGO's global bus lock freezes every other client for that long -
+# benign and self-resolving, worth naming in a diagnostic but never worth
+# reacting to; the watchdog sits well above it, so it only fires on silence
+# INDIGO itself would not call normal.
 INDIGO_STALL_SECONDS = 5.0
-# A stall like that is benign and self-resolving, not a dead connection, so
-# the watchdog sits well above it and only fires on silence INDIGO itself
-# would not call normal.
 STALE_CONNECTION_SECONDS = 15.0
 
 
