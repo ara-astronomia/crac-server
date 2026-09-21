@@ -22,6 +22,10 @@ COORDINATES_AT_REST = ("Ok", "Idle")
 # diagnostic, never worth reacting to. The watchdog sits well above it.
 INDIGO_STALL_SECONDS = 5.0
 STALE_CONNECTION_SECONDS = 15.0
+# As long as the bus can stall, an unreachable device says nothing about the
+# telescope: the window covers that stall, and stays well under the nine
+# seconds a device takes to come back from a real reconnection.
+LOST_AFTER_SECONDS = INDIGO_STALL_SECONDS
 
 
 class Telescope(TelescopeBase):
@@ -41,6 +45,7 @@ class Telescope(TelescopeBase):
         self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
         self._uses_raw_socket = False
+        self._unreachable_since = None
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.
@@ -279,7 +284,11 @@ class Telescope(TelescopeBase):
         device state was lost, so one-shot syncs have to be repeated.
         """
         if not self._client.is_device_connected(self._name):
-            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+            if self.__is_unreachable_for_longer_than_a_gap_between_polls():
+                return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+            return (self.eq_coords, self.aa_coords, self.speed, self.status)
+
+        self._unreachable_since = None
 
         if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
             bus_quiet = self._client.seconds_since_last_message()
@@ -320,6 +329,14 @@ class Telescope(TelescopeBase):
         logger.debug(f"data received from cache: {status}")
 
         return (eq_coords, aa_coords, speed, status)
+
+    def __is_unreachable_for_longer_than_a_gap_between_polls(self) -> bool:
+        """Report the mount unreachable only once it has stayed so for the
+        whole window: LOST raises an alarm and disables the roof button, too
+        much for a single reading lost between two polls."""
+        if self._unreachable_since is None:
+            self._unreachable_since = time.monotonic()
+        return time.monotonic() - self._unreachable_since >= LOST_AFTER_SECONDS
 
     def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
         if not self._polling:
