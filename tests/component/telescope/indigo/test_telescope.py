@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus
-from crac_server.component.telescope.indigo.telescope import Telescope
+from crac_protobuf.telescope_pb2 import AltazimutalCoords, EquatorialCoords, TelescopeSpeed, TelescopeStatus
+from crac_server.component.telescope.indigo.telescope import LOST_AFTER_SECONDS, Telescope
 
 
 class ImmediateThread:
@@ -79,14 +79,62 @@ class TestIndigoTelescope(unittest.TestCase):
         self.telescope.retrieve()
         self.assertEqual(self.mock_client.connect_device.call_count, 2)
 
-    def test_retrieve_refuses_when_device_not_connected_on_indigo(self):
+    def _stub_clock(self):
+        """Give the test a writable monotonic clock, so the hysteresis window
+        is crossed by moving time instead of sleeping through it."""
+        now = [0.0]
+        patcher = patch("time.monotonic", lambda: now[0])
+        self.addCleanup(patcher.stop)
+        patcher.start()
+        return now
+
+    def _stub_last_known_state(self):
+        self.telescope.eq_coords = EquatorialCoords(ra=1.0, dec=2.0)
+        self.telescope.aa_coords = AltazimutalCoords(alt=3.0, az=4.0)
+        self.telescope.speed = TelescopeSpeed.SPEED_TRACKING
+        self.telescope._status = TelescopeStatus.SECURE
+
+    def test_retrieve_keeps_the_last_known_state_on_a_single_failed_read(self):
+        self._stub_clock()
+        self._stub_last_known_state()
         self.mock_client.is_device_connected.return_value = False
+        eq_coords, aa_coords, speed, status = self.telescope.retrieve()
+        self.assertEqual(eq_coords, EquatorialCoords(ra=1.0, dec=2.0))
+        self.assertEqual(aa_coords, AltazimutalCoords(alt=3.0, az=4.0))
+        self.assertEqual(speed, TelescopeSpeed.SPEED_TRACKING)
+        self.assertEqual(status, TelescopeStatus.SECURE)
+        self.mock_client.connect_device.assert_not_called()
+
+    def test_retrieve_declares_the_telescope_lost_past_the_hysteresis_window(self):
+        now = self._stub_clock()
+        self._stub_last_known_state()
+        self.mock_client.is_device_connected.return_value = False
+        self.telescope.retrieve()
+        now[0] = LOST_AFTER_SECONDS + 0.1
         eq_coords, aa_coords, speed, status = self.telescope.retrieve()
         self.assertIsNone(eq_coords)
         self.assertIsNone(aa_coords)
         self.assertEqual(speed, TelescopeSpeed.SPEED_ERROR)
         self.assertEqual(status, TelescopeStatus.LOST)
         self.mock_client.connect_device.assert_not_called()
+
+    def test_a_successful_read_restarts_the_hysteresis_window(self):
+        now = self._stub_clock()
+        self._stub_last_known_state()
+        self._stub_properties({
+            "MOUNT_EQUATORIAL_COORDINATES": {"state": "Ok", "items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
+            "MOUNT_HORIZONTAL_COORDINATES": {"items": [{"name": "ALT", "value": 1}, {"name": "AZ", "value": 2}]},
+            "MOUNT_TRACKING": {"items": [{"name": "ON", "value": True}]},
+        })
+        self.mock_client.is_device_connected.return_value = False
+        self.telescope.retrieve()
+        now[0] = 1.0
+        self.mock_client.is_device_connected.return_value = True
+        self.telescope.retrieve()
+        now[0] = 2.5
+        self.mock_client.is_device_connected.return_value = False
+        _, _, _, status = self.telescope.retrieve()
+        self.assertNotEqual(status, TelescopeStatus.LOST)
 
     def _stub_staleness(self, device_quiet: float, bus_quiet: float):
         def seconds_since_last_message(device=None):
