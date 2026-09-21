@@ -22,10 +22,10 @@ COORDINATES_AT_REST = ("Ok", "Idle")
 # diagnostic, never worth reacting to. The watchdog sits well above it.
 INDIGO_STALL_SECONDS = 5.0
 STALE_CONNECTION_SECONDS = 15.0
-# A device comes back about nine seconds after a real reconnection, so a
-# window this short still lets a genuine failure through, while a reading
-# lost between two polls no longer reaches the operator as an alarm.
-LOST_AFTER_SECONDS = 2.0
+# As long as the bus can stall, an unreachable device says nothing about the
+# telescope: the window covers that stall, and stays well under the nine
+# seconds a device takes to come back from a real reconnection.
+LOST_AFTER_SECONDS = INDIGO_STALL_SECONDS
 
 
 class Telescope(TelescopeBase):
