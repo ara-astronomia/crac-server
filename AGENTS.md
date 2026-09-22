@@ -35,7 +35,7 @@ crac_server/
   config.py                 # lettura config.ini (percorso da CRAC_CONFIG_PATH),
                             # override dei valori via env {SECTION}_{KEY}
   component/                # driver hardware/protocollo
-    telescope/               # un sotto-modulo per driver: indigo, indi, ascom_hub, theskyx, simulator
+    telescope/               # un sotto-modulo per driver: indigo, simulator
     curtains/, roof/         # controllo GPIO via gpiozero (simulator/ per mock)
     cover_mirror/            # copertura a petali via INDIGO
     indigo_client.py         # client INDIGO condiviso (connessione persistente, cache proprietà)
