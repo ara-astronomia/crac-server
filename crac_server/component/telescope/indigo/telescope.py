@@ -94,15 +94,6 @@ class Telescope(TelescopeBase):
         """
         return bool(self._client.get_property(self._name, "MOUNT_PARK_POSITION", timeout=0))
 
-    def sync(self, started_at: datetime):
-        """Not supported on INDIGO: the mount knows where it points.
-
-        Declaring the park position to the mount would overwrite what the
-        mount itself holds, and MOUNT_PARK already covers it. The method
-        stays only to satisfy the abstract contract.
-        """
-        logger.warning("[Telescope] SYNC is not supported on INDIGO, nothing was sent to the mount")
-
     def set_speed(self, speed: TelescopeSpeed):
         """Set tracking, then ask for a slew on the next coordinates.
 

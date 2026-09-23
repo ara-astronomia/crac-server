@@ -9,9 +9,8 @@ from crac_server.handler.telescope_handler import (
     TelescopeDisconnectedHandler, 
     TelescopeFlatHandler, 
     TelescopeFlatterHandler, 
-    TelescopeParkHandler, 
-    TelescopeSwitchHandler, 
-    TelescopeSyncHandler
+    TelescopeParkHandler,
+    TelescopeSwitchHandler
 )
 
 
@@ -34,7 +33,6 @@ class TelescopeService(TelescopeServicer):
         telescope_connect_handler = TelescopeConnectHandler()
         telescope_disconnected_handler = TelescopeDisconnectedHandler()
         telescope_disconnect_handler = TelescopeDisconnectHandler()
-        telescope_sync_handler = TelescopeSyncHandler()
         telescope_park_handler = TelescopeParkHandler()
         telescope_flat_handler = TelescopeFlatHandler()
         telescope_flatter_handler = TelescopeFlatterHandler()
@@ -42,7 +40,6 @@ class TelescopeService(TelescopeServicer):
         telescope_switch_handler.set_next(telescope_connect_handler) \
             .set_next(telescope_disconnected_handler) \
             .set_next(telescope_disconnect_handler) \
-            .set_next(telescope_sync_handler) \
             .set_next(telescope_park_handler) \
             .set_next(telescope_flat_handler) \
             .set_next(telescope_flatter_handler) \

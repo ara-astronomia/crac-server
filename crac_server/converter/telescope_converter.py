@@ -29,7 +29,6 @@ class TelescopeMediator:
         self._status = self.button.status
         self._speed = self.button.speed
         self._connect_is_disabled = False
-        self._sync_is_disabled = False
         self._park_is_disabled = False
         self._flat_is_disabled = False
     
@@ -67,14 +66,6 @@ class TelescopeMediator:
         self._connect_is_disabled = value
 
     @property
-    def sync_is_disabled(self) -> bool:
-        return self._sync_is_disabled
-    
-    @sync_is_disabled.setter
-    def sync_is_disabled(self, value: bool):
-        self._sync_is_disabled = value
-
-    @property
     def park_is_disabled(self) -> bool:
         return self._park_is_disabled
     
@@ -102,14 +93,6 @@ class TelescopeConverter:
             is_disabled=mediator.connect_is_disabled
         )
 
-        sync_button_gui = ButtonGui(
-            key=ButtonKey.KEY_SYNC,
-            label=ButtonLabel.LABEL_SYNC,
-            metadata=TelescopeAction.SYNC,
-            is_disabled=mediator.sync_is_disabled,
-            button_color=ButtonColor(text_color="black", background_color="white") if mediator.status < TelescopeStatus.LOST else ButtonColor(text_color="white", background_color="red") 
-        )
-
         park_button_color, flat_button_color = self.__draw_park_flat_buttons(mediator.status)
         park_button_gui = ButtonGui(
             key=ButtonKey.KEY_PARK,
@@ -134,7 +117,6 @@ class TelescopeConverter:
             speed=mediator.speed, 
             buttons_gui=[
                 connection_button_gui,
-                sync_button_gui,
                 park_button_gui,
                 flat_button_gui,
             ]

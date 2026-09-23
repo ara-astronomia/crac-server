@@ -28,7 +28,6 @@ class TelescopeSwitchHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
         if switches()["TELE_SWITCH"].get_status() is ButtonStatus.OFF:
             mediator.connect_is_disabled = True
-            mediator.sync_is_disabled = True
             mediator.park_is_disabled = True
             mediator.flat_is_disabled = True
             mediator.status = TelescopeStatus.LOST
@@ -61,14 +60,6 @@ class TelescopeDisconnectHandler(AbstractTelescopeHandler):
         if mediator.action is TelescopeAction.TELESCOPE_DISCONNECT:
             mediator.button.polling_end()
             self._next_handler = None
-        
-        return super().handle(mediator)
-
-
-class TelescopeSyncHandler(AbstractTelescopeHandler):
-    def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
-        if mediator.action is TelescopeAction.SYNC:
-            mediator.button.queue_sync(switches()["TELE_SWITCH"].turned_on_at)
         
         return super().handle(mediator)
 
