@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, EquatorialCoords, TelescopeSpeed, TelescopeStatus
@@ -360,3 +361,15 @@ class TestIndigoTelescope(unittest.TestCase):
              self.assertLogs("crac_server.component.telescope.indigo.telescope", level="ERROR") as logs:
             self.telescope._Telescope__wait_for_slew_completion(0.05)
         self.assertIn("giving up waiting", logs.output[-1])
+
+    def test_rounded_radec2altaz(self):
+        eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)
+        aa_coords = self.telescope._radec2altaz(eq_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc), 2)
+        self.assertEqual(aa_coords.az, 0.20)
+        self.assertEqual(aa_coords.alt, 0.1)
+
+    def test_rounded_altaz2radec(self):
+        aa_coords = AltazimutalCoords(az=0.20000345603265943, alt=0.09999827706661533)
+        eq_coords = self.telescope._altaz2radec(aa_coords, datetime(2020, 12, 6, 15, 29, 43, 79060, tzinfo=timezone.utc), 2)
+        self.assertEqual(eq_coords.ra, 9.36)
+        self.assertEqual(eq_coords.dec, 47.96)
