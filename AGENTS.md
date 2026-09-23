@@ -104,18 +104,14 @@ tests/                      # rispecchia la struttura di crac_server/
   per le alt/az (astropy senza pressione non modella la rifrazione, e la quota
   non sposta un oggetto stellare); conta invece per l'airmass, che crac-cloud
   calcola su `[geography] height` via `geographic_service`.
-- **`sync()` sul driver indigo non fa niente**: logga un warning ed esce. Il
-  razionale ("dichiara al mount dove punta all'accensione") è superato dal park
-  nativo, e dichiarare la posizione sarebbe un'altra scrittura che sovrascrive
-  quello che il mount sa di sé. Resta solo perché è `@abstractmethod` nella
-  classe base.
 - **Dopo il park non si tocca `MOUNT_TRACKING`**: parcheggiare spegne già
   il tracking da solo, e il comando arriverebbe a mount parcheggiato (dove
   viene rifiutato) o in pieno park.
-- **Coda comandi telescopio** (`Telescope._jobs`): va sempre deduplicata
-  (vedi `queue_set_speed`) - senza dedup, un client che pollasse più spesso
-  del ciclo interno di retrieve() farebbe crescere la coda senza limite,
-  ritardando i comandi reali (park/flat) dietro job ridondanti.
+- **Coda comandi telescopio** (`Telescope._jobs`): `_enqueue()` deduplica sul
+  job intero (stesso dizionario azione+argomenti già in coda) - senza dedup,
+  un client che pollasse più spesso del ciclo interno di retrieve() farebbe
+  crescere la coda senza limite, ritardando i comandi reali dietro job
+  ridondanti.
 - **La suite va lanciata dalla root** (`python -m unittest discover`):
   `tests/__init__.py` e' il setup globale (pin factory mock e configurazione
   dei test) e gira solo se `tests` viene importato come package. Con

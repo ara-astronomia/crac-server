@@ -1,5 +1,4 @@
 import logging
-import socket
 from abc import ABC, abstractmethod
 from astropy import units as u
 from astropy.coordinates import (
@@ -18,8 +17,9 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server import config
 from crac_server.status_log import ErrorCause, StatusLogger
 from datetime import datetime
-from threading import Thread
+from threading import Lock, Thread
 from time import sleep
+from typing import NamedTuple, Optional
 
 
 logger = logging.getLogger(__name__)
@@ -30,20 +30,22 @@ ERROR_CAUSE_BY_STATUS = {
 }
 
 
+class TelescopeReading(NamedTuple):
+    """What a polling cycle reads from the mount, named by field. Coords are
+    None when the mount is unreachable."""
+    eq_coords: Optional[EquatorialCoords]
+    aa_coords: Optional[AltazimutalCoords]
+    speed: TelescopeSpeed
+    status: TelescopeStatus
+
+
 class Telescope(ABC):
 
-    def __init__(self, hostname: str = None, port: int = None) -> None:  # type: ignore
-        self._hostname = hostname
-        self._port = port
-        # I driver che parlano con un client condiviso a connessione
-        # persistente (es. quello indigo, vedi indigo_client.py) non hanno
-        # bisogno che il ciclo di polling apra/chiuda un socket grezzo ad
-        # ogni giro.
-        self._uses_raw_socket = True
+    def __init__(self) -> None:
         self._polling = False
         self._jobs = deque()
+        self._jobs_lock = Lock()
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
-        self._connection_retry = 0
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._status_log = StatusLogger(logger, "Telescope", TelescopeStatus)
         self._speed_log = StatusLogger(logger, "Telescope speed", TelescopeSpeed)
@@ -74,7 +76,7 @@ class Telescope(ABC):
         """ Move the Telescope in the flat position """
 
     @abstractmethod
-    def retrieve(self) -> tuple:
+    def retrieve(self) -> TelescopeReading:
         """ Retrieve coordinate and speed from the Telescope """
     
     def polling_start(self):
@@ -91,22 +93,18 @@ class Telescope(ABC):
             self.t.join()
     
     def _enqueue(self, **job):
-        """Queue a command for the polling loop, and say so: a command that
-        arrives while the loop is off waits in the queue, and an unannounced
-        wait is indistinguishable from a command that was never sent."""
-        logger.info(f"[Telescope] {job['action'].__name__} queued, {len(self._jobs) + 1} waiting")
-        self._jobs.append(job)
+        """Queue a command for the polling loop, and log it.
+        Deduplicated on the full job under a lock: queue_park() can run
+        from another thread than the one handling gRPC requests."""
+        with self._jobs_lock:
+            if job in self._jobs:
+                return
+            logger.info(f"[Telescope] {job['action'].__name__} queued, {len(self._jobs) + 1} waiting")
+            self._jobs.append(job)
 
     def queue_set_speed(self, speed: TelescopeSpeed):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
             speed = TelescopeSpeed.SPEED_TRACKING
-        # crac-cloud fa polling con SetAction(CHECK_TELESCOPE) più spesso del
-        # ciclo interno di polling del telescopio: senza deduplica, ogni
-        # richiesta che vede ancora lo speed "vecchio" (non ancora
-        # aggiornato dal job precedente, non ancora eseguito) accoda un
-        # altro job identico, facendo crescere la coda senza limite.
-        if any(job.get("action") == self.set_speed and job.get("speed") == speed for job in self._jobs):
-            return
         self._enqueue(action=self.set_speed, speed=speed)
     
     def queue_park(self):
@@ -140,42 +138,11 @@ class Telescope(ABC):
             TelescopeStatus.WEST
         )
 
-    def __open_connection(self) -> bool:
-        """ Connect the server to the Telescope """
-
-        if not self._hostname or not self._port:
-            return True 
-        try:
-            #self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.s = socket.create_connection((self._hostname, self._port), timeout=2)
-            return True
-        except (ConnectionRefusedError, socket.error, socket.herror, TimeoutError) as e: 
-            logger.error(f"Connection error: {e}", exc_info=1)
-            return False
-        except:
-            logger.error("Generic connection error", exc_info=1)
-            return False
-
-    def __disconnect(self):
-        """ Disconnect the server from the Telescope"""
-        if not self._hostname or not self._port:
-            return
-
-        if self.status is not TelescopeStatus.LOST:  # type: ignore
-            self.s.close()
-
     def __read(self):
-        """ 
-            Polling the Telescope for coordinate and speed
-            If there are some actions to do like move it or sync it
-            then they will be dequeued and worked here
-        """
+        """ Polling the Telescope for coordinate and speed.
+            Queued actions like move it are dequeued and worked here. """
 
         while self._polling:
-            if self._uses_raw_socket and not self.__open_connection():
-                self.status = TelescopeStatus.LOST
-                continue
-
             try:
                 if len(self._jobs) > 0:
                     logger.debug(f"there are {len(self._jobs)} jobs: {self._jobs}")
@@ -190,13 +157,9 @@ class Telescope(ABC):
                 self.status = TelescopeStatus.ERROR
                 continue
             finally:
-                if self._uses_raw_socket:
-                    self.__disconnect()
                 sleep(config.Config.getFloat("polling_interval", "telescope"))
         else:
             self._reset()
-            if self._uses_raw_socket:
-                self.__disconnect()
 
     def _reset(self):
         self._status_log.forget()
