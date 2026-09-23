@@ -93,7 +93,7 @@ class Telescope(ABC):
             self.t.join()
     
     def _enqueue(self, **job):
-        """Queue a command for the polling loop, and say so.
+        """Queue a command for the polling loop, and log it.
         Deduplicated on the full job under a lock: queue_park() can run
         from another thread than the one handling gRPC requests."""
         with self._jobs_lock:
