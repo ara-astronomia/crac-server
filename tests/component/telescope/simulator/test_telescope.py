@@ -10,25 +10,15 @@ INI_PATH = os.path.join(os.path.dirname(simulator_module.__file__), "telescope.i
 
 
 class TestSimulatorTelescope(unittest.TestCase):
-    """telescope.ini is the driver's own state file, not a mock - tests read
-    it back and restore its original content instead of stubbing I/O."""
+    """telescope.ini is the driver's own scratch state, gitignored and
+    rewritten whole on every command - tests just clean it up afterward."""
 
     def setUp(self):
-        # None means the driver hadn't written it yet - a fresh checkout
-        # doesn't ship this gitignored state file.
-        self._original_ini = None
-        if os.path.exists(INI_PATH):
-            with open(INI_PATH) as f:
-                self._original_ini = f.read()
         self.telescope = Telescope()
 
     def tearDown(self):
-        if self._original_ini is None:
-            if os.path.exists(INI_PATH):
-                os.remove(INI_PATH)
-        else:
-            with open(INI_PATH, "w") as f:
-                f.write(self._original_ini)
+        if os.path.exists(INI_PATH):
+            os.remove(INI_PATH)
 
     def _read_coords(self):
         config = ConfigParser()
