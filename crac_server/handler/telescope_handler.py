@@ -82,9 +82,9 @@ class TelescopeFlatHandler(AbstractTelescopeHandler):
 
 class TelescopeFlatterHandler(AbstractTelescopeHandler):
     def handle(self, mediator: TelescopeMediator) -> TelescopeResponse:
-        # crac-cloud fa polling dello stato con SetAction(CHECK_TELESCOPE):
-        # senza il controllo su mediator.speed, questo handler riaccoderebbe
-        # set_speed(TRACKING) a ogni giro finché la luce flat resta accesa.
+        # crac-cloud polls the status with SetAction(CHECK_TELESCOPE): without
+        # the mediator.speed check, this handler would requeue
+        # set_speed(TRACKING) on every poll while the flat light stays on.
         if (
                 mediator.status is TelescopeStatus.FLATTER and
                 mediator.speed is not TelescopeSpeed.SPEED_TRACKING and
