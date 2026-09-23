@@ -173,14 +173,9 @@ class Telescope(TelescopeBase):
         return False
 
     def __unpark(self):
-        """Release the mount before a slew.
-
-        A parked mount refuses every movement command
-        (indigo_mount_simulator.c: MOUNT_PARK_PARKED_ITEM->sw.value puts
-        MOUNT_EQUATORIAL_COORDINATES in ALERT, "Mount is parked"), so it is
-        unparked explicitly, as the other drivers do too, see
-        ascom_hub._unpark_and_track.
-        """
+        """Release the mount before a slew: a parked mount refuses every
+        movement command (indigo_mount_simulator.c puts
+        MOUNT_EQUATORIAL_COORDINATES in ALERT, "Mount is parked")."""
         self.__call(
                         {"newSwitchVector":
                             {
