@@ -18,27 +18,6 @@ class Telescope(TelescopeBase):
     def __init__(self):
         super().__init__()
     
-    def sync(self, started_at: datetime):
-        aa_coords = AltazimutalCoords(
-            alt=Config.getFloat("park_alt", "telescope"),
-            az=Config.getFloat("park_az", "telescope")
-        )
-        eq_coords = self._calculate_telescope_position(
-            aa_coords=aa_coords, 
-            started_at=started_at, 
-            decimal_places=2,
-            speed=self.speed
-        )
-        synced_aa_coords = self._radec2altaz(eq_coords=eq_coords, obstime=datetime.utcnow())
-        telescope_config = ConfigParser()
-        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
-        telescope_config.read(telescope_path)
-        tr = telescope_config.get("coords", "tr", fallback=0)
-        sl = telescope_config.get("coords", "sl", fallback=1)
-        telescope_config["coords"] = {'alt': str(synced_aa_coords.alt), 'az': str(synced_aa_coords.az), 'tr': tr, 'sl': sl, 'error': 0}
-        with open(telescope_path, 'w') as telescope_file:
-            telescope_config.write(telescope_file)
-
     def set_speed(self, speed: TelescopeSpeed):
         if speed == TelescopeSpeed.SPEED_TRACKING:
             sl = 1

@@ -62,13 +62,6 @@ class Telescope(ABC):
         self._status = value
 
     @abstractmethod
-    def sync(self, started_at: datetime):
-        """ 
-            Register the telescope in park position
-            Calculate the corrisponding equatorial coordinate
-        """
-
-    @abstractmethod
     def set_speed(self, speed: TelescopeSpeed):
         """ Set the speed of the Telescope """
 
@@ -104,9 +97,6 @@ class Telescope(ABC):
         logger.info(f"[Telescope] {job['action'].__name__} queued, {len(self._jobs) + 1} waiting")
         self._jobs.append(job)
 
-    def queue_sync(self, started_at: datetime):
-        self._enqueue(action=self.sync, started_at=started_at)
-    
     def queue_set_speed(self, speed: TelescopeSpeed):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
             speed = TelescopeSpeed.SPEED_TRACKING
@@ -259,37 +249,6 @@ class Telescope(ABC):
     def __within_range(self, coord: float, check: float):
         return coord - 2 <= check <= coord + 2
     
-    def _calculate_eq_coords_of_park_position(self, started_at: datetime) -> EquatorialCoords:
-        aa_coords = AltazimutalCoords(
-            alt=config.Config.getFloat("park_alt", "telescope"), 
-            az=config.Config.getFloat("park_az", "telescope")
-        )
-        logger.debug(f"This is the aa coordinate for park position: {aa_coords}")
-        return self._calculate_telescope_position(
-            aa_coords=aa_coords, 
-            started_at=started_at, 
-            decimal_places=2,
-            speed=self.speed
-        )
-
-    def _calculate_telescope_position(self, aa_coords: AltazimutalCoords, started_at: datetime, decimal_places: int, speed: TelescopeSpeed = TelescopeSpeed.SPEED_TRACKING) -> EquatorialCoords:
-        started_at = datetime.utcnow() if started_at is None else started_at
-        eq_coords = self._altaz2radec(
-            aa_coords=aa_coords, 
-            obstime=started_at
-        )
-        if speed is TelescopeSpeed.SPEED_NOT_TRACKING:  # type: ignore
-            timestamp_started_at = datetime.timestamp(started_at)
-            timestamp_now = datetime.timestamp(datetime.utcnow())
-            delta_timestamp = timestamp_now - timestamp_started_at
-            ra = (delta_timestamp / 3600) + eq_coords.ra
-            synced_eq_coords = EquatorialCoords(ra=round(ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
-            logger.debug(f"equatorial coordinate for synced position when telescope is not tracking {synced_eq_coords}")
-            return synced_eq_coords
-        logger.debug(f"equatorial coordinate for synced position when telescope is tracking  {eq_coords}")
-        synced_eq_coords = EquatorialCoords(ra=round(eq_coords.ra, decimal_places), dec=round(eq_coords.dec, decimal_places))
-        return synced_eq_coords
-
     def _radec2altaz(self, eq_coords: EquatorialCoords, obstime: datetime, decimal_places: int = 0):
         timestring = obstime.strftime(format="%Y-%m-%d %H:%M:%S")
         observing_time = Time(timestring)
