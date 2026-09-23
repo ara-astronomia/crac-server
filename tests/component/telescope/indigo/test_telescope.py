@@ -1,3 +1,4 @@
+import threading
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -53,6 +54,19 @@ class TestIndigoTelescope(unittest.TestCase):
     def test_queue_dedupes_an_identical_pending_job(self):
         self.telescope.queue_park()
         self.telescope.queue_park()
+        self.assertEqual(len(self.telescope._jobs), 1)
+
+    def test_queue_flat_dedupes_the_same_keep_tracking(self):
+        self.telescope.queue_flat(keep_tracking=True)
+        self.telescope.queue_flat(keep_tracking=True)
+        self.assertEqual(len(self.telescope._jobs), 1)
+
+    def test_concurrent_queue_park_stays_deduped(self):
+        threads = [threading.Thread(target=lambda: [self.telescope.queue_park() for _ in range(200)]) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         self.assertEqual(len(self.telescope._jobs), 1)
 
     def test_queue_set_speed_dedupes_the_same_speed(self):

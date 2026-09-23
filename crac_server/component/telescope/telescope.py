@@ -17,9 +17,9 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server import config
 from crac_server.status_log import ErrorCause, StatusLogger
 from datetime import datetime
-from threading import Thread
+from threading import Lock, Thread
 from time import sleep
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 
 logger = logging.getLogger(__name__)
@@ -31,11 +31,10 @@ ERROR_CAUSE_BY_STATUS = {
 
 
 class TelescopeReading(NamedTuple):
-    """What a polling cycle reads from the mount. A named contract instead
-    of a positional tuple, so adding a field is a constructor kwarg at each
-    call site, not a silent shift of every existing position."""
-    eq_coords: EquatorialCoords
-    aa_coords: AltazimutalCoords
+    """What a polling cycle reads from the mount, named by field. Coords are
+    None when the mount is unreachable."""
+    eq_coords: Optional[EquatorialCoords]
+    aa_coords: Optional[AltazimutalCoords]
     speed: TelescopeSpeed
     status: TelescopeStatus
 
@@ -45,8 +44,8 @@ class Telescope(ABC):
     def __init__(self) -> None:
         self._polling = False
         self._jobs = deque()
+        self._jobs_lock = Lock()
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
-        self._connection_retry = 0
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._status_log = StatusLogger(logger, "Telescope", TelescopeStatus)
         self._speed_log = StatusLogger(logger, "Telescope speed", TelescopeSpeed)
@@ -95,12 +94,13 @@ class Telescope(ABC):
     
     def _enqueue(self, **job):
         """Queue a command for the polling loop, and say so.
-        Deduplicated on the full job, or a caller polling faster than the
-        telescope's own cycle grows the queue without bound."""
-        if job in self._jobs:
-            return
-        logger.info(f"[Telescope] {job['action'].__name__} queued, {len(self._jobs) + 1} waiting")
-        self._jobs.append(job)
+        Deduplicated on the full job under a lock: queue_park() can run
+        from another thread than the one handling gRPC requests."""
+        with self._jobs_lock:
+            if job in self._jobs:
+                return
+            logger.info(f"[Telescope] {job['action'].__name__} queued, {len(self._jobs) + 1} waiting")
+            self._jobs.append(job)
 
     def queue_set_speed(self, speed: TelescopeSpeed):
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING and not self.has_tracking_off_capability:
