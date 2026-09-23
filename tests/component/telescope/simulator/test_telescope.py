@@ -14,13 +14,21 @@ class TestSimulatorTelescope(unittest.TestCase):
     it back and restore its original content instead of stubbing I/O."""
 
     def setUp(self):
-        with open(INI_PATH) as f:
-            self._original_ini = f.read()
+        # None means the driver hadn't written it yet - a fresh checkout
+        # doesn't ship this gitignored state file.
+        self._original_ini = None
+        if os.path.exists(INI_PATH):
+            with open(INI_PATH) as f:
+                self._original_ini = f.read()
         self.telescope = Telescope()
 
     def tearDown(self):
-        with open(INI_PATH, "w") as f:
-            f.write(self._original_ini)
+        if self._original_ini is None:
+            if os.path.exists(INI_PATH):
+                os.remove(INI_PATH)
+        else:
+            with open(INI_PATH, "w") as f:
+                f.write(self._original_ini)
 
     def _read_coords(self):
         config = ConfigParser()
