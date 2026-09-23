@@ -4,7 +4,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,
 )
 from crac_server import config
-from crac_server.component.telescope.telescope import Telescope as TelescopeBase
+from crac_server.component.telescope.telescope import Telescope as TelescopeBase, TelescopeReading
 from crac_server.config import Config
 from datetime import datetime
 import logging
@@ -53,13 +53,13 @@ class Telescope(TelescopeBase):
             speed=speed
         )
 
-    def retrieve(self):
+    def retrieve(self) -> TelescopeReading:
         aa_coords = self._retrieve_aa_coords()
         eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow())
         speed = self._retrieve_speed()
         status = self._retrieve_status(aa_coords)
 
-        return (eq_coords, aa_coords, speed, status)
+        return TelescopeReading(eq_coords, aa_coords, speed, status)
 
     def _move(self, aa_coords: AltazimutalCoords, speed: TelescopeSpeed):
         if speed == TelescopeSpeed.SPEED_TRACKING:

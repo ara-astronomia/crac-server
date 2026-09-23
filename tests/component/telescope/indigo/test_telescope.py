@@ -50,6 +50,21 @@ class TestIndigoTelescope(unittest.TestCase):
             self.telescope.queue_park()
         self.assertIn("park queued", logs.output[0])
 
+    def test_queue_dedupes_an_identical_pending_job(self):
+        self.telescope.queue_park()
+        self.telescope.queue_park()
+        self.assertEqual(len(self.telescope._jobs), 1)
+
+    def test_queue_set_speed_dedupes_the_same_speed(self):
+        self.telescope.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
+        self.telescope.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
+        self.assertEqual(len(self.telescope._jobs), 1)
+
+    def test_queue_set_speed_keeps_different_speeds(self):
+        self.telescope.queue_set_speed(TelescopeSpeed.SPEED_TRACKING)
+        self.telescope.queue_set_speed(TelescopeSpeed.SPEED_SLEWING)
+        self.assertEqual(len(self.telescope._jobs), 2)
+
     def test_a_mount_at_rest_on_idle_coordinates_is_not_an_error(self):
         self._stub_properties({
             "MOUNT_EQUATORIAL_COORDINATES": {"state": "Idle", "items": [{"name": "RA", "value": 1}, {"name": "DEC", "value": 2}]},
@@ -59,9 +74,8 @@ class TestIndigoTelescope(unittest.TestCase):
         _, _, speed, _ = self.telescope.retrieve()
         self.assertEqual(speed, TelescopeSpeed.SPEED_NOT_TRACKING)
 
-    def test_init_does_not_force_connection_and_skips_raw_socket_polling(self):
+    def test_init_does_not_force_connection(self):
         self.mock_client.connect_device.assert_not_called()
-        self.assertFalse(self.telescope._uses_raw_socket)
 
     def test_geographic_coordinates_are_never_sent_to_the_mount(self):
         self._stub_properties({

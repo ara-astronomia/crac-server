@@ -10,7 +10,7 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
 )
 from crac_server import config
-from crac_server.component.telescope.telescope import Telescope as TelescopeBase
+from crac_server.component.telescope.telescope import Telescope as TelescopeBase, TelescopeReading
 from crac_server.component.client.indigo import get_indigo_client
 from crac_server.status_log import ErrorCause
 import logging
@@ -40,11 +40,10 @@ class Telescope(TelescopeBase):
         """
         hostname = config.Config.getValue("hostname", "telescope") if hostname is None else hostname
         port = config.Config.getInt("port", "telescope") if port is None else port
-        super().__init__(hostname=hostname, port=port)
+        super().__init__()
         self._name = config.Config.getValue("name", "indigo")
         self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
-        self._uses_raw_socket = False
         self._unreachable_since = None
 
     def __sync_park_position(self):
@@ -258,7 +257,7 @@ class Telescope(TelescopeBase):
         values = {item.get("name"): item.get("value") for item in coords.get("items", [])}
         return (values.get("RA"), values.get("DEC"))
 
-    def retrieve(self) -> tuple:
+    def retrieve(self) -> TelescopeReading:
         """Read the mount state.
 
         Every coordinate here is read, never written: the site lives in the
@@ -271,8 +270,8 @@ class Telescope(TelescopeBase):
         """
         if not self._client.is_device_connected(self._name):
             if self.__is_unreachable_for_longer_than_a_gap_between_polls():
-                return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
-            return (self.eq_coords, self.aa_coords, self.speed, self.status)
+                return TelescopeReading(None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.LOST)
+            return TelescopeReading(self.eq_coords, self.aa_coords, self.speed, self.status)
 
         self._unreachable_since = None
 
@@ -301,7 +300,7 @@ class Telescope(TelescopeBase):
                 # retrieve() runs on it - a thread cannot join itself. The
                 # throwaway thread reuses its stop-and-join, races included.
                 threading.Thread(target=self.polling_end, daemon=True).start()
-            return (None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
+            return TelescopeReading(None, None, TelescopeSpeed.SPEED_ERROR, TelescopeStatus.DISCONNECTED)
 
         if self._client.connect_device(self._name):
             self._park_position_synced = False
@@ -314,7 +313,7 @@ class Telescope(TelescopeBase):
         status = self._retrieve_status(aa_coords)
         logger.debug(f"data received from cache: {status}")
 
-        return (eq_coords, aa_coords, speed, status)
+        return TelescopeReading(eq_coords, aa_coords, speed, status)
 
     def __is_unreachable_for_longer_than_a_gap_between_polls(self) -> bool:
         """Report the mount unreachable only once it has stayed so for the
