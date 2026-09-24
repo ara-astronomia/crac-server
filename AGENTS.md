@@ -131,6 +131,11 @@ tests/                      # rispecchia la struttura di crac_server/
   discover` di questo repo) che un terzo può mischiare nel proprio
   `unittest.TestCase` per verificare la forma del contratto. Nessuna
   promessa di stabilità sull'interfaccia fra versioni.
+- **Dopo aver toccato gli entry point in `pyproject.toml`, rilanciare
+  `uv sync`**: sono letti dai metadati del pacchetto installato
+  (`crac_server.egg-info/entry_points.txt`), non dal file al volo -
+  senza un resync anche `indigo`/`simulator` risultano "non registrati"
+  e `telescope()` fallisce all'avvio.
 - **La suite va lanciata dalla root** (`python -m unittest discover`):
   `tests/__init__.py` e' il setup globale (pin factory mock e configurazione
   dei test) e gira solo se `tests` viene importato come package. Con

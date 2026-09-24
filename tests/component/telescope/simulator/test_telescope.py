@@ -58,6 +58,13 @@ class TestSimulatorTelescope(unittest.TestCase):
                 self.telescope.set_speed(written)
                 self.assertEqual(self.telescope._retrieve_speed(), expected)
 
+    def test_retrieve_speed_is_error_on_an_unmapped_state(self):
+        config = ConfigParser()
+        config["coords"] = {"alt": "0", "az": "0", "tr": "0", "sl": "0", "error": "0"}
+        with open(INI_PATH, "w") as f:
+            config.write(f)
+        self.assertEqual(self.telescope._retrieve_speed(), TelescopeSpeed.SPEED_ERROR)
+
     def test_retrieve_reads_back_the_written_state(self):
         self.telescope._polling = True
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
