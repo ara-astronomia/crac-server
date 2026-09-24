@@ -40,6 +40,9 @@ class TelescopeReading(NamedTuple):
 
 
 class Telescope(ABC):
+    """Contract for a telescope driver. Register an implementation under the
+    "crac_server.telescope_drivers" entry point (see AGENTS.md); simulator/
+    is the minimal reference and conformance.py checks the contract's shape."""
 
     def __init__(self) -> None:
         self._polling = False
