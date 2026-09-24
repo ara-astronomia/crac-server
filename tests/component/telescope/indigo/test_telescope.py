@@ -264,6 +264,12 @@ class TestIndigoTelescope(unittest.TestCase):
         status = self.telescope._retrieve_status(AltazimutalCoords(alt=0, az=0))
         self.assertNotEqual(status, TelescopeStatus.PARKED)
 
+    def test_retrieve_status_at_the_southwest_boundary_is_not_none(self):
+        self._stub_properties({})
+        self.telescope._polling = True
+        status = self.telescope._retrieve_status(AltazimutalCoords(alt=50, az=190))
+        self.assertEqual(status, TelescopeStatus.WEST)
+
     def test_park_sends_parked_command(self):
         self._stub_park_properties()
         self.telescope.park(TelescopeSpeed.SPEED_TRACKING)

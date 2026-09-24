@@ -341,7 +341,7 @@ class Telescope(TelescopeBase):
                 return TelescopeStatus.SOUTHWEST
             elif 180 >= aa_coords.az > config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.SOUTHEAST
-            elif config.Config.getInt("azSW", "azimut") < aa_coords.az <= config.Config.getInt("azNW", "azimut"):
+            elif config.Config.getInt("azSW", "azimut") <= aa_coords.az <= config.Config.getInt("azNW", "azimut"):
                 return TelescopeStatus.WEST
             elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.EAST
