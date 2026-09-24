@@ -2,11 +2,8 @@ import os
 import unittest
 from configparser import ConfigParser
 
-from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus
-from crac_server.component.telescope.simulator import telescope as simulator_module
-from crac_server.component.telescope.simulator.telescope import Telescope
-
-INI_PATH = os.path.join(os.path.dirname(simulator_module.__file__), "telescope.ini")
+from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus
+from crac_server.component.telescope.simulator.telescope import INI_PATH, Telescope
 
 
 class TestSimulatorTelescope(unittest.TestCase):
@@ -64,6 +61,11 @@ class TestSimulatorTelescope(unittest.TestCase):
         with open(INI_PATH, "w") as f:
             config.write(f)
         self.assertEqual(self.telescope._retrieve_speed(), TelescopeSpeed.SPEED_ERROR)
+
+    def test_retrieve_status_at_the_southwest_boundary_is_not_none(self):
+        self.telescope._polling = True
+        status = self.telescope._retrieve_status(AltazimutalCoords(alt=50, az=190))
+        self.assertEqual(status, TelescopeStatus.WEST)
 
     def test_retrieve_reads_back_the_written_state(self):
         self.telescope._polling = True

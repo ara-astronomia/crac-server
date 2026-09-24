@@ -13,6 +13,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
+INI_PATH = os.path.join(os.path.dirname(__file__), "telescope.ini")
+
 
 class Telescope(TelescopeBase):
     def __init__(self):
@@ -31,8 +33,7 @@ class Telescope(TelescopeBase):
         aa_coords = self._retrieve_aa_coords()
         telescope_config = ConfigParser()
         telescope_config["coords"] = {'alt': str(aa_coords.alt), 'az': str(aa_coords.az), 'tr': str(tr), 'sl': str(sl), 'error': 0}
-        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
-        with open(telescope_path, 'w') as telescope_file:
+        with open(INI_PATH, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
     def park(self, speed: TelescopeSpeed):
@@ -73,22 +74,19 @@ class Telescope(TelescopeBase):
             tr = 1
         telescope_config = ConfigParser()
         telescope_config["coords"] = {'alt': str(aa_coords.alt), 'az': str(aa_coords.az), 'tr': str(tr), 'sl': str(sl), 'error': 0}
-        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
-        with open(telescope_path, 'w') as telescope_file:
+        with open(INI_PATH, 'w') as telescope_file:
             telescope_config.write(telescope_file)
 
     def _retrieve_aa_coords(self) -> AltazimutalCoords:
-        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()
-        telescope_config.read(telescope_path)
+        telescope_config.read(INI_PATH)
         alt = telescope_config.get("coords", "alt", fallback=0)
         az = telescope_config.get("coords", "az", fallback=0)
         return AltazimutalCoords(alt=float(alt), az=float(az))
 
     def _retrieve_speed(self) -> TelescopeSpeed:
-        telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()
-        telescope_config.read(telescope_path)
+        telescope_config.read(INI_PATH)
         tr = telescope_config.get("coords", "tr", fallback="1")
         sl = telescope_config.get("coords", "sl", fallback="1")
         if tr == "1" and sl == "1":
