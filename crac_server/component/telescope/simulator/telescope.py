@@ -89,8 +89,8 @@ class Telescope(TelescopeBase):
         telescope_path = os.path.join(os.path.dirname(__file__), 'telescope.ini')
         telescope_config = ConfigParser()
         telescope_config.read(telescope_path)
-        tr = telescope_config.get("coords", "tr", fallback=0)
-        sl = telescope_config.get("coords", "sl", fallback=1)
+        tr = telescope_config.get("coords", "tr", fallback="1")
+        sl = telescope_config.get("coords", "sl", fallback="1")
         if tr == "1" and sl == "1":
             return TelescopeSpeed.SPEED_NOT_TRACKING
         elif tr == "0" and sl == "1":
