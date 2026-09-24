@@ -2,10 +2,7 @@ import os
 import unittest
 
 from crac_server.component.telescope.conformance import TelescopeConformanceTestCase
-from crac_server.component.telescope.simulator import telescope as simulator_module
-from crac_server.component.telescope.simulator.telescope import Telescope as SimulatorTelescope
-
-INI_PATH = os.path.join(os.path.dirname(simulator_module.__file__), "telescope.ini")
+from crac_server.component.telescope.simulator.telescope import INI_PATH, Telescope as SimulatorTelescope
 
 
 class TestSimulatorConformance(TelescopeConformanceTestCase, unittest.TestCase):
@@ -18,6 +15,15 @@ class TestSimulatorConformance(TelescopeConformanceTestCase, unittest.TestCase):
     def tearDown(self):
         if os.path.exists(INI_PATH):
             os.remove(INI_PATH)
+
+
+class TestConformanceRequiresTestCase(unittest.TestCase):
+
+    def test_forgetting_unittest_testcase_raises_at_class_definition(self):
+        with self.assertRaises(TypeError):
+            class Forgetful(TelescopeConformanceTestCase):
+                def driver(self):
+                    return SimulatorTelescope()
 
 
 if __name__ == "__main__":
