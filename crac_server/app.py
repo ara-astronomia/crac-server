@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_CONF_PATH = os.path.join(BASE_DIR, 'logging.conf')
 load_dotenv()
-logging.config.fileConfig(LOG_CONF_PATH)
+logging.config.fileConfig(LOG_CONF_PATH, disable_existing_loggers=False)
 logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
@@ -91,5 +91,15 @@ async def serve():
     await server.wait_for_termination()
 
 
+def main():
+    """A crash must not run gpiozero's atexit cleanup: it releases every
+    GPIO pin, which on this hardware drives the roof and the switches."""
+    try:
+        asyncio.run(serve())
+    except BaseException:
+        logger.exception('crac-server crashed')
+        os._exit(1)
+
+
 if __name__ == "__main__":
-    asyncio.run(serve())
+    main()
