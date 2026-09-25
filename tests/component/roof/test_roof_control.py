@@ -30,6 +30,17 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         # prima del primo.
         Device.pin_factory.reset()
 
+    def test_construction_does_not_drive_the_motor_pin(self):
+        """A restarted process must not command the roof: the pin keeps
+        whatever a previous run left it at, open or closed."""
+        motor_pin = Device.pin_factory.pin(Config.getInt("switch_roof", "roof_board"))
+        motor_pin.function = "output"
+        motor_pin.state = True
+
+        RoofControl()
+
+        self.assertTrue(motor_pin.state)
+
     def test_status_is_opening(self):
         roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()

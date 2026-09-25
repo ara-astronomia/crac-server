@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class RoofControl():
 
     def __init__(self):
-        self.motor = OutputDevice(Config.getInt("switch_roof", "roof_board"))
+        self.motor = OutputDevice(Config.getInt("switch_roof", "roof_board"), initial_value=None)
         self.roof_closed_switch = DigitalInputDevice(Config.getInt("roof_verify_closed", "roof_board"), pull_up=True)
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
         self.timeout = Config.getInt("roof_timeout", "roof_board")

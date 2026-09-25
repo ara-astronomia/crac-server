@@ -11,7 +11,7 @@ lock = threading.Lock()
 
 class ButtonControl():
     def __init__(self, pin: int):
-        self.output = OutputDevice(pin)
+        self.output = OutputDevice(pin, initial_value=None)
         self.lock = threading.Lock()
         self.turned_on_at: datetime
         self.turned_off_at: datetime
