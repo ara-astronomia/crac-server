@@ -16,7 +16,7 @@ from crac_protobuf.telescope_pb2 import (
 )
 from crac_server import config
 from crac_server.status_log import ErrorCause, StatusLogger
-from datetime import datetime
+from datetime import datetime, UTC
 from threading import Lock, Thread
 from time import sleep
 from typing import NamedTuple, Optional
@@ -40,6 +40,9 @@ class TelescopeReading(NamedTuple):
 
 
 class Telescope(ABC):
+    """Contract for a telescope driver. Register an implementation under the
+    "crac_server.telescope_drivers" entry point (see AGENTS.md); simulator/
+    is the minimal reference and conformance.py checks the contract's shape."""
 
     def __init__(self) -> None:
         self._polling = False
@@ -171,7 +174,7 @@ class Telescope(ABC):
 
     def _retrieve_aa_coords(self, eq_coords):
         if eq_coords:
-            aa_coords = self._radec2altaz(eq_coords, obstime=datetime.utcnow()) if eq_coords else None
+            aa_coords = self._radec2altaz(eq_coords, obstime=datetime.now(UTC)) if eq_coords else None
             return aa_coords
 
     def _retrieve_status(self, aa_coords: AltazimutalCoords) -> TelescopeStatus:
@@ -192,7 +195,7 @@ class Telescope(ABC):
                 return TelescopeStatus.SOUTHWEST
             elif 180 >= aa_coords.az > config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.SOUTHEAST
-            elif config.Config.getInt("azSW", "azimut") < aa_coords.az <= config.Config.getInt("azNW", "azimut"):
+            elif config.Config.getInt("azSW", "azimut") <= aa_coords.az <= config.Config.getInt("azNW", "azimut"):
                 return TelescopeStatus.WEST
             elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.EAST

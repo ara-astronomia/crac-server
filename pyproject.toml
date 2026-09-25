@@ -25,6 +25,10 @@ dependencies = [
     "astropy >= 6.0.0",
 ]
 
+[project.entry-points."crac_server.telescope_drivers"]
+indigo = "crac_server.component.telescope.indigo.telescope:Telescope"
+simulator = "crac_server.component.telescope.simulator.telescope:Telescope"
+
 [project.optional-dependencies]
 # N.B.: Le dipendenze di sviluppo (dev-dependencies) vengono spostate qui
 # e dovranno essere installate specificando [dev]

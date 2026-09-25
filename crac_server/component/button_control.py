@@ -1,5 +1,5 @@
 from functools import lru_cache
-from datetime import datetime
+from datetime import datetime, UTC
 import threading
 from crac_protobuf.button_pb2 import ButtonStatus
 from crac_server.config import Config
@@ -19,12 +19,12 @@ class ButtonControl():
     def on(self):
         with self.lock:
             self.output.on()
-            self.turned_on_at = datetime.utcnow()
+            self.turned_on_at = datetime.now(UTC)
 
     def off(self):
         with self.lock:
             self.output.off()
-            self.turned_off_at = datetime.utcnow()
+            self.turned_off_at = datetime.now(UTC)
 
     def get_status(self) -> ButtonStatus:
         if self.output.value:

@@ -35,7 +35,8 @@ crac_server/
   config.py                 # lettura config.ini (percorso da CRAC_CONFIG_PATH),
                             # override dei valori via env {SECTION}_{KEY}
   component/                # driver hardware/protocollo
-    telescope/               # un sotto-modulo per driver: indigo, simulator
+    telescope/               # un sotto-modulo per driver: indigo, simulator,
+                             # pluggable via entry point (vedi sotto)
     curtains/, roof/         # controllo GPIO via gpiozero (simulator/ per mock)
     cover_mirror/            # copertura a petali via INDIGO
     indigo_client.py         # client INDIGO condiviso (connessione persistente, cache proprietà)
@@ -112,6 +113,29 @@ tests/                      # rispecchia la struttura di crac_server/
   un client che pollasse più spesso del ciclo interno di retrieve() farebbe
   crescere la coda senza limite, ritardando i comandi reali dietro job
   ridondanti.
+- **Un driver telescopio esterno si registra come entry point**, non va
+  copiato dentro questo repo: nel `pyproject.toml` del pacchetto di terzi,
+  `[project.entry-points."crac_server.telescope_drivers"]` con
+  `nome = "mio_pacchetto.telescope:Telescope"`. `config.ini` continua a
+  usare un nome breve (`driver = nome`), esattamente come oggi con
+  `indigo`/`simulator` - anche questi due sono registrati nello stesso
+  modo, nel `pyproject.toml` di questo repo, non hardcoded nel factory
+  (`crac_server/component/telescope/__init__.py`). Il contratto da
+  implementare è la classe astratta `Telescope`
+  (`component/telescope/telescope.py`): quattro metodi
+  (`set_speed`/`park`/`flat`/`retrieve`), `retrieve()` ritorna un
+  `TelescopeReading` (NamedTuple: `eq_coords`, `aa_coords`, `speed`,
+  `status`). `simulator` è il riferimento minimale; `conformance.py`
+  nello stesso package offre un mixin di test (`TelescopeConformanceTestCase`,
+  **non** un `TestCase` di per sé - lo raccoglierebbe anche `unittest
+  discover` di questo repo) che un terzo può mischiare nel proprio
+  `unittest.TestCase` per verificare la forma del contratto. Nessuna
+  promessa di stabilità sull'interfaccia fra versioni.
+- **Dopo aver toccato gli entry point in `pyproject.toml`, rilanciare
+  `uv sync`**: sono letti dai metadati del pacchetto installato
+  (`crac_server.egg-info/entry_points.txt`), non dal file al volo -
+  senza un resync anche `indigo`/`simulator` risultano "non registrati"
+  e `telescope()` fallisce all'avvio.
 - **La suite va lanciata dalla root** (`python -m unittest discover`):
   `tests/__init__.py` e' il setup globale (pin factory mock e configurazione
   dei test) e gira solo se `tests` viene importato come package. Con

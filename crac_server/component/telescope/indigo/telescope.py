@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 import threading
 import time
@@ -62,7 +62,7 @@ class Telescope(TelescopeBase):
             return
         if self.__retrieve_status_park():
             return
-        obstime = datetime.utcnow()
+        obstime = datetime.now(UTC)
         aa_coords = AltazimutalCoords(
             alt=config.Config.getFloat("park_alt", "telescope"),
             az=config.Config.getFloat("park_az", "telescope"),
@@ -341,7 +341,7 @@ class Telescope(TelescopeBase):
                 return TelescopeStatus.SOUTHWEST
             elif 180 >= aa_coords.az > config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.SOUTHEAST
-            elif config.Config.getInt("azSW", "azimut") < aa_coords.az <= config.Config.getInt("azNW", "azimut"):
+            elif config.Config.getInt("azSW", "azimut") <= aa_coords.az <= config.Config.getInt("azNW", "azimut"):
                 return TelescopeStatus.WEST
             elif config.Config.getInt("azNE", "azimut") <= aa_coords.az <= config.Config.getInt("azSE", "azimut"):
                 return TelescopeStatus.EAST
@@ -353,7 +353,7 @@ class Telescope(TelescopeBase):
         reads MOUNT_ON_COORDINATES_SET at the very moment the coordinates
         arrive, not at the next polling cycle.
         """
-        eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.utcnow()) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
+        eq_coords = self._altaz2radec(aa_coords, decimal_places=2, obstime=datetime.now(UTC)) if isinstance(aa_coords, (AltazimutalCoords)) else aa_coords
         logger.debug("aa_coords: %s", aa_coords)
         logger.debug("eq_coords: %s", eq_coords)
         self.set_speed(speed)
