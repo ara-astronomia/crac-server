@@ -63,7 +63,7 @@ class RoofControl():
     @staticmethod
     def __is_where_the_motor_sent_it(is_roof_closed, is_roof_open, is_switched_on) -> bool:
         """A limit switch that agrees with the motor settles the position,
-        however late the roof got there: the movement is confirmed after all."""
+        however late the roof got there."""
         return (is_roof_closed and not is_switched_on) or (is_roof_open and is_switched_on)
 
     def get_status(self) -> RoofStatus:
@@ -73,8 +73,6 @@ class RoofControl():
         logger.debug(f'roof opened switch is {is_roof_open}')
         is_switched_on = self.motor.value
         logger.debug(f'roof motor switch is {is_switched_on}')
-        if self.__is_where_the_motor_sent_it(is_roof_closed, is_roof_open, is_switched_on):
-            self.movement_not_confirmed = False
 
         if is_roof_closed and is_roof_open:
             status = RoofStatus.ROOF_ERROR
@@ -82,7 +80,9 @@ class RoofControl():
                 status, ErrorCause.SENSORS_INCONSISTENT,
                 detail="both limit switches active",
             )
-        elif self.movement_not_confirmed:
+        elif self.movement_not_confirmed and not self.__is_where_the_motor_sent_it(
+            is_roof_closed, is_roof_open, is_switched_on
+        ):
             status = RoofStatus.ROOF_ERROR
             self._status_log.record(
                 status, ErrorCause.MOVEMENT_NOT_CONFIRMED,
