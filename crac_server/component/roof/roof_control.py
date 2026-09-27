@@ -21,6 +21,7 @@ class RoofControl():
 
     async def open(self):
         async with self.lock:
+            self.movement_not_confirmed = False
             self.motor.on()
             is_open = await self.__reaches(self.roof_open_switch)
             self.movement_not_confirmed = not is_open
@@ -36,6 +37,7 @@ class RoofControl():
 
     async def close(self):
         async with self.lock:
+            self.movement_not_confirmed = False
             self.motor.off()
             is_closed = await self.__reaches(self.roof_closed_switch)
             self.movement_not_confirmed = not is_closed
@@ -58,6 +60,12 @@ class RoofControl():
             logger.error("Roof run interrupted with the motor still driving: the roof is left mid travel")
             raise
 
+    @staticmethod
+    def __is_where_the_motor_sent_it(is_roof_closed, is_roof_open, is_switched_on) -> bool:
+        """A limit switch that agrees with the motor settles the position,
+        however late the roof got there: the movement is confirmed after all."""
+        return (is_roof_closed and not is_switched_on) or (is_roof_open and is_switched_on)
+
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active
         logger.debug(f'roof closed switch is {is_roof_closed}')
@@ -65,6 +73,8 @@ class RoofControl():
         logger.debug(f'roof opened switch is {is_roof_open}')
         is_switched_on = self.motor.value
         logger.debug(f'roof motor switch is {is_switched_on}')
+        if self.__is_where_the_motor_sent_it(is_roof_closed, is_roof_open, is_switched_on):
+            self.movement_not_confirmed = False
 
         if is_roof_closed and is_roof_open:
             status = RoofStatus.ROOF_ERROR

@@ -168,6 +168,66 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             simulated_roof()
 
+    def test_a_roof_that_reaches_the_closed_switch_after_an_error_is_closed(self):
+        roof_control = RoofControl()
+        roof_control.roof_open_switch.pin.drive_high()
+        roof_control.roof_closed_switch.pin.drive_low()
+        roof_control.motor.value = False
+        roof_control.movement_not_confirmed = True
+
+        self.assertEqual(RoofStatus.ROOF_CLOSED, roof_control.get_status())
+        self.assertFalse(roof_control.movement_not_confirmed)
+
+    def test_a_roof_that_reaches_the_open_switch_after_an_error_is_open(self):
+        roof_control = RoofControl()
+        roof_control.roof_open_switch.pin.drive_low()
+        roof_control.roof_closed_switch.pin.drive_high()
+        roof_control.motor.value = True
+        roof_control.movement_not_confirmed = True
+
+        self.assertEqual(RoofStatus.ROOF_OPENED, roof_control.get_status())
+        self.assertFalse(roof_control.movement_not_confirmed)
+
+    def test_a_roof_that_never_left_the_open_switch_stays_in_error(self):
+        """Told to close, still on the open switch: the roof did not move, and
+        without the error it would read as closing."""
+        roof_control = RoofControl()
+        roof_control.roof_open_switch.pin.drive_low()
+        roof_control.roof_closed_switch.pin.drive_high()
+        roof_control.motor.value = False
+        roof_control.movement_not_confirmed = True
+
+        self.assertEqual(RoofStatus.ROOF_ERROR, roof_control.get_status())
+
+    def test_a_roof_that_never_left_the_closed_switch_stays_in_error(self):
+        roof_control = RoofControl()
+        roof_control.roof_open_switch.pin.drive_high()
+        roof_control.roof_closed_switch.pin.drive_low()
+        roof_control.motor.value = True
+        roof_control.movement_not_confirmed = True
+
+        self.assertEqual(RoofStatus.ROOF_ERROR, roof_control.get_status())
+
+    async def test_a_roof_that_arrives_after_the_timeout_recovers_on_its_own(self):
+        roof_control = simulated_roof(travel_seconds=0.3)
+        await roof_control.open()
+        roof_control.timeout = 0.1
+
+        self.assertFalse(await roof_control.close())
+        self.assertEqual(RoofStatus.ROOF_ERROR, roof_control.get_status())
+
+        await asyncio.sleep(0.4)
+        self.assertEqual(RoofStatus.ROOF_CLOSED, roof_control.get_status())
+
+    async def test_a_new_run_after_an_error_reports_the_run(self):
+        roof_control = simulated_roof(travel_seconds=0.3)
+        roof_control.movement_not_confirmed = True
+
+        run = asyncio.create_task(roof_control.open())
+        await asyncio.sleep(0.1)
+        self.assertEqual(RoofStatus.ROOF_OPENING, roof_control.get_status())
+        await run
+
     async def test_when_roof_is_blocked_while_opening_then_it_will_close(self):
         roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
@@ -210,8 +270,8 @@ class TestRoofControlStatusLogging(unittest.TestCase):
 
     def test_an_unconfirmed_movement_is_told_apart_from_a_broken_sensor(self):
         roof_control = RoofControl()
-        roof_control.roof_open_switch.pin.drive_high()
-        roof_control.roof_closed_switch.pin.drive_low()
+        roof_control.roof_open_switch.pin.drive_low()
+        roof_control.roof_closed_switch.pin.drive_high()
         roof_control.motor.value = False
         roof_control.movement_not_confirmed = True
         with self.assertLogs(self.LOGGER, level="ERROR") as captured:

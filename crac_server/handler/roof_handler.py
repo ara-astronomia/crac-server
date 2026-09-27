@@ -36,10 +36,24 @@ class AbstractButtonHandler(AbstractHandler):
         
         return RoofConverter().convert(mediator)
 
+    @staticmethod
+    def _would_open(mediator: RoofMediator) -> bool:
+        """A roof in error has no known position: only the command tells which
+        way it would move."""
+        return mediator.status is RoofStatus.ROOF_CLOSED or (
+            mediator.status is RoofStatus.ROOF_ERROR and mediator.action is RoofAction.OPEN
+        )
+
+    @staticmethod
+    def _would_close(mediator: RoofMediator) -> bool:
+        return mediator.status is RoofStatus.ROOF_OPENED or (
+            mediator.status is RoofStatus.ROOF_ERROR and mediator.action is RoofAction.CLOSE
+        )
+
 
 class RoofWeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
-        if mediator.status is RoofStatus.ROOF_CLOSED:
+        if self._would_open(mediator):
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(weather())
             logger.debug(f"In weather status {weather_response.status}")
@@ -55,7 +69,7 @@ class RoofWeatherHandler(AbstractButtonHandler):
 class RoofTelescopeHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
         if (
-            mediator.status is RoofStatus.ROOF_OPENED and
+            self._would_close(mediator) and
             not self.__telescope_is_secure()
         ):
             self._next_handler = None
@@ -72,7 +86,7 @@ class RoofTelescopeHandler(AbstractButtonHandler):
 class RoofCurtainsHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
         if (
-            mediator.status is RoofStatus.ROOF_OPENED and
+            self._would_close(mediator) and
             not self.__curtains_are_secure()
         ):
             self._next_handler = None
