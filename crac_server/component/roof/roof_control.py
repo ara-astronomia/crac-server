@@ -16,15 +16,21 @@ class RoofControl():
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
         self.timeout = Config.getInt("roof_timeout", "roof_board")
         self.lock = asyncio.Lock()
-        self.movement_not_confirmed = False
+        self._movement_not_confirmed = False
         self._status_log = StatusLogger(logger, "Roof", RoofStatus)
+
+    @property
+    def movement_not_confirmed(self) -> bool:
+        """The last run ordered did not reach its limit switch in time. Only a
+        run writes it."""
+        return self._movement_not_confirmed
 
     async def open(self):
         async with self.lock:
-            self.movement_not_confirmed = False
+            self._movement_not_confirmed = False
             self.motor.on()
             is_open = await self.__reaches(self.roof_open_switch)
-            self.movement_not_confirmed = not is_open
+            self._movement_not_confirmed = not is_open
         if not is_open:
             logger.error(
                 "Roof opening not confirmed after %s seconds: motor=%s, "
@@ -37,10 +43,10 @@ class RoofControl():
 
     async def close(self):
         async with self.lock:
-            self.movement_not_confirmed = False
+            self._movement_not_confirmed = False
             self.motor.off()
             is_closed = await self.__reaches(self.roof_closed_switch)
-            self.movement_not_confirmed = not is_closed
+            self._movement_not_confirmed = not is_closed
             if not is_closed:
                 logger.error(
                     "Roof closing not confirmed after %s seconds: motor=%s, "
