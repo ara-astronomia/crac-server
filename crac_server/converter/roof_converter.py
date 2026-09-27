@@ -38,6 +38,16 @@ class RoofMediator:
         self._status = value
 
     @property
+    def action_in_error(self) -> RoofAction:
+        """In error the position of the roof is unknown, so the way it would
+        move is the command asked for. A plain status request gets the command
+        against the motor pin: the other one is already on the pin and would
+        change nothing."""
+        if self.action in (RoofAction.OPEN, RoofAction.CLOSE):
+            return self.action
+        return RoofAction.CLOSE if self.button.motor.value else RoofAction.OPEN
+
+    @property
     def is_disabled(self) -> bool:
         return self._is_disabled
     
@@ -57,12 +67,19 @@ class RoofConverter:
         button_gui = ButtonGui(
             key=ButtonKey.KEY_ROOF,
             label=label,
-            metadata=(RoofAction.CLOSE if mediator.status in [RoofStatus.ROOF_OPENED, RoofStatus.ROOF_OPENING] else RoofAction.OPEN),
+            metadata=self.__offered_action(mediator),
             is_disabled=mediator.is_disabled,
             button_color=ButtonColor(text_color=text_color, background_color=background_color),
         )
 
         return RoofResponse(status=mediator.status, button_gui=button_gui)
+
+    def __offered_action(self, mediator: RoofMediator) -> RoofAction:
+        if mediator.status is RoofStatus.ROOF_ERROR:
+            return mediator.action_in_error
+        if mediator.status in [RoofStatus.ROOF_OPENED, RoofStatus.ROOF_OPENING]:
+            return RoofAction.CLOSE
+        return RoofAction.OPEN
 
     def __roof_label(self, status):
         label = None

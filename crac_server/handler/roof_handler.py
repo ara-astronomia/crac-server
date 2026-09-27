@@ -38,16 +38,14 @@ class AbstractButtonHandler(AbstractHandler):
 
     @staticmethod
     def _would_open(mediator: RoofMediator) -> bool:
-        """A roof in error has no known position: only the command tells which
-        way it would move."""
         return mediator.status is RoofStatus.ROOF_CLOSED or (
-            mediator.status is RoofStatus.ROOF_ERROR and mediator.action is RoofAction.OPEN
+            mediator.status is RoofStatus.ROOF_ERROR and mediator.action_in_error == RoofAction.OPEN
         )
 
     @staticmethod
     def _would_close(mediator: RoofMediator) -> bool:
         return mediator.status is RoofStatus.ROOF_OPENED or (
-            mediator.status is RoofStatus.ROOF_ERROR and mediator.action is RoofAction.CLOSE
+            mediator.status is RoofStatus.ROOF_ERROR and mediator.action_in_error == RoofAction.CLOSE
         )
 
 

@@ -53,11 +53,16 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
     request disables nothing, since it asks for no movement.
     """
 
-    def _mediator(self, action):
-        return SimpleNamespace(status=RoofStatus.ROOF_ERROR, action=action, is_disabled=False)
+    def _mediator(self, action, motor_on=False):
+        requested = action in (RoofAction.OPEN, RoofAction.CLOSE)
+        against_the_motor = RoofAction.CLOSE if motor_on else RoofAction.OPEN
+        return SimpleNamespace(
+            status=RoofStatus.ROOF_ERROR, action=action, is_disabled=False,
+            action_in_error=action if requested else against_the_motor,
+        )
 
-    def _weather_handler(self, action, weather_status):
-        mediator = self._mediator(action)
+    def _weather_handler(self, action, weather_status, motor_on=False):
+        mediator = self._mediator(action, motor_on)
         with (
             patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=False),
             patch.object(WeatherConverter, "convert", return_value=WeatherResponse(status=weather_status)),
@@ -66,8 +71,8 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
             RoofWeatherHandler().handle(mediator)
         return mediator
 
-    def _telescope_handler(self, action, telescope_status):
-        mediator = self._mediator(action)
+    def _telescope_handler(self, action, telescope_status, motor_on=False):
+        mediator = self._mediator(action, motor_on)
         parked_telescope = SimpleNamespace(status=telescope_status, polling=True)
         with (
             patch("crac_server.handler.roof_handler.telescope", return_value=parked_telescope),
@@ -76,8 +81,8 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
             RoofTelescopeHandler().handle(mediator)
         return mediator
 
-    def _curtains_handler(self, action, curtain_status):
-        mediator = self._mediator(action)
+    def _curtains_handler(self, action, curtain_status, motor_on=False):
+        mediator = self._mediator(action, motor_on)
         curtain = SimpleNamespace(get_status=lambda: curtain_status)
         with (
             patch("crac_server.handler.roof_handler.curtain_east", return_value=curtain),
@@ -115,11 +120,25 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
         mediator = self._curtains_handler(RoofAction.CLOSE, CurtainStatus.CURTAIN_DISABLED)
         self.assertIs(False, mediator.is_disabled)
 
-    def test_a_status_request_disables_nothing(self):
-        self.assertIs(False, self._weather_handler(RoofAction.CHECK_ROOF, WeatherStatus.WEATHER_STATUS_DANGER).is_disabled)
-        self.assertIs(False, self._telescope_handler(RoofAction.CHECK_ROOF, TelescopeStatus.EAST).is_disabled)
-        self.assertIs(False, self._curtains_handler(RoofAction.CHECK_ROOF, CurtainStatus.CURTAIN_OPENED).is_disabled)
+    def test_a_status_request_with_the_motor_closing_checks_the_weather(self):
+        mediator = self._weather_handler(RoofAction.CHECK_ROOF, WeatherStatus.WEATHER_STATUS_DANGER, motor_on=False)
+        self.assertIs(True, mediator.is_disabled)
 
+    def test_a_status_request_with_the_motor_closing_ignores_the_telescope(self):
+        mediator = self._telescope_handler(RoofAction.CHECK_ROOF, TelescopeStatus.EAST, motor_on=False)
+        self.assertIs(False, mediator.is_disabled)
+
+    def test_a_status_request_with_the_motor_opening_checks_the_telescope(self):
+        mediator = self._telescope_handler(RoofAction.CHECK_ROOF, TelescopeStatus.EAST, motor_on=True)
+        self.assertIs(True, mediator.is_disabled)
+
+    def test_a_status_request_with_the_motor_opening_checks_the_curtains(self):
+        mediator = self._curtains_handler(RoofAction.CHECK_ROOF, CurtainStatus.CURTAIN_OPENED, motor_on=True)
+        self.assertIs(True, mediator.is_disabled)
+
+    def test_a_status_request_with_the_motor_opening_ignores_the_weather(self):
+        mediator = self._weather_handler(RoofAction.CHECK_ROOF, WeatherStatus.WEATHER_STATUS_DANGER, motor_on=True)
+        self.assertIs(False, mediator.is_disabled)
 
 if __name__ == "__main__":
     unittest.main()
