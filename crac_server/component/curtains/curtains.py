@@ -212,10 +212,8 @@ class Curtain:
 
     def bring_down(self):
 
-        """
-            Bring down the curtain completely to the closed limit switch
-            Keeps motor running until the physical closed limit switch activates
-        """
+        """Bring down the curtain until the closed limit switch stops it.
+        Aiming at n_step_sub_min keeps the encoder from stopping it first."""
         
         with self.lock_rotation:
             # Se il finecorsa chiuso è già attivo, non fare nulla
@@ -225,6 +223,7 @@ class Curtain:
             
             # Metti il motore in chiusura e lascialo correre fino allo switch
             # Il callback __reset_steps__() fermerà il motore quando lo switch si attiva
+            self.target = self.__sub_min_step__
             self.__close__()
 
     def disable(self):
