@@ -67,14 +67,14 @@ class Curtain:
                 self.target is None or
                 self.__steps_inside_tolerance_area__() or
                 self.steps() >= self.__security_step__ or
-                (self.steps() <= self.__sub_min_step__ and not self.to_disable) or
+                self.steps() <= self.__sub_min_step__ or
                 not self.motor.enable_device.value
             ):
                 self.__stop__()
                 logger.debug("Curtain: %s stopped with step: %s and target = %s", self._orientation, self.steps(), self.target)
                 self.target = None
-                if self.to_disable and self.curtain_closed.is_active and not self.motor.value:
-                    logger.debug("Curtain: %s disable motor due curtain_closed active and motor already stopped", self._orientation)
+                if self.to_disable and self.__is_down__() and not self.motor.value:
+                    logger.debug("Curtain: %s disable motor due curtain down and motor already stopped", self._orientation)
                     self.disable_motor()
 
     def __reset_steps__(self, open_or_closed):
@@ -97,8 +97,13 @@ class Curtain:
             (self.steps() == self.__sub_min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
         )
 
+    def __is_down__(self) -> bool:
+        """On the closed switch, or as low as the encoder allows: a switch
+        that does not trip is not waited for."""
+        return self.curtain_closed.is_active or self.steps() <= self.__sub_min_step__
+
     def __is_disabled__(self) -> bool:
-        return self.curtain_closed.is_active and not self.motor.value and not self.motor.enable_device.value
+        return self.__is_down__() and not self.motor.value and not self.motor.enable_device.value
 
     def __is_opening__(self) -> bool:
         return self.motor.value == 1
@@ -212,12 +217,11 @@ class Curtain:
 
     def bring_down(self):
 
-        """Bring down the curtain until the closed limit switch stops it.
-        Aiming at n_step_sub_min keeps the encoder from stopping it first."""
+        """Bring down the curtain to the closed limit switch, or to
+        n_step_sub_min if the switch does not trip first."""
         
         with self.lock_rotation:
-            # already on the closed limit switch: nothing to do
-            if self.curtain_closed.is_active:
+            if self.__is_down__():
                 logger.debug("Curtain: %s already at closed limit", self._orientation)
                 return
             
@@ -229,8 +233,7 @@ class Curtain:
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
 
-        # already on the closed limit switch: disable the motor right away
-        if self.curtain_closed.is_active:
+        if self.__is_down__():
             logger.debug("Curtain: %s already closed when disable() called, disable motor immediately", self._orientation)
             self.__stop__()
             self.disable_motor()
