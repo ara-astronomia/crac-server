@@ -11,6 +11,9 @@ from crac_protobuf.chart_pb2 import (
     WeatherResponse,  # type: ignore
     WeatherStatus,  # type: ignore
 )
+from crac_protobuf.roof_pb2 import (
+    RoofStatus,  # type: ignore
+)
 from crac_protobuf.curtains_pb2 import (
     CurtainStatus,  # type: ignore
 )
@@ -23,8 +26,10 @@ from crac_server.component.curtains.factory_curtain import curtain_east, curtain
 from crac_server.component.roof import roof
 from crac_server.component.telescope import telescope
 from crac_server.component.weather import weather
+from crac_server.config import Config
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.converter.weather_converter import WeatherConverter
+from crac_server.status_log import ErrorCause, StatusLogger
 
 
 logger = logging.getLogger(__name__)
@@ -33,12 +38,31 @@ logger = logging.getLogger(__name__)
 class WeatherService(WeatherServicer):
 
     def __init__(self) -> None:
+        self.check_interval = Config.getRequiredFloat("check_interval", "weather")
         self.t = None
         super().__init__()
         self.lock = Lock()
         self.weather_converter = WeatherConverter()
+        self._watch_log = StatusLogger(logger, "Weather watch")
 
     async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
+        return await self.check()
+
+    async def watch(self):
+        """Check the weather every check_interval seconds, for as long as the
+        server runs, so that the closure does not wait for a client to ask.
+        A failed check is logged and the next one runs anyway."""
+        while True:
+            try:
+                await self.check()
+                self._watch_log.record("running")
+            except Exception as e:
+                self._watch_log.record("check failed", ErrorCause.UNEXPECTED_FAILURE, detail=str(e))
+            await asyncio.sleep(self.check_interval)
+
+    async def check(self) -> WeatherResponse:
+        """Read the weather and, when it is dangerous and the roof may be
+        open, start the emergency closure unless one is already running."""
         try:
             response = await asyncio.to_thread(self.weather_converter.convert, weather())
         except UnreachableThresholdError:
@@ -51,7 +75,8 @@ class WeatherService(WeatherServicer):
 
         if (
             response.status == WeatherStatus.WEATHER_STATUS_DANGER and
-            telescope().polling and 
+            roof().get_status() != RoofStatus.ROOF_CLOSED and
+            telescope().polling and
             self.t == None
         ):
             logger.info("weather in danger status - block crac")

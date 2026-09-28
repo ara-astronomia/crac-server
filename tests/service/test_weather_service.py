@@ -72,8 +72,86 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
         self.weather_service.weather_converter.convert = MagicMock(return_value=WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER))
         type(telescope()).polling = True  # type: ignore
         self.weather_service._emergency_closure = MagicMock()
-        await self.weather_service.GetStatus(None, None)
+        with patch("crac_server.service.weather_service.roof") as roof:
+            roof.return_value.get_status.return_value = RoofStatus.ROOF_OPENED
+            await self.weather_service.GetStatus(None, None)
         self.weather_service._emergency_closure.assert_called_once()
+
+
+class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
+    """
+    The safety decision must not depend on a client polling GetStatus: the
+    service checks the weather by itself, and closes only what can be closed.
+    """
+
+    SERVICE_LOGGER = "crac_server.service.weather_service"
+
+    def setUp(self):
+        roof_patcher = patch("crac_server.service.weather_service.roof")
+        self.roof = roof_patcher.start().return_value
+        self.addCleanup(roof_patcher.stop)
+        self.roof.get_status.return_value = RoofStatus.ROOF_OPENED
+        telescope_patcher = patch("crac_server.service.weather_service.telescope")
+        telescope_patcher.start().return_value.polling = True
+        self.addCleanup(telescope_patcher.stop)
+
+        self.service = WeatherService()
+        self.service.check_interval = 0.01
+        self.service.weather_converter = MagicMock()
+        self.service.weather_converter.convert.return_value = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER)
+        self.service._emergency_closure = MagicMock()
+
+    async def test_danger_starts_the_closure_without_any_client(self):
+        await self.__watch_for(0.05)
+
+        self.service._emergency_closure.assert_called_once()
+
+    async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
+        self.service.weather_converter.convert.side_effect = [
+            UnreachableThresholdError("weather.chart.wind: the DANGER band is unreachable"),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER),
+        ]
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_for(0.05)
+
+        self.assertIn("DANGER band is unreachable", captured.output[0])
+        self.service._emergency_closure.assert_called_once()
+
+    async def test_a_closed_roof_needs_no_closure(self):
+        self.roof.get_status.return_value = RoofStatus.ROOF_CLOSED
+
+        await self.service.GetStatus(None, None)
+
+        self.service._emergency_closure.assert_not_called()
+
+    async def test_a_roof_in_error_may_be_open_and_is_closed(self):
+        self.roof.get_status.return_value = RoofStatus.ROOF_ERROR
+
+        await self.service.GetStatus(None, None)
+
+        self.service._emergency_closure.assert_called_once()
+
+    async def test_a_closure_in_progress_is_not_started_twice(self):
+        self.service.t = MagicMock()
+
+        await self.service.GetStatus(None, None)
+        await self.__watch_for(0.05)
+
+        self.service._emergency_closure.assert_not_called()
+
+    async def __watch_for(self, seconds):
+        task = asyncio.create_task(self.service.watch())
+        await asyncio.sleep(seconds)
+        task.cancel()
+
+
+class TestWeatherServiceCheckInterval(unittest.TestCase):
+
+    def test_a_missing_check_interval_fails_at_startup(self):
+        with patch("crac_server.service.weather_service.Config.getValue", return_value=""):
+            with self.assertRaises(ValueError):
+                WeatherService()
 
 
 class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):
