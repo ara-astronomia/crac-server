@@ -216,13 +216,12 @@ class Curtain:
         Aiming at n_step_sub_min keeps the encoder from stopping it first."""
         
         with self.lock_rotation:
-            # Se il finecorsa chiuso è già attivo, non fare nulla
+            # already on the closed limit switch: nothing to do
             if self.curtain_closed.is_active:
                 logger.debug("Curtain: %s already at closed limit", self._orientation)
                 return
             
-            # Metti il motore in chiusura e lascialo correre fino allo switch
-            # Il callback __reset_steps__() fermerà il motore quando lo switch si attiva
+            # __reset_steps__() stops the motor when the closed switch activates
             self.target = self.__sub_min_step__
             self.__close__()
 
@@ -230,7 +229,7 @@ class Curtain:
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
 
-        # Se il finecorsa chiuso è già attivo, disabilitiamo subito il motore
+        # already on the closed limit switch: disable the motor right away
         if self.curtain_closed.is_active:
             logger.debug("Curtain: %s already closed when disable() called, disable motor immediately", self._orientation)
             self.__stop__()
@@ -242,11 +241,8 @@ class Curtain:
 
     def enable(self):
         logger.debug("Curtain: %s, motor is %s", self.to_disable, self.motor.enable_device.value)
-        # Annulla un eventuale disable() ancora in corso (tenda non ancora
-        # arrivata al finecorsa chiuso): senza questo, to_disable resta a
-        # True e verrà letto come intento di disabilitazione ancora valido
-        # dal prossimo __check_and_stop__/__reset_steps__, ri-disabilitando
-        # il motore a sorpresa alla prossima chiusura completa.
+        # cancels a disable() still on its way down, or the next full close
+        # would disable the motor again
         with self.lock_rotation:
             self.to_disable = False
         self.motor.enable_device.on()

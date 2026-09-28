@@ -22,13 +22,9 @@ class TestCurtainEnable(unittest.TestCase):
         Device.pin_factory.reset()
 
     def test_enable_cancels_pending_disable_intent(self):
-        # regressione: disable() imposta to_disable=True, resettato solo dal
-        # callback del finecorsa chiuso quando la tenda arriva fisicamente
-        # chiusa (__reset_steps__/disable_motor). Se enable() viene chiamato
-        # PRIMA che questo accada (tenda ancora in chiusura), to_disable
-        # restava bloccato a True: la tenda si sarebbe ridisabilitata da
-        # sola alla successiva chiusura completa, anche non voluta.
-        self.curtain.curtain_closed.pin.drive_high()  # finecorsa chiuso non ancora attivo
+        # enable() while disable() is still on its way down: left True,
+        # to_disable would disable the motor at the next full close
+        self.curtain.curtain_closed.pin.drive_high()
         self.curtain.disable()
         self.assertTrue(self.curtain.to_disable)
 
