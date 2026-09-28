@@ -16,14 +16,26 @@ class RoofControl():
         self.roof_open_switch = DigitalInputDevice(Config.getInt("roof_verify_open", "roof_board"), pull_up=True)
         self.timeout = Config.getInt("roof_timeout", "roof_board")
         self.lock = asyncio.Lock()
-        self.movement_not_confirmed = False
+        self._movement_not_confirmed = False
         self._status_log = StatusLogger(logger, "Roof", RoofStatus)
+
+    @property
+    def movement_not_confirmed(self) -> bool:
+        """The last run ordered did not reach its limit switch in time. Only a
+        run writes it."""
+        return self._movement_not_confirmed
+
+    @property
+    def sensors_inconsistent(self) -> bool:
+        """Both limit switches active: a run could never be confirmed."""
+        return self.roof_closed_switch.is_active and self.roof_open_switch.is_active
 
     async def open(self):
         async with self.lock:
+            self._movement_not_confirmed = False
             self.motor.on()
             is_open = await self.__reaches(self.roof_open_switch)
-            self.movement_not_confirmed = not is_open
+            self._movement_not_confirmed = not is_open
         if not is_open:
             logger.error(
                 "Roof opening not confirmed after %s seconds: motor=%s, "
@@ -36,9 +48,10 @@ class RoofControl():
 
     async def close(self):
         async with self.lock:
+            self._movement_not_confirmed = False
             self.motor.off()
             is_closed = await self.__reaches(self.roof_closed_switch)
-            self.movement_not_confirmed = not is_closed
+            self._movement_not_confirmed = not is_closed
             if not is_closed:
                 logger.error(
                     "Roof closing not confirmed after %s seconds: motor=%s, "
@@ -58,6 +71,12 @@ class RoofControl():
             logger.error("Roof run interrupted with the motor still driving: the roof is left mid travel")
             raise
 
+    @staticmethod
+    def __is_where_the_motor_sent_it(is_roof_closed, is_roof_open, is_switched_on) -> bool:
+        """A limit switch that agrees with the motor settles the position,
+        however late the roof got there."""
+        return (is_roof_closed and not is_switched_on) or (is_roof_open and is_switched_on)
+
     def get_status(self) -> RoofStatus:
         is_roof_closed = self.roof_closed_switch.is_active
         logger.debug(f'roof closed switch is {is_roof_closed}')
@@ -66,13 +85,15 @@ class RoofControl():
         is_switched_on = self.motor.value
         logger.debug(f'roof motor switch is {is_switched_on}')
 
-        if is_roof_closed and is_roof_open:
+        if self.sensors_inconsistent:
             status = RoofStatus.ROOF_ERROR
             self._status_log.record(
                 status, ErrorCause.SENSORS_INCONSISTENT,
                 detail="both limit switches active",
             )
-        elif self.movement_not_confirmed:
+        elif self.movement_not_confirmed and not self.__is_where_the_motor_sent_it(
+            is_roof_closed, is_roof_open, is_switched_on
+        ):
             status = RoofStatus.ROOF_ERROR
             self._status_log.record(
                 status, ErrorCause.MOVEMENT_NOT_CONFIRMED,

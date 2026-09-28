@@ -36,10 +36,22 @@ class AbstractButtonHandler(AbstractHandler):
         
         return RoofConverter().convert(mediator)
 
+    @staticmethod
+    def _would_open(mediator: RoofMediator) -> bool:
+        return mediator.status is RoofStatus.ROOF_CLOSED or (
+            mediator.status is RoofStatus.ROOF_ERROR and mediator.action_in_error == RoofAction.OPEN
+        )
+
+    @staticmethod
+    def _would_close(mediator: RoofMediator) -> bool:
+        return mediator.status is RoofStatus.ROOF_OPENED or (
+            mediator.status is RoofStatus.ROOF_ERROR and mediator.action_in_error == RoofAction.CLOSE
+        )
+
 
 class RoofWeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
-        if mediator.status is RoofStatus.ROOF_CLOSED:
+        if self._would_open(mediator):
             weather_converter = WeatherConverter()
             weather_response = weather_converter.convert(weather())
             logger.debug(f"In weather status {weather_response.status}")
@@ -55,7 +67,7 @@ class RoofWeatherHandler(AbstractButtonHandler):
 class RoofTelescopeHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
         if (
-            mediator.status is RoofStatus.ROOF_OPENED and
+            self._would_close(mediator) and
             not self.__telescope_is_secure()
         ):
             self._next_handler = None
@@ -72,7 +84,7 @@ class RoofTelescopeHandler(AbstractButtonHandler):
 class RoofCurtainsHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
         if (
-            mediator.status is RoofStatus.ROOF_OPENED and
+            self._would_close(mediator) and
             not self.__curtains_are_secure()
         ):
             self._next_handler = None
@@ -88,14 +100,26 @@ class RoofCurtainsHandler(AbstractButtonHandler):
 
 class RoofHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
-        if mediator.status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING]:
+        if (
+            mediator.status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING] or
+            mediator.button.sensors_inconsistent
+        ):
             self._next_handler = None
             mediator.is_disabled = True
         elif mediator.action is RoofAction.OPEN:
             loop = asyncio.get_event_loop()
             loop.create_task(mediator.button.open())
+            self.__answer_with_the_run(mediator, RoofStatus.ROOF_OPENING)
         elif mediator.action is RoofAction.CLOSE:
             loop = asyncio.get_event_loop()
             loop.create_task(mediator.button.close())
+            self.__answer_with_the_run(mediator, RoofStatus.ROOF_CLOSING)
 
         return super().handle(mediator)
+
+    @staticmethod
+    def __answer_with_the_run(mediator: RoofMediator, run: RoofStatus):
+        """The run starts after the answer: the status read before it would
+        enable the button again until the next poll."""
+        mediator.status = run
+        mediator.is_disabled = True

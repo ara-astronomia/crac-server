@@ -14,12 +14,12 @@ class MockCurtain(Curtain):
             self.curtain_open.pin.drive_high()
 
     def __rotate_cw__(self, *inputs):
-        [input.pin.drive_low() for input in inputs if self.target is not None]
-        [input.pin.drive_high() for input in inputs if self.target is not None]
+        [input.pin.drive_low() for input in inputs]
+        [input.pin.drive_high() for input in inputs]
 
     def __rotate_ccw__(self, *inputs):
-        [input.pin.drive_low() for input in reversed(inputs) if self.target is not None]
-        [input.pin.drive_high() for input in reversed(inputs) if self.target is not None]
+        [input.pin.drive_low() for input in reversed(inputs)]
+        [input.pin.drive_high() for input in reversed(inputs)]
 
     def __check_curtains_limit__(self):
         if  self.curtain_closed.pin:
@@ -44,13 +44,13 @@ class MockCurtain(Curtain):
         self.t.start()
 
     def __fake_move_forward__(self, curtain):
-        while curtain.motor.is_active and curtain.motor.value:
+        while curtain.motor.value == 1:
             sleep(0.2)
             curtain.__rotate_cw__(curtain.rotary_encoder.a, curtain.rotary_encoder.b)
             curtain.__check_curtains_limit__()
 
     def __fake_move_backward__(self, curtain):
-        while curtain.motor.is_active and curtain.motor.value:
+        while curtain.motor.value == -1:
             sleep(0.2)
             curtain.__rotate_ccw__(curtain.rotary_encoder.a, curtain.rotary_encoder.b)
             curtain.__check_curtains_limit__()
