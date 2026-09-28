@@ -152,5 +152,20 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
                 mediator.button.open.assert_not_called()
                 mediator.button.close.assert_not_called()
 
+    def test_a_command_answers_with_the_run_it_started(self):
+        for action, run in ((RoofAction.OPEN, RoofStatus.ROOF_OPENING), (RoofAction.CLOSE, RoofStatus.ROOF_CLOSING)):
+            with self.subTest(action=RoofAction.Name(action)):
+                mediator = self._mediator(action)
+                loop = MagicMock()
+                with (
+                    patch("crac_server.handler.roof_handler.asyncio.get_event_loop", return_value=loop),
+                    patch.object(RoofConverter, "convert", return_value=RoofResponse()),
+                ):
+                    RoofHandler().handle(mediator)
+
+                loop.create_task.assert_called_once()
+                self.assertEqual(run, mediator.status)
+                self.assertIs(True, mediator.is_disabled)
+
 if __name__ == "__main__":
     unittest.main()

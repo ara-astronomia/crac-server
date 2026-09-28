@@ -109,8 +109,17 @@ class RoofHandler(AbstractButtonHandler):
         elif mediator.action is RoofAction.OPEN:
             loop = asyncio.get_event_loop()
             loop.create_task(mediator.button.open())
+            self.__answer_with_the_run(mediator, RoofStatus.ROOF_OPENING)
         elif mediator.action is RoofAction.CLOSE:
             loop = asyncio.get_event_loop()
             loop.create_task(mediator.button.close())
+            self.__answer_with_the_run(mediator, RoofStatus.ROOF_CLOSING)
 
         return super().handle(mediator)
+
+    @staticmethod
+    def __answer_with_the_run(mediator: RoofMediator, run: RoofStatus):
+        """The run starts after the answer: the status read before it would
+        enable the button again until the next poll."""
+        mediator.status = run
+        mediator.is_disabled = True
