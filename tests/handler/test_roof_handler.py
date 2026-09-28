@@ -1,15 +1,16 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from crac_protobuf.chart_pb2 import WeatherResponse, WeatherStatus
 from crac_protobuf.curtains_pb2 import CurtainStatus
-from crac_protobuf.roof_pb2 import RoofAction, RoofResponse, RoofStatus
+from crac_protobuf.roof_pb2 import RoofAction, RoofRequest, RoofResponse, RoofStatus
 from crac_protobuf.telescope_pb2 import TelescopeStatus
-from crac_server.converter.roof_converter import RoofConverter
+from crac_server.converter.roof_converter import RoofConverter, RoofMediator
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.roof_handler import (
     RoofCurtainsHandler,
+    RoofHandler,
     RoofTelescopeHandler,
     RoofWeatherHandler,
 )
@@ -53,13 +54,13 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
     request disables nothing, since it asks for no movement.
     """
 
-    def _mediator(self, action, motor_on=False):
-        requested = action in (RoofAction.OPEN, RoofAction.CLOSE)
-        against_the_motor = RoofAction.CLOSE if motor_on else RoofAction.OPEN
-        return SimpleNamespace(
-            status=RoofStatus.ROOF_ERROR, action=action, is_disabled=False,
-            action_in_error=action if requested else against_the_motor,
-        )
+    def _mediator(self, action, motor_on=False, sensors_inconsistent=False):
+        roof_in_error = MagicMock()
+        roof_in_error.get_status.return_value = RoofStatus.ROOF_ERROR
+        roof_in_error.motor.value = int(motor_on)
+        roof_in_error.sensors_inconsistent = sensors_inconsistent
+        with patch("crac_server.converter.roof_converter.roof", return_value=roof_in_error):
+            return RoofMediator(RoofRequest(action=action))
 
     def _weather_handler(self, action, weather_status, motor_on=False):
         mediator = self._mediator(action, motor_on)
@@ -139,6 +140,17 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
     def test_a_status_request_with_the_motor_opening_ignores_the_weather(self):
         mediator = self._weather_handler(RoofAction.CHECK_ROOF, WeatherStatus.WEATHER_STATUS_DANGER, motor_on=True)
         self.assertIs(False, mediator.is_disabled)
+
+    def test_with_both_limit_switches_active_no_command_moves_the_roof(self):
+        for action in (RoofAction.OPEN, RoofAction.CLOSE, RoofAction.CHECK_ROOF):
+            with self.subTest(action=RoofAction.Name(action)):
+                mediator = self._mediator(action, sensors_inconsistent=True)
+                with patch.object(RoofConverter, "convert", return_value=RoofResponse()):
+                    RoofHandler().handle(mediator)
+
+                self.assertIs(True, mediator.is_disabled)
+                mediator.button.open.assert_not_called()
+                mediator.button.close.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

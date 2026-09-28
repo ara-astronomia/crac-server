@@ -100,7 +100,10 @@ class RoofCurtainsHandler(AbstractButtonHandler):
 
 class RoofHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
-        if mediator.status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING]:
+        if (
+            mediator.status in [RoofStatus.ROOF_OPENING, RoofStatus.ROOF_CLOSING] or
+            mediator.button.sensors_inconsistent
+        ):
             self._next_handler = None
             mediator.is_disabled = True
         elif mediator.action is RoofAction.OPEN:

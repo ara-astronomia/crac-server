@@ -25,6 +25,11 @@ class RoofControl():
         run writes it."""
         return self._movement_not_confirmed
 
+    @property
+    def sensors_inconsistent(self) -> bool:
+        """Both limit switches active: a run could never be confirmed."""
+        return self.roof_closed_switch.is_active and self.roof_open_switch.is_active
+
     async def open(self):
         async with self.lock:
             self._movement_not_confirmed = False
@@ -80,7 +85,7 @@ class RoofControl():
         is_switched_on = self.motor.value
         logger.debug(f'roof motor switch is {is_switched_on}')
 
-        if is_roof_closed and is_roof_open:
+        if self.sensors_inconsistent:
             status = RoofStatus.ROOF_ERROR
             self._status_log.record(
                 status, ErrorCause.SENSORS_INCONSISTENT,
