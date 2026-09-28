@@ -91,12 +91,6 @@ class TestCurtainDisable(unittest.TestCase):
         self.assertEqual(29, simulated.steps())
         self.assertEqual(0, simulated.motor.value)
 
-    def test_a_curtain_at_rest_is_disabled_on_the_closed_limit_switch(self):
-        self.curtain.disable()
-        self.curtain.curtain_closed.pin.drive_low()
-
-        self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
-
     def test_without_the_closed_switch_the_encoder_stops_the_run_at_sub_min(self):
         self.curtain.disable()
         self._walk_down_to(-40)

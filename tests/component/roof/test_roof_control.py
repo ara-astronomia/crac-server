@@ -243,6 +243,22 @@ class TestRoofControl(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(RoofStatus.ROOF_OPENING, roof_control.get_status())
         await run
 
+    async def test_a_new_close_after_an_error_reports_the_run(self):
+        roof_control = simulated_roof(travel_seconds=0.3)
+        await roof_control.open()
+        await an_unconfirmed_run(roof_control)
+        self.assertEqual(RoofStatus.ROOF_ERROR, roof_control.get_status())
+
+        seen_during_the_run = []
+
+        def reaches(timeout):
+            seen_during_the_run.append(roof_control.get_status())
+            return True
+
+        with patch.object(roof_control.roof_closed_switch, "wait_for_active", side_effect=reaches):
+            await roof_control.close()
+        self.assertEqual([RoofStatus.ROOF_CLOSING], seen_during_the_run)
+
     async def test_when_roof_is_blocked_while_opening_then_it_will_close(self):
         roof_control = RoofControl()
         roof_control.roof_open_switch.pin.drive_high()
