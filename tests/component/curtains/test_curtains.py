@@ -66,6 +66,24 @@ class TestCurtainDisable(unittest.TestCase):
 
         self.assertEqual(-1, self.curtain.motor.value)
 
+    def test_the_simulated_encoder_turns_with_the_motor_even_without_a_target(self):
+        simulated = MockCurtain(
+            rotary_encoder={"a": 7, "b": 8, "max_steps": 215},
+            curtain_closed={"pin": 16, "pull_up": True},
+            curtain_open={"pin": 21, "pull_up": True},
+            motor={"forward": 23, "backward": 24, "enable": 25, "pwm": False},
+            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
+        )
+        self.addCleanup(simulated.__stop__)
+        simulated.motor.enable_device.on()
+        simulated.rotary_encoder.steps = 30
+
+        simulated.__close__()
+        simulated.t.join(timeout=2)
+
+        self.assertEqual(29, simulated.steps())
+        self.assertEqual(0, simulated.motor.value)
+
     def test_a_curtain_at_rest_is_disabled_on_the_closed_limit_switch(self):
         self.curtain.disable()
         self.curtain.curtain_closed.pin.drive_low()
