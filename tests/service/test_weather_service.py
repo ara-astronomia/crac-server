@@ -211,6 +211,23 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
 
         self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
 
+    async def test_a_reading_that_keeps_failing_is_logged_once_and_so_is_its_recovery(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = [
+            ConnectionError("weather station unreachable"),
+            ConnectionError("weather station unreachable"),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
+        ]
+
+        with self.assertLogs("crac_server.service.weather_service", level="INFO") as captured:
+            for _ in range(3):
+                await service.GetStatus(None, None)
+
+        self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
+        self.assertIn("weather station unreachable", captured.records[0].getMessage())
+        self.assertIn("recovered", captured.records[1].getMessage())
+
     async def test_a_slow_reading_lets_the_other_rpcs_through(self):
         """The weather refreshes from a remote source: while that one stays
         silent, roof, telescope, curtains and UPS must keep answering."""

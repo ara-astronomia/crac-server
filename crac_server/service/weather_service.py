@@ -47,6 +47,7 @@ class WeatherService(WeatherServicer):
         self.lock = Lock()
         self.weather_converter = WeatherConverter()
         self._watch_log = StatusLogger(logger, "Weather watch")
+        self._read_log = StatusLogger(logger, "Weather", WeatherStatus)
 
     @staticmethod
     def _check_interval() -> float:
@@ -82,9 +83,11 @@ class WeatherService(WeatherServicer):
             response = await asyncio.to_thread(self.weather_converter.convert, weather())
         except UnreachableThresholdError:
             raise
-        except Exception:
-            logger.error("Weather read failed: reporting status as UNSPECIFIED", exc_info=1)
+        except Exception as e:
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)
+            self._read_log.record(response.status, ErrorCause.DEVICE_UNREACHABLE, detail=f"{type(e).__name__}: {e}")
+        else:
+            self._read_log.record(response.status)
         logger.debug("weather response")
         logger.debug(response)
 
