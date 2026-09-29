@@ -1,4 +1,6 @@
 import asyncio
+import os
+from threading import Thread
 from time import sleep
 import unittest
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -102,21 +104,25 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.service._emergency_closure = MagicMock()
 
     async def test_danger_starts_the_closure_without_any_client(self):
-        await self.__watch_for(0.05)
+        await self.__watch_until_checked(times=1)
 
         self.service._emergency_closure.assert_called_once()
 
     async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
-        self.service.weather_converter.convert.side_effect = [
-            UnreachableThresholdError("weather.chart.wind: the DANGER band is unreachable"),
-            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER),
-        ]
+        self.service.weather_converter.convert.side_effect = self.__unreachable_threshold_then_danger()
 
         with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
-            await self.__watch_for(0.05)
+            await self.__watch_until_checked(times=2)
 
         self.assertIn("DANGER band is unreachable", captured.output[0])
         self.service._emergency_closure.assert_called_once()
+
+    async def test_the_watch_waits_check_interval_between_two_checks(self):
+        with patch("crac_server.service.weather_service.asyncio.sleep", side_effect=asyncio.CancelledError) as sleep:
+            with self.assertRaises(asyncio.CancelledError):
+                await self.service.watch()
+
+        sleep.assert_awaited_once_with(self.service.check_interval)
 
     async def test_a_closed_roof_needs_no_closure(self):
         self.roof.get_status.return_value = RoofStatus.ROOF_CLOSED
@@ -136,14 +142,28 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.service.t = MagicMock()
 
         await self.service.GetStatus(None, None)
-        await self.__watch_for(0.05)
+        await self.__watch_until_checked(times=3)
 
         self.service._emergency_closure.assert_not_called()
 
-    async def __watch_for(self, seconds):
+    async def __watch_until_checked(self, times):
+        """Run the watch until the given number of checks is over, which is
+        when the next one starts reading, then wait for the closure thread
+        they may have started."""
         task = asyncio.create_task(self.service.watch())
-        await asyncio.sleep(seconds)
-        task.cancel()
+        try:
+            async with asyncio.timeout(2):
+                while self.service.weather_converter.convert.call_count <= times:
+                    await asyncio.sleep(0.001)
+        finally:
+            task.cancel()
+        if isinstance(self.service.t, Thread):
+            self.service.t.join()
+
+    def __unreachable_threshold_then_danger(self):
+        yield UnreachableThresholdError("weather.chart.wind: the DANGER band is unreachable")
+        while True:
+            yield WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER)
 
 
 class TestWeatherServiceCheckInterval(unittest.TestCase):
@@ -152,6 +172,17 @@ class TestWeatherServiceCheckInterval(unittest.TestCase):
         with patch("crac_server.service.weather_service.Config.getValue", return_value=""):
             with self.assertRaises(ValueError):
                 WeatherService()
+
+    def test_an_interval_that_is_not_a_number_of_at_least_30_seconds_fails_at_startup(self):
+        for value in ("abc", "29.9", "0", "-5", "nan", "inf"):
+            with self.subTest(check_interval=value):
+                with patch.dict(os.environ, {"WEATHER_CHECK_INTERVAL": value}):
+                    with self.assertRaises(ValueError):
+                        WeatherService()
+
+    def test_30_seconds_is_accepted(self):
+        with patch.dict(os.environ, {"WEATHER_CHECK_INTERVAL": "30"}):
+            self.assertEqual(30, WeatherService().check_interval)
 
 
 class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):

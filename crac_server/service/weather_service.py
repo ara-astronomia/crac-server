@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 from threading import Lock, Thread
 from time import sleep
 from crac_protobuf.button_pb2 import (
@@ -34,16 +35,30 @@ from crac_server.status_log import ErrorCause, StatusLogger
 
 logger = logging.getLogger(__name__)
 
+MIN_CHECK_INTERVAL = 30
+
 
 class WeatherService(WeatherServicer):
 
     def __init__(self) -> None:
-        self.check_interval = Config.getRequiredFloat("check_interval", "weather")
+        self.check_interval = self._check_interval()
         self.t = None
         super().__init__()
         self.lock = Lock()
         self.weather_converter = WeatherConverter()
         self._watch_log = StatusLogger(logger, "Weather watch")
+
+    @staticmethod
+    def _check_interval() -> float:
+        """A shorter interval would only spin the loop: the weather source
+        itself refreshes far less often. NaN and infinity would silently stop
+        the checks."""
+        interval = Config.getRequiredFloat("check_interval", "weather")
+        if not MIN_CHECK_INTERVAL <= interval < math.inf:
+            raise ValueError(
+                f"weather.check_interval must be a number of seconds, at least {MIN_CHECK_INTERVAL}: {interval}"
+            )
+        return interval
 
     async def GetStatus(self, request: WeatherRequest, context) -> WeatherResponse:
         return await self.check()
