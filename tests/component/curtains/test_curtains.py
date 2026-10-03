@@ -99,7 +99,21 @@ class TestCurtainDisable(unittest.TestCase):
 
         self.assertEqual(205, simulated.steps())
         self.assertFalse(simulated.curtain_open.is_active)
-        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, simulated.get_status())
+
+    def test_a_curtain_stopped_at_full_travel_is_open(self):
+        self.curtain.rotary_encoder.steps = 205
+
+        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
+
+    def test_a_curtain_stopped_past_full_travel_is_open(self):
+        self.curtain.rotary_encoder.steps = 210
+
+        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
+
+    def test_a_curtain_stopped_short_of_full_travel_is_not_open(self):
+        self.curtain.rotary_encoder.steps = 204
+
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
 
     def test_without_the_closed_switch_the_curtain_keeps_going_down(self):
         self.curtain.disable()

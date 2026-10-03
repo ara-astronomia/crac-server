@@ -116,7 +116,9 @@ class Curtain:
         return self.motor.value == -1
 
     def __is_open__(self) -> bool:
-        return self.curtain_open.is_active and not self.curtain_closed.is_active and not self.motor.value
+        """Full travel is read from the encoder: the curtains run out of
+        travel before reaching the open switch."""
+        return self.steps() >= self.__max_step__ and not self.curtain_closed.is_active and not self.motor.value
 
     def __is_closed__(self) -> bool:
         return self.curtain_closed.is_active and not self.curtain_open.is_active and not self.motor.value
