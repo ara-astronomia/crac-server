@@ -91,6 +91,16 @@ class TestCurtainDisable(unittest.TestCase):
         self.assertEqual(29, simulated.steps())
         self.assertEqual(0, simulated.motor.value)
 
+    def test_a_simulated_curtain_never_reaches_the_open_switch(self):
+        simulated = self._simulated(200)
+        simulated.target = 205
+        simulated.__open__()
+        simulated.t.join(timeout=3)
+
+        self.assertEqual(205, simulated.steps())
+        self.assertFalse(simulated.curtain_open.is_active)
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, simulated.get_status())
+
     def test_without_the_closed_switch_the_curtain_keeps_going_down(self):
         self.curtain.disable()
         self._walk_down_to(-40)
