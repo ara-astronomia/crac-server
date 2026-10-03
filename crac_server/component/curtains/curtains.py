@@ -25,7 +25,6 @@ class Curtain:
         self._status_log = StatusLogger(logger, orientation, CurtainStatus)
 
     def __base__(self):
-        self.__sub_min_step__ = Config.getInt("n_step_sub_min", "encoder_step")
         self.__min_step__ = 0
         self.__max_step__ = Config.getInt("n_step_corsa", "encoder_step")
         self.__security_step__ = Config.getInt("n_step_sicurezza", "encoder_step")
@@ -59,15 +58,22 @@ class Curtain:
             return  self.target - self.__tolerance_steps__  <= self.steps() <= self.target
         return True
 
+    def __closing_to_the_switch__(self) -> bool:
+        """A curtain sent to its closed position runs until the closed switch
+        trips: the encoder of these curtains is not reliable enough to tell
+        where the bottom is."""
+        return self.target is not None and self.target <= self.__min_step__ and self.motor.value == -1
+
     def __check_and_stop__(self):
         with self.lock_rotation:
+            if self.__closing_to_the_switch__():
+                return
             logger.debug("Curtain %s: Number of steps: %s", self._orientation, self.steps())
             logger.debug("Curtain: %s: target: %s", self._orientation, self.target)
             if (
                 self.target is None or
                 self.__steps_inside_tolerance_area__() or
                 self.steps() >= self.__security_step__ or
-                self.steps() <= self.__sub_min_step__ or
                 not self.motor.enable_device.value
             ):
                 self.__stop__()
@@ -92,15 +98,13 @@ class Curtain:
 
     def __is_danger__(self):
         return (
-            self.steps() > self.__security_step__ or self.steps() < self.__sub_min_step__ or
-            (self.steps() == self.__security_step__ and not self.curtain_open.is_active and self.motor.value == 1) or
-            (self.steps() == self.__sub_min_step__ and not self.curtain_closed.is_active and self.motor.value == -1)
+            self.steps() > self.__security_step__ or
+            (self.steps() == self.__security_step__ and not self.curtain_open.is_active and self.motor.value == 1)
         )
 
     def __is_down__(self) -> bool:
-        """On the closed switch, or as low as the encoder allows: a switch
-        that does not trip is not waited for."""
-        return self.curtain_closed.is_active or self.steps() <= self.__sub_min_step__
+        """Only the closed switch says the curtain is down."""
+        return self.curtain_closed.is_active
 
     def __is_disabled__(self) -> bool:
         return self.__is_down__() and not self.motor.value and not self.motor.enable_device.value
@@ -209,24 +213,24 @@ class Curtain:
 
             self.target = step
 
-            # deciding the movement direction
-            if self.steps() < self.target - self.__tolerance_steps__:
+            if self.target <= self.__min_step__:
+                if not self.__is_down__():
+                    self.__close__()
+            elif self.steps() < self.target - self.__tolerance_steps__:
                 self.__open__()
             elif self.steps() > self.target + self.__tolerance_steps__:
                 self.__close__()
 
     def bring_down(self):
 
-        """Bring down the curtain to the closed limit switch, or to
-        n_step_sub_min if the switch does not trip first."""
+        """Bring down the curtain until the closed limit switch trips."""
         
         with self.lock_rotation:
             if self.__is_down__():
                 logger.debug("Curtain: %s already at closed limit", self._orientation)
                 return
             
-            # __reset_steps__() stops the motor when the closed switch activates
-            self.target = self.__sub_min_step__
+            self.target = self.__min_step__
             self.__close__()
 
     def disable(self):

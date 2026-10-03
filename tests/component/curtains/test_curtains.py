@@ -91,25 +91,34 @@ class TestCurtainDisable(unittest.TestCase):
         self.assertEqual(29, simulated.steps())
         self.assertEqual(0, simulated.motor.value)
 
-    def test_without_the_closed_switch_the_encoder_stops_the_run_at_sub_min(self):
+    def test_without_the_closed_switch_the_curtain_keeps_going_down(self):
         self.curtain.disable()
         self._walk_down_to(-40)
 
-        self.assertEqual(-10, self.curtain.steps())
-        self.assertEqual(0, self.curtain.motor.value)
+        self.assertEqual(-40, self.curtain.steps())
+        self.assertEqual(-1, self.curtain.motor.value)
+        self.assertEqual(CurtainStatus.CURTAIN_DISABLING, self.curtain.get_status())
 
-    def test_a_curtain_stopped_at_sub_min_is_trusted_to_be_down(self):
+    def test_the_closed_switch_stops_and_disables_the_curtain(self):
         self.curtain.disable()
         self._walk_down_to(-40)
 
+        self._press_closed_switch()
+
+        self.assertEqual(0, self.curtain.steps())
         self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
 
-    def test_a_curtain_at_sub_min_does_not_start_again(self):
+    def test_a_curtain_below_zero_without_the_closed_switch_starts_again(self):
         self.curtain.rotary_encoder.steps = -10
         self.curtain.disable()
 
-        self.assertEqual(0, self.curtain.motor.value)
-        self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
+        self.assertEqual(-1, self.curtain.motor.value)
+
+    def _press_closed_switch(self):
+        self.curtain.curtain_closed.pin.drive_low()
+        deadline = time.monotonic() + 1
+        while self.curtain.motor.value and time.monotonic() < deadline:
+            time.sleep(0.01)
 
     def test_a_simulated_curtain_disabled_while_opening_reaches_the_closed_switch(self):
         simulated = self._simulated(5)
@@ -123,3 +132,79 @@ class TestCurtainDisable(unittest.TestCase):
             time.sleep(0.1)
 
         self.assertEqual(CurtainStatus.CURTAIN_DISABLED, simulated.get_status())
+
+
+class TestCurtainCloseToTheSwitch(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+        self.curtain = Curtain(
+            rotary_encoder={"a": 5, "b": 6, "max_steps": 215},
+            curtain_closed={"pin": 12, "pull_up": True},
+            curtain_open={"pin": 13, "pull_up": True},
+            motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
+            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
+        )
+        self.curtain.motor.enable_device.on()
+        self.curtain.rotary_encoder.steps = 50
+
+    def tearDown(self):
+        self.curtain.__stop__()
+        Device.pin_factory.reset()
+
+    def _walk_down_to(self, steps):
+        while self.curtain.motor.value and self.curtain.steps() > steps:
+            self.curtain.rotary_encoder.steps = self.curtain.steps() - 1
+            self.curtain.__check_and_stop__()
+
+    def test_the_encoder_at_zero_does_not_stop_a_closing_curtain(self):
+        self.curtain.move(0)
+        self._walk_down_to(-5)
+
+        self.assertEqual(-1, self.curtain.motor.value)
+
+    def test_the_closed_switch_stops_a_closing_curtain_and_resets_the_steps(self):
+        self.curtain.move(0)
+        self._walk_down_to(-5)
+
+        self.curtain.curtain_closed.pin.drive_low()
+        deadline = time.monotonic() + 1
+        while self.curtain.motor.value and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        self.assertEqual(0, self.curtain.motor.value)
+        self.assertEqual(0, self.curtain.steps())
+        self.assertEqual(CurtainStatus.CURTAIN_CLOSED, self.curtain.get_status())
+
+    def test_a_curtain_at_zero_steps_but_off_the_switch_closes(self):
+        self.curtain.rotary_encoder.steps = 0
+
+        self.curtain.move(0)
+
+        self.assertEqual(-1, self.curtain.motor.value)
+
+    def test_a_curtain_on_the_closed_switch_does_not_move(self):
+        self.curtain.rotary_encoder.steps = 0
+        self.curtain.curtain_closed.pin.drive_low()
+
+        self.curtain.move(0)
+
+        self.assertEqual(0, self.curtain.motor.value)
+
+    def test_a_curtain_below_zero_is_not_in_danger(self):
+        self.curtain.rotary_encoder.steps = -30
+
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
+
+    def test_a_closing_curtain_well_below_zero_is_not_in_danger(self):
+        self.curtain.move(0)
+        self._walk_down_to(-10)
+
+        self.assertEqual(CurtainStatus.CURTAIN_CLOSING, self.curtain.get_status())
+
+    def test_a_partial_target_is_still_reached_by_the_encoder(self):
+        self.curtain.move(20)
+        self._walk_down_to(0)
+
+        self.assertEqual(20, self.curtain.steps())
+        self.assertEqual(0, self.curtain.motor.value)
