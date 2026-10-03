@@ -12,6 +12,7 @@ class MockCurtain(Curtain):
             self.curtain_closed.pin.drive_low()
         if  self.curtain_open.pin:
             self.curtain_open.pin.drive_high()
+        self.__enable_unless_down__()
 
     def __rotate_cw__(self, *inputs):
         [input.pin.drive_low() for input in inputs]
@@ -22,16 +23,13 @@ class MockCurtain(Curtain):
         [input.pin.drive_high() for input in reversed(inputs)]
 
     def __check_curtains_limit__(self):
+        """Only the closed switch trips: the real curtains run out of travel
+        before reaching the open switch."""
         if  self.curtain_closed.pin:
             if self.steps() <= self.__min_step__ + self.__tolerance_steps__:
                 self.curtain_closed.pin.drive_low()
             else:
                 self.curtain_closed.pin.drive_high()
-        if  self.curtain_open.pin:
-            if self.steps() >= self.__max_step__ - self.__tolerance_steps__:
-                self.curtain_open.pin.drive_low()
-            else:
-                self.curtain_open.pin.drive_high()
 
     def __open__(self):
         super().__open__()
