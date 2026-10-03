@@ -29,7 +29,7 @@ class TestCurtainStatusLogging(unittest.TestCase):
 
     def _no_state_recognized(self):
         predicates = [
-            "__is_disabled__", "__is_opening__",
+            "__is_danger__", "__is_disabled__", "__is_opening__",
             "__is_closing__", "__is_open__", "__is_closed__", "__is_stopped__",
         ]
         patchers = [patch.object(self.curtain, name, return_value=False) for name in predicates]
