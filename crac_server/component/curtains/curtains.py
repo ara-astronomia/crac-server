@@ -49,12 +49,21 @@ class Curtain:
         self.curtain_open.when_activated = self.__reset_steps__
         self.rotary_encoder.when_rotated = self.__check_and_stop__
 
+    def __stop_before_reversing__(self, direction: int):
+        """A motor never turns the other way while running: it stops and
+        rests for reverse_pause seconds first."""
+        if self.motor.value == -direction:
+            self.__stop__()
+            sleep(self.__reverse_pause__)
+
     def __open__(self):
         with self.lock_rotation:
+            self.__stop_before_reversing__(1)
             self.motor.forward()
 
     def __close__(self):
         with self.lock_rotation:
+            self.__stop_before_reversing__(-1)
             self.motor.backward()
 
     def __stop__(self):
@@ -209,9 +218,6 @@ class Curtain:
                 logger.debug("Curtain: %s already at closed limit", self._orientation)
                 return
             
-            if self.__is_opening__():
-                self.__stop__()
-                sleep(self.__reverse_pause__)
             self.target = self.__min_step__
             self.__close__()
 

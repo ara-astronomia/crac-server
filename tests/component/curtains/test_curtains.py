@@ -338,3 +338,34 @@ class TestCurtainReversal(unittest.TestCase):
 
         self.assertEqual([], pauses)
         self.assertEqual(-1, self.curtain.motor.value)
+
+    def _recording_pauses(self, start):
+        pauses = []
+        with patch("crac_server.component.curtains.curtains.sleep",
+                   side_effect=lambda seconds: pauses.append((seconds, self.curtain.motor.value))):
+            start()
+        return pauses
+
+    def test_closing_a_curtain_that_is_opening_stops_and_pauses_first(self):
+        self.curtain.__open__()
+
+        pauses = self._recording_pauses(self.curtain.__close__)
+
+        self.assertEqual([(0.5, 0)], pauses)
+        self.assertEqual(-1, self.curtain.motor.value)
+
+    def test_opening_a_curtain_that_is_closing_stops_and_pauses_first(self):
+        self.curtain.__close__()
+
+        pauses = self._recording_pauses(self.curtain.__open__)
+
+        self.assertEqual([(0.5, 0)], pauses)
+        self.assertEqual(1, self.curtain.motor.value)
+
+    def test_keeping_the_same_direction_does_not_pause(self):
+        self.curtain.__open__()
+
+        pauses = self._recording_pauses(self.curtain.__open__)
+
+        self.assertEqual([], pauses)
+        self.assertEqual(1, self.curtain.motor.value)
