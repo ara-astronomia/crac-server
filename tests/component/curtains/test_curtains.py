@@ -208,3 +208,84 @@ class TestCurtainCloseToTheSwitch(unittest.TestCase):
 
         self.assertEqual(20, self.curtain.steps())
         self.assertEqual(0, self.curtain.motor.value)
+
+
+class TestCurtainOpenToTheSwitch(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+        self.curtain = Curtain(
+            rotary_encoder={"a": 5, "b": 6, "max_steps": 0},
+            curtain_closed={"pin": 12, "pull_up": True},
+            curtain_open={"pin": 13, "pull_up": True},
+            motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
+            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
+        )
+        self.curtain.motor.enable_device.on()
+        self.curtain.rotary_encoder.steps = 150
+
+    def tearDown(self):
+        self.curtain.__stop__()
+        Device.pin_factory.reset()
+
+    def _walk_up_to(self, steps):
+        while self.curtain.motor.value and self.curtain.steps() < steps:
+            self.curtain.rotary_encoder.steps = self.curtain.steps() + 1
+            self.curtain.__check_and_stop__()
+
+    def test_the_encoder_at_full_travel_does_not_stop_an_opening_curtain(self):
+        self.curtain.move(205)
+        self._walk_up_to(260)
+
+        self.assertEqual(260, self.curtain.steps())
+        self.assertEqual(1, self.curtain.motor.value)
+        self.assertEqual(CurtainStatus.CURTAIN_OPENING, self.curtain.get_status())
+
+    def test_the_open_switch_stops_an_opening_curtain_and_sets_full_travel(self):
+        self.curtain.move(205)
+        self._walk_up_to(230)
+
+        self.curtain.curtain_open.pin.drive_low()
+        deadline = time.monotonic() + 1
+        while self.curtain.motor.value and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        self.assertEqual(0, self.curtain.motor.value)
+        self.assertEqual(205, self.curtain.steps())
+        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
+
+    def test_a_curtain_at_full_travel_but_off_the_switch_opens(self):
+        self.curtain.rotary_encoder.steps = 205
+
+        self.curtain.move(205)
+
+        self.assertEqual(1, self.curtain.motor.value)
+
+    def test_a_curtain_on_the_open_switch_does_not_move(self):
+        self.curtain.rotary_encoder.steps = 205
+        self.curtain.curtain_open.pin.drive_low()
+
+        self.curtain.move(205)
+
+        self.assertEqual(0, self.curtain.motor.value)
+
+    def test_a_curtain_above_full_travel_is_not_in_danger(self):
+        self.curtain.rotary_encoder.steps = 230
+
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
+
+
+class TestCurtainFactoryEncoder(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+
+    def tearDown(self):
+        Device.pin_factory.reset()
+
+    def test_the_encoder_of_a_built_curtain_has_no_step_limit(self):
+        from crac_server.component.curtains.factory_curtain import FactoryCurtain
+
+        curtain = FactoryCurtain.curtain(CurtainOrientation.CURTAIN_EAST, mock=False)
+
+        self.assertEqual(0, curtain.rotary_encoder.max_steps)

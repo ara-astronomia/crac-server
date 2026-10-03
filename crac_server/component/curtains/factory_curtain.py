@@ -83,7 +83,7 @@ class FactoryCurtain:
         builder_curtain.rotary_encoder = {
             "a": a,
             "b": b,
-            "max_steps": Config.getInt("n_step_sicurezza", "encoder_step")
+            "max_steps": 0
         }
         builder_curtain.verify_open = {
             "pin": pin_open,
