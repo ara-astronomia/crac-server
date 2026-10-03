@@ -1,5 +1,6 @@
 import time
 import unittest
+from unittest.mock import patch
 from gpiozero import Device
 from crac_protobuf.curtains_pb2 import CurtainOrientation, CurtainStatus
 from crac_server.component.curtains.curtains import Curtain
@@ -90,30 +91,6 @@ class TestCurtainDisable(unittest.TestCase):
 
         self.assertEqual(29, simulated.steps())
         self.assertEqual(0, simulated.motor.value)
-
-    def test_a_simulated_curtain_never_reaches_the_open_switch(self):
-        simulated = self._simulated(200)
-        simulated.target = 205
-        simulated.__open__()
-        simulated.t.join(timeout=3)
-
-        self.assertEqual(205, simulated.steps())
-        self.assertFalse(simulated.curtain_open.is_active)
-
-    def test_a_curtain_stopped_at_full_travel_is_open(self):
-        self.curtain.rotary_encoder.steps = 205
-
-        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
-
-    def test_a_curtain_stopped_past_full_travel_is_open(self):
-        self.curtain.rotary_encoder.steps = 210
-
-        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
-
-    def test_a_curtain_stopped_short_of_full_travel_is_not_open(self):
-        self.curtain.rotary_encoder.steps = 204
-
-        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
 
     def test_without_the_closed_switch_the_curtain_keeps_going_down(self):
         self.curtain.disable()
@@ -232,3 +209,132 @@ class TestCurtainCloseToTheSwitch(unittest.TestCase):
 
         self.assertEqual(20, self.curtain.steps())
         self.assertEqual(0, self.curtain.motor.value)
+
+
+def _curtain(orientation=CurtainOrientation.CURTAIN_EAST):
+    return Curtain(
+        rotary_encoder={"a": 5, "b": 6, "max_steps": 215},
+        curtain_closed={"pin": 12, "pull_up": True},
+        curtain_open={"pin": 13, "pull_up": True},
+        motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
+        orientation=CurtainOrientation.Name(orientation),
+    )
+
+
+class TestCurtainFullTravel(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+        self.curtain = _curtain()
+        self.curtain.motor.enable_device.on()
+
+    def tearDown(self):
+        self.curtain.__stop__()
+        Device.pin_factory.reset()
+
+    def test_a_curtain_stopped_at_full_travel_is_open(self):
+        self.curtain.rotary_encoder.steps = 205
+
+        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
+
+    def test_a_curtain_stopped_past_full_travel_is_open(self):
+        self.curtain.rotary_encoder.steps = 210
+
+        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
+
+    def test_a_curtain_stopped_short_of_full_travel_is_not_open(self):
+        self.curtain.rotary_encoder.steps = 204
+
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
+
+    def test_a_curtain_on_the_open_switch_is_open_whatever_the_encoder_says(self):
+        self.curtain.rotary_encoder.steps = 150
+        self.curtain.curtain_open.pin.drive_low()
+        self.curtain.rotary_encoder.steps = 150
+
+        self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
+
+    def test_full_travel_is_the_value_read_at_startup(self):
+        with patch("crac_server.component.curtains.curtains.Config.getInt", return_value=100):
+            self.assertEqual(205, self.curtain.full_travel)
+
+    def test_a_simulated_curtain_never_reaches_the_open_switch(self):
+        simulated = MockCurtain(
+            rotary_encoder={"a": 7, "b": 8, "max_steps": 215},
+            curtain_closed={"pin": 16, "pull_up": True},
+            curtain_open={"pin": 21, "pull_up": True},
+            motor={"forward": 23, "backward": 24, "enable": 25, "pwm": False},
+            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_WEST),
+        )
+        self.addCleanup(simulated.__stop__)
+        simulated.motor.enable_device.on()
+        simulated.curtain_closed.pin.drive_high()
+        simulated.rotary_encoder.steps = 200
+        simulated.target = 205
+        simulated.__open__()
+        simulated.t.join(timeout=3)
+
+        self.assertEqual(205, simulated.steps())
+        self.assertFalse(simulated.curtain_open.is_active)
+
+
+class TestCurtainAtStartup(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+
+    def tearDown(self):
+        Device.pin_factory.reset()
+
+    def test_a_curtain_off_the_closed_switch_starts_enabled_and_still(self):
+        curtain = _curtain()
+
+        self.assertTrue(curtain.motor.enable_device.value)
+        self.assertEqual(0, curtain.motor.value)
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, curtain.get_status())
+
+    def test_a_simulated_curtain_on_the_closed_switch_starts_disabled(self):
+        simulated = MockCurtain(
+            rotary_encoder={"a": 5, "b": 6, "max_steps": 215},
+            curtain_closed={"pin": 12, "pull_up": True},
+            curtain_open={"pin": 13, "pull_up": True},
+            motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
+            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
+        )
+
+        self.assertFalse(simulated.motor.enable_device.value)
+        self.assertEqual(CurtainStatus.CURTAIN_DISABLED, simulated.get_status())
+
+
+class TestCurtainReversal(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+        self.curtain = _curtain()
+        self.curtain.motor.enable_device.on()
+        self.curtain.rotary_encoder.steps = 100
+
+    def tearDown(self):
+        self.curtain.__stop__()
+        Device.pin_factory.reset()
+
+    def _disable_recording_pauses(self):
+        pauses = []
+        with patch("crac_server.component.curtains.curtains.sleep",
+                   side_effect=lambda seconds: pauses.append((seconds, self.curtain.motor.value))):
+            self.curtain.disable()
+        return pauses
+
+    def test_an_opening_curtain_stops_and_pauses_before_going_down(self):
+        self.curtain.move(150)
+
+        pauses = self._disable_recording_pauses()
+
+        self.assertEqual([(0.5, 0)], pauses)
+        self.assertEqual(-1, self.curtain.motor.value)
+
+    def test_a_curtain_at_rest_goes_down_without_pausing(self):
+        pauses = self._disable_recording_pauses()
+
+        self.assertEqual([], pauses)
+        self.assertEqual(-1, self.curtain.motor.value)

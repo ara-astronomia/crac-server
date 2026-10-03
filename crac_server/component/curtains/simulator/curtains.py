@@ -12,6 +12,7 @@ class MockCurtain(Curtain):
             self.curtain_closed.pin.drive_low()
         if  self.curtain_open.pin:
             self.curtain_open.pin.drive_high()
+        self.__enable_unless_down__()
 
     def __rotate_cw__(self, *inputs):
         [input.pin.drive_low() for input in inputs]

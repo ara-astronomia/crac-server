@@ -1,5 +1,6 @@
 import logging
 import threading
+from time import sleep
 from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
@@ -17,7 +18,7 @@ class Curtain:
         self.curtain_closed = DigitalInputDevice(**curtain_closed)
         self.curtain_open = DigitalInputDevice(**curtain_open)
         self.motor = Motor(**motor)
-        self.motor.enable_device.off()
+        self.__enable_unless_down__()
         self.__event_detect__()
         self.lock_rotation = threading.RLock()
         self.to_disable = False
@@ -29,17 +30,24 @@ class Curtain:
         self.__max_step__ = Config.getInt("n_step_corsa", "encoder_step")
         self.__security_step__ = Config.getInt("n_step_sicurezza", "encoder_step")
         self.__tolerance_steps__ = Config.getInt("tolerance_steps", "encoder_step")
+        self.__reverse_pause__ = Config.getFloat("reverse_pause", "motor_board")
         self.target : Union[None, int] = None
+
+    def __enable_unless_down__(self):
+        """At startup a curtain off the closed switch is still in use: its
+        motor is enabled, without moving, so that what crac-server reports
+        and what the motor can do agree."""
+        self.motor.enable_device.value = not self.__is_down__()
+
+    @property
+    def full_travel(self) -> int:
+        """Steps of a full opening, read once at startup."""
+        return self.__max_step__
 
     def __event_detect__(self):
         self.curtain_closed.when_activated = self.__reset_steps__
         self.curtain_open.when_activated = self.__reset_steps__
         self.rotary_encoder.when_rotated = self.__check_and_stop__
-
-    def __remove_event_detect__(self):
-        self.rotary_encoder.when_rotated = None
-        self.curtain_closed.when_activated = None
-        self.curtain_open.when_activated = None
 
     def __open__(self):
         with self.lock_rotation:
@@ -118,47 +126,16 @@ class Curtain:
     def __is_open__(self) -> bool:
         """Full travel is read from the encoder: the curtains run out of
         travel before reaching the open switch."""
-        return self.steps() >= self.__max_step__ and not self.curtain_closed.is_active and not self.motor.value
+        return (
+            (self.curtain_open.is_active or self.steps() >= self.__max_step__) and
+            not self.curtain_closed.is_active and not self.motor.value
+        )
 
     def __is_closed__(self) -> bool:
         return self.curtain_closed.is_active and not self.curtain_open.is_active and not self.motor.value
 
     def __is_stopped__(self) -> bool:
         return not self.curtain_closed.is_active and not self.curtain_open.is_active and not self.motor.value
-
-    def manual_reset(self):
-
-        """ Reset the steps counter with the help of the edge switchers """
-
-        if not self.motor.enable_device.value:
-            return
-
-        status = self.get_status()
-        if status != CurtainStatus.CURTAIN_STOPPED and status != CurtainStatus.CURTAIN_DANGER:
-            return
-        self.__remove_event_detect__()
-
-        distance_to_min_step = abs(self.steps() - self.__min_step__)
-        distance_to_max_step = abs(self.__max_step__ - self.steps())
-
-        if distance_to_min_step <= distance_to_max_step:
-            if self.steps() > self.__min_step__:
-                self.__close__()
-            else:
-                self.__open__()
-            self.curtain_closed.wait_for_active()
-            self.__stop__()
-            self.rotary_encoder.steps = self.__min_step__
-        else:
-            if self.steps() > self.__max_step__:
-                self.__close__()
-            else:
-                self.__open__()
-            self.curtain_open.wait_for_active()
-            self.__stop__()
-            self.rotary_encoder.steps = self.__max_step__
-
-        self.__event_detect__()
 
     def steps(self) -> int:
         return self.rotary_encoder.steps
@@ -232,6 +209,9 @@ class Curtain:
                 logger.debug("Curtain: %s already at closed limit", self._orientation)
                 return
             
+            if self.__is_opening__():
+                self.__stop__()
+                sleep(self.__reverse_pause__)
             self.target = self.__min_step__
             self.__close__()
 

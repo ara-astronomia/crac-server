@@ -108,28 +108,18 @@ class CurtainsEnableHandler(AbstractCurtainsHandler):
         
         return super().handle(mediator)
 
-class CurtainsCalibrationHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
-        
-        # TODO check if manual calibration is needed and in case create a story for it
-        # elif request.action is CurtainsAction.CALIBRATE_CURTAINS:
-        #     curtain_east().manual_reset()
-        #     curtain_west().manual_reset()
-
-        return super().handle(mediator)
-
 class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
 
         # Non eseguire movimenti se le tende sono disabilitate
         if not mediator.is_disabled and telescope().speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
-            steps = self.__calculate_curtains_steps()
+            steps = self.__calculate_curtains_steps(mediator.button_east.full_travel)
             mediator.button_east.move(steps["east"])
             mediator.button_west.move(steps["west"])
 
         return super().handle(mediator)
     
-    def __calculate_curtains_steps(self):
+    def __calculate_curtains_steps(self, n_step_corsa: int):
 
         """
             Change the height of the curtains
@@ -140,7 +130,6 @@ class CurtainsMoveHandler(AbstractCurtainsHandler):
         status = telescope().status
         steps = {}
         logger.debug("Telescope status %s", status)
-        n_step_corsa = Config.getInt('n_step_corsa', "encoder_step")
         # TODO verify tele height:
         # if less than east_min_height e ovest_min_height
         if status in [TelescopeStatus.LOST, TelescopeStatus.ERROR]:
