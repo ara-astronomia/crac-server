@@ -61,8 +61,8 @@ class TestCurtainsDisableHandler(unittest.TestCase):
             action=CurtainsAction.DISABLE,
             status_east=status_east,
             status_west=status_west,
-            button_east=east,
-            button_west=west,
+            curtain_east=east,
+            curtain_west=west,
         )
         with patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()):
             CurtainsDisableHandler().handle(mediator)
@@ -85,7 +85,7 @@ class TestCurtainsRoofHandler(unittest.TestCase):
 
     def test_a_roof_not_open_disables_the_curtains_without_powering_their_motors(self):
         east, west = MagicMock(), MagicMock()
-        mediator = SimpleNamespace(button_east=east, button_west=west, is_disabled=False)
+        mediator = SimpleNamespace(curtain_east=east, curtain_west=west, is_disabled=False)
         with (
             patch("crac_server.handler.curtains_handler.roof") as roof,
             patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
@@ -101,7 +101,7 @@ class TestCurtainsMoveHandler(unittest.TestCase):
 
     def test_full_opening_uses_the_travel_the_curtains_read_at_startup(self):
         east, west = MagicMock(full_travel=180), MagicMock(full_travel=180)
-        mediator = SimpleNamespace(is_disabled=False, button_east=east, button_west=west)
+        mediator = SimpleNamespace(is_disabled=False, curtain_east=east, curtain_west=west)
         scope = MagicMock(speed=TelescopeSpeed.SPEED_TRACKING, status=TelescopeStatus.EAST)
         scope.aa_coords.alt = 80
         scope.is_below_curtains_area.return_value = False

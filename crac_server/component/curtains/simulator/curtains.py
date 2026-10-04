@@ -1,54 +1,41 @@
-from crac_server.component.curtains.curtains import Curtain
+from crac_server.component.curtains.curtains import BOTTOM_STEP, Curtain
 from threading import Thread
 from time import sleep
 from crac_protobuf.curtains_pb2 import CurtainOrientation
 
 
 class MockCurtain(Curtain):
+    """Starts on its closed switch, and turns its encoder while the motor runs."""
 
-    def __init__(self, rotary_encoder: dict[str, int], curtain_closed: dict[str, int], curtain_open: dict[str, int], motor: dict[str, int], orientation: CurtainOrientation):
-        super().__init__(rotary_encoder, curtain_closed, curtain_open, motor, orientation)
-        if  self.curtain_closed.pin:
-            self.curtain_closed.pin.drive_low()
-        if  self.curtain_open.pin:
-            self.curtain_open.pin.drive_high()
-        self.__enable_unless_down__()
+    def __init__(self, encoder: dict[str, int], closed_switch: dict[str, int], open_switch: dict[str, int], motor: dict[str, int], orientation: CurtainOrientation):
+        super().__init__(encoder, closed_switch, open_switch, motor, orientation)
+        self._closed_switch.pin.drive_low()
+        self._open_switch.pin.drive_high()
 
-    def __rotate_cw__(self, *inputs):
-        [input.pin.drive_low() for input in inputs]
-        [input.pin.drive_high() for input in inputs]
+    def _open(self):
+        super()._open()
+        self._thread = Thread(target=self._fake_move, args=(1,))
+        self._thread.start()
 
-    def __rotate_ccw__(self, *inputs):
-        [input.pin.drive_low() for input in reversed(inputs)]
-        [input.pin.drive_high() for input in reversed(inputs)]
+    def _close(self):
+        super()._close()
+        self._thread = Thread(target=self._fake_move, args=(-1,))
+        self._thread.start()
 
-    def __check_curtains_limit__(self):
+    def _fake_move(self, direction: int):
+        pins = (self._encoder.a.pin, self._encoder.b.pin)
+        while self._motor.value == direction:
+            sleep(0.2)
+            for pin in pins if direction == 1 else reversed(pins):
+                pin.drive_low()
+            for pin in pins if direction == 1 else reversed(pins):
+                pin.drive_high()
+            self._update_closed_switch()
+
+    def _update_closed_switch(self):
         """Only the closed switch trips: the real curtains run out of travel
         before reaching the open switch."""
-        if  self.curtain_closed.pin:
-            if self.steps() <= self.__min_step__ + self.__tolerance_steps__:
-                self.curtain_closed.pin.drive_low()
-            else:
-                self.curtain_closed.pin.drive_high()
-
-    def __open__(self):
-        super().__open__()
-        self.t = Thread(target=self.__fake_move_forward__, args=(self,))
-        self.t.start()
-
-    def __close__(self):
-        super().__close__()
-        self.t = Thread(target=self.__fake_move_backward__, args=(self,))
-        self.t.start()
-
-    def __fake_move_forward__(self, curtain):
-        while curtain.motor.value == 1:
-            sleep(0.2)
-            curtain.__rotate_cw__(curtain.rotary_encoder.a, curtain.rotary_encoder.b)
-            curtain.__check_curtains_limit__()
-
-    def __fake_move_backward__(self, curtain):
-        while curtain.motor.value == -1:
-            sleep(0.2)
-            curtain.__rotate_ccw__(curtain.rotary_encoder.a, curtain.rotary_encoder.b)
-            curtain.__check_curtains_limit__()
+        if self.steps() <= BOTTOM_STEP + self._tolerance_steps:
+            self._closed_switch.pin.drive_low()
+        else:
+            self._closed_switch.pin.drive_high()

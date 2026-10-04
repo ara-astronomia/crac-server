@@ -16,12 +16,12 @@ class CurtainsService(CurtainServicer):
         weather_curtains_handler = CurtainsWeatherHandler()
         telescope_curtains_handler = CurtainsTelescopeHandler()
         disable_curtains_handler = CurtainsDisableHandler()
-        enable_curtains_handelr = CurtainsEnableHandler()
+        enable_curtains_handler = CurtainsEnableHandler()
         move_curtains_handler = CurtainsMoveHandler()
         roof_curtains_handler.set_next(weather_curtains_handler) \
             .set_next(telescope_curtains_handler) \
             .set_next(disable_curtains_handler) \
-            .set_next(enable_curtains_handelr) \
+            .set_next(enable_curtains_handler) \
             .set_next(move_curtains_handler)
 
         return roof_curtains_handler.handle(curtains_mediator)

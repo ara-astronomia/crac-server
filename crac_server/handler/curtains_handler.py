@@ -38,8 +38,8 @@ class CurtainsRoofHandler(AbstractCurtainsHandler):
         roof_is_opened = roof().get_status() is RoofStatus.ROOF_OPENED
 
         if not roof_is_opened:
-            mediator.button_east.disable()
-            mediator.button_west.disable()
+            mediator.curtain_east.disable()
+            mediator.curtain_west.disable()
             mediator.is_disabled = True
             self._next_handler = None
         
@@ -72,8 +72,8 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
 class CurtainsTelescopeHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:    
         if not telescope().polling:
-            mediator.button_east.disable()
-            mediator.button_west.disable()
+            mediator.curtain_east.disable()
+            mediator.curtain_west.disable()
             mediator.is_disabled = True
             self._next_handler = None
 
@@ -85,8 +85,8 @@ class CurtainsDisableHandler(AbstractCurtainsHandler):
 
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         if mediator.action is CurtainsAction.DISABLE:
-            mediator.button_east.disable(power_motor=True)
-            mediator.button_west.disable(power_motor=True)
+            mediator.curtain_east.disable(power_motor=True)
+            mediator.curtain_west.disable(power_motor=True)
             self._next_handler = None
             return super().handle(mediator)
         
@@ -98,72 +98,52 @@ class CurtainsEnableHandler(AbstractCurtainsHandler):
         if (
                 mediator.action is CurtainsAction.ENABLE
         ):
-            mediator.button_east.enable()
-            mediator.button_west.enable()
+            mediator.curtain_east.enable()
+            mediator.curtain_west.enable()
         
         return super().handle(mediator)
 
 class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
-
-        # Non eseguire movimenti se le tende sono disabilitate
         if not mediator.is_disabled and telescope().speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
-            steps = self.__calculate_curtains_steps(mediator.button_east.full_travel)
-            mediator.button_east.move(steps["east"])
-            mediator.button_west.move(steps["west"])
+            steps = self.__calculate_curtains_steps(mediator.curtain_east.full_travel)
+            mediator.curtain_east.move(steps["east"])
+            mediator.curtain_west.move(steps["west"])
 
         return super().handle(mediator)
     
-    def __calculate_curtains_steps(self, n_step_corsa: int):
-
-        """
-            Change the height of the curtains
-            to based on the given Coordinates
-        """
+    def __calculate_curtains_steps(self, full_travel: int):
+        """Both curtains down with the telescope parked or below their area,
+        both fully open above it or outside it; otherwise the curtain on the
+        telescope's side follows its altitude and the other one is open."""
 
         aa_coords = telescope().aa_coords
         status = telescope().status
         steps = {}
         logger.debug("Telescope status %s", status)
-        # TODO verify tele height:
-        # if less than east_min_height e ovest_min_height
         if status in [TelescopeStatus.LOST, TelescopeStatus.ERROR]:
             steps["west"] = None
             steps["east"] = None
         elif status == TelescopeStatus.PARKED:
-            # When telescope is parked, bring curtains down to 0
             steps["west"] = 0
             steps["east"] = 0
         elif telescope().is_below_curtains_area(aa_coords.alt):
-            #   keep both curtains to 0
             steps["west"] = 0
             steps["east"] = 0
-
-            #   else if higher to east_max_height e ovest_max_height
         elif telescope().is_above_curtains_area(aa_coords.alt, Config.getInt("max_est", "tende"), Config.getInt("max_west", "tende")) or not telescope().is_within_curtains_area():
-            #   move both curtains max open
-            steps["west"] = n_step_corsa
-            steps["east"] = n_step_corsa
-
-            #   else if higher to ovest_min_height and Az tele to west
+            steps["west"] = full_travel
+            steps["east"] = full_travel
         elif status == TelescopeStatus.WEST:
             logger.debug("inside west status")
-            #   move curtain east max open
-            steps["east"] = n_step_corsa
-            #   move curtain west to f(Alt telescope - x)
-            increm_w = (Config.getInt("max_west", "tende") - Config.getInt("park_west", "tende")) / n_step_corsa
-            steps["west"] = round((aa_coords.alt - Config.getInt("park_west", "tende"))/increm_w)
-
-            #   else if higher to ovest_min_height and Az tele to est
+            steps["east"] = full_travel
+            degrees_per_step = (Config.getInt("max_west", "tende") - Config.getInt("park_west", "tende")) / full_travel
+            steps["west"] = round((aa_coords.alt - Config.getInt("park_west", "tende")) / degrees_per_step)
         elif status == TelescopeStatus.EAST:
             logger.debug("inside east status")
-            #   move curtian west max open
-            steps["west"] = n_step_corsa
-            #   if inferior to est_min_height
-            #   move curtain east to f(Alt tele - x)
-            increm_e = (Config.getInt("max_est", "tende") - Config.getInt("park_est", "tende")) / n_step_corsa
-            steps["east"] = round((aa_coords.alt - Config.getInt("park_est", "tende")) / increm_e)
+            steps["west"] = full_travel
+            degrees_per_step = (Config.getInt("max_est", "tende") - Config.getInt("park_est", "tende")) / full_travel
+            steps["east"] = round((aa_coords.alt - Config.getInt("park_est", "tende")) / degrees_per_step)
 
-        logger.debug("calculatd curtain steps %s", steps)
+        logger.debug("calculated curtain steps %s", steps)
 
         return steps

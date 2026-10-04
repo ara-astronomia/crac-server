@@ -16,22 +16,19 @@ class TestCurtainStatusLogging(unittest.TestCase):
     def setUp(self):
         Device.pin_factory.reset()
         self.curtain = MockCurtain(
-            rotary_encoder={"a": 5, "b": 6, "max_steps": 215},
-            curtain_closed={"pin": 12, "pull_up": True},
-            curtain_open={"pin": 13, "pull_up": True},
+            encoder={"a": 5, "b": 6, "max_steps": 215},
+            closed_switch={"pin": 12, "pull_up": True},
+            open_switch={"pin": 13, "pull_up": True},
             motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
             orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
         )
 
     def tearDown(self):
-        self.curtain.__stop__()
+        self.curtain._stop()
         Device.pin_factory.reset()
 
     def _no_state_recognized(self):
-        predicates = [
-            "__is_danger__", "__is_disabled__", "__is_opening__",
-            "__is_closing__", "__is_open__", "__is_closed__", "__is_stopped__",
-        ]
+        predicates = ["_is_danger", "_is_disabled", "_is_open", "_is_closed", "_is_stopped"]
         patchers = [patch.object(self.curtain, name, return_value=False) for name in predicates]
         for patcher in patchers:
             patcher.start()
@@ -50,7 +47,7 @@ class TestCurtainStatusLogging(unittest.TestCase):
     def test_recovery_is_logged_at_info(self):
         self._no_state_recognized()
         self.curtain.get_status()
-        with patch.object(self.curtain, "__is_closed__", return_value=True):
+        with patch.object(self.curtain, "_is_closed", return_value=True):
             with self.assertLogs(self.LOGGER, level="INFO") as captured:
                 self.curtain.get_status()
         self.assertEqual(len(captured.records), 1)
