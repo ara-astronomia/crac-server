@@ -211,14 +211,17 @@ class Curtain:
 
     def bring_down(self):
 
-        """Bring down the curtain until the closed limit switch trips."""
-        
+        """Bring down the curtain until the closed limit switch trips. The motor
+        is enabled first, or a disabled one would never move; the closed switch
+        disables it again."""
+
         with self.lock_rotation:
             if self.__is_down__():
                 logger.debug("Curtain: %s already at closed limit", self._orientation)
                 return
-            
+
             self.target = self.__min_step__
+            self.motor.enable_device.on()
             self.__close__()
 
     def disable(self):

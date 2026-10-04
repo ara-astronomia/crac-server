@@ -115,6 +115,23 @@ class TestCurtainDisable(unittest.TestCase):
 
         self.assertEqual(-1, self.curtain.motor.value)
 
+    def test_a_curtain_left_disabled_halfway_gets_its_motor_back_to_go_down(self):
+        self.curtain.motor.enable_device.off()
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
+
+        self.curtain.disable()
+
+        self.assertTrue(self.curtain.motor.enable_device.value)
+        self.assertEqual(-1, self.curtain.motor.value)
+
+    def test_a_curtain_left_disabled_halfway_ends_up_disabled_on_the_closed_switch(self):
+        self.curtain.motor.enable_device.off()
+        self.curtain.disable()
+
+        self._press_closed_switch()
+
+        self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
+
     def _press_closed_switch(self):
         self.curtain.curtain_closed.pin.drive_low()
         deadline = time.monotonic() + 1
