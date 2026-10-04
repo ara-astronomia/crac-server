@@ -7,7 +7,13 @@ from crac_protobuf.curtains_pb2 import CurtainsAction, CurtainsResponse, Curtain
 from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus
 from crac_server.converter.curtains_converter import CurtainsConverter
 from crac_server.converter.weather_converter import WeatherConverter
-from crac_server.handler.curtains_handler import CurtainsMoveHandler, CurtainsWeatherHandler
+from crac_protobuf.roof_pb2 import RoofStatus
+from crac_server.handler.curtains_handler import (
+    CurtainsDisableHandler,
+    CurtainsMoveHandler,
+    CurtainsRoofHandler,
+    CurtainsWeatherHandler,
+)
 
 
 class TestCurtainsWeatherHandler(unittest.TestCase):
@@ -44,6 +50,51 @@ class TestCurtainsWeatherHandler(unittest.TestCase):
         mediator = self._handle(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, False)
         self.assertIs(False, mediator.is_disabled)
 
+
+class TestCurtainsDisableHandler(unittest.TestCase):
+    """DISABLE brings each curtain down whatever it is doing, powering its
+    motor: the operator asked for it and is watching."""
+
+    def _disable(self, status_east, status_west):
+        east, west = MagicMock(), MagicMock()
+        mediator = SimpleNamespace(
+            action=CurtainsAction.DISABLE,
+            status_east=status_east,
+            status_west=status_west,
+            button_east=east,
+            button_west=west,
+        )
+        with patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()):
+            CurtainsDisableHandler().handle(mediator)
+        return east, west
+
+    def test_a_moving_curtain_does_not_stop_the_other_from_being_disabled(self):
+        east, west = self._disable(CurtainStatus.CURTAIN_OPENED, CurtainStatus.CURTAIN_OPENING)
+
+        east.disable.assert_called_once_with(power_motor=True)
+        west.disable.assert_called_once_with(power_motor=True)
+
+    def test_curtains_in_danger_or_error_are_disabled_too(self):
+        east, west = self._disable(CurtainStatus.CURTAIN_DANGER, CurtainStatus.CURTAIN_ERROR)
+
+        east.disable.assert_called_once_with(power_motor=True)
+        west.disable.assert_called_once_with(power_motor=True)
+
+
+class TestCurtainsRoofHandler(unittest.TestCase):
+
+    def test_a_roof_not_open_disables_the_curtains_without_powering_their_motors(self):
+        east, west = MagicMock(), MagicMock()
+        mediator = SimpleNamespace(button_east=east, button_west=west, is_disabled=False)
+        with (
+            patch("crac_server.handler.curtains_handler.roof") as roof,
+            patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
+        ):
+            roof.return_value.get_status.return_value = RoofStatus.ROOF_CLOSED
+            CurtainsRoofHandler().handle(mediator)
+
+        east.disable.assert_called_once_with()
+        west.disable.assert_called_once_with()
 
 
 class TestCurtainsMoveHandler(unittest.TestCase):

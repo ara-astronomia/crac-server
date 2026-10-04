@@ -115,18 +115,27 @@ class TestCurtainDisable(unittest.TestCase):
 
         self.assertEqual(-1, self.curtain.motor.value)
 
-    def test_a_curtain_left_disabled_halfway_gets_its_motor_back_to_go_down(self):
+    def test_an_operator_disable_gets_the_motor_of_a_curtain_left_halfway_back(self):
         self.curtain.motor.enable_device.off()
         self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
 
-        self.curtain.disable()
+        self.curtain.disable(power_motor=True)
 
         self.assertTrue(self.curtain.motor.enable_device.value)
         self.assertEqual(-1, self.curtain.motor.value)
 
+    def test_an_automatic_disable_never_powers_a_disabled_motor(self):
+        """A curtain down on a broken closed switch looks halfway too: powering
+        its motor on every poll would push it against the bottom, unattended."""
+        self.curtain.motor.enable_device.off()
+
+        self.curtain.disable()
+
+        self.assertFalse(self.curtain.motor.enable_device.value)
+
     def test_a_curtain_left_disabled_halfway_ends_up_disabled_on_the_closed_switch(self):
         self.curtain.motor.enable_device.off()
-        self.curtain.disable()
+        self.curtain.disable(power_motor=True)
 
         self._press_closed_switch()
 

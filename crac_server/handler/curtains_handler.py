@@ -80,18 +80,13 @@ class CurtainsTelescopeHandler(AbstractCurtainsHandler):
         return super().handle(mediator)
 
 class CurtainsDisableHandler(AbstractCurtainsHandler):
+    """DISABLE brings each curtain down whatever it is doing, and the chain
+    stops here so that no move overrides it."""
+
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         if mediator.action is CurtainsAction.DISABLE:
-            if (
-                mediator.status_east <= CurtainStatus.CURTAIN_OPENED and
-                mediator.status_west <= CurtainStatus.CURTAIN_OPENED
-            ):
-                # Chiama disable() su entrambe le tende in modo indipendente
-                # Ogni tenda si disabiliterà da sola quando il finecorsa si attiva
-                mediator.button_east.disable()
-                mediator.button_west.disable()
-            
-            # Una volta eseguito DISABLE, non eseguire oltre MOVE (evitiamo override del target=0)
+            mediator.button_east.disable(power_motor=True)
+            mediator.button_west.disable(power_motor=True)
             self._next_handler = None
             return super().handle(mediator)
         

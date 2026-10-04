@@ -211,9 +211,7 @@ class Curtain:
 
     def bring_down(self):
 
-        """Bring down the curtain until the closed limit switch trips. The motor
-        is enabled first, or a disabled one would never move; the closed switch
-        disables it again."""
+        """Bring down the curtain until the closed limit switch trips."""
 
         with self.lock_rotation:
             if self.__is_down__():
@@ -221,10 +219,12 @@ class Curtain:
                 return
 
             self.target = self.__min_step__
-            self.motor.enable_device.on()
             self.__close__()
 
-    def disable(self):
+    def disable(self, power_motor: bool = False):
+        """With power_motor a disabled motor is enabled to go down: only for an
+        operator's request, since a curtain on a broken closed switch looks
+        halfway too. The closed switch disables the motor again."""
         logger.debug("Curtain: %s, self.to_disable is %s", self._orientation, self.to_disable)
         self.to_disable = True
 
@@ -234,6 +234,8 @@ class Curtain:
             self.disable_motor()
             return
 
+        if power_motor:
+            self.motor.enable_device.on()
         self.bring_down()
         logger.debug("Curtain: %s, curtain moved to 0 before disabling, to_disable is %s", self._orientation, self.to_disable)
 
