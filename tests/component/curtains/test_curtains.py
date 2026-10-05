@@ -399,14 +399,62 @@ class TestCurtainReversal(unittest.TestCase):
         self.assertEqual(0, self.curtain._motor.value)
         self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
 
-    def test_a_second_command_during_the_pause_rests_again_before_starting(self):
-        self.curtain._drive(-1)
+    def test_a_command_during_the_pause_does_not_make_it_longer(self):
         self.curtain._drive(1)
+        self.curtain._drive(-1)
+        time.sleep(self.PAUSE / 2)
+
+        self.curtain.disable()
+        time.sleep(self.PAUSE * 0.75)
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_the_pause_is_counted_from_the_stop(self):
+        self.curtain._drive(1)
+        self.curtain._stop()
+        time.sleep(self.PAUSE * 1.5)
 
         self.curtain._drive(-1)
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_a_motor_stopped_a_moment_ago_still_rests_before_reversing(self):
+        self.curtain._drive(1)
+        self.curtain._stop()
+
+        self.curtain.disable()
 
         self.assertEqual(0, self.curtain._motor.value)
         self._after_the_pause()
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_the_open_switch_during_the_pause_does_not_stop_the_way_down(self):
+        self.curtain.move(150)
+        self.curtain.disable()
+
+        self.curtain._open_switch.pin.drive_low()
+        self._after_the_pause()
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_after_the_pause_the_curtain_heads_for_the_target_of_that_moment(self):
+        self.curtain.move(150)
+        self.curtain._drive(-1)
+
+        self.curtain._target = 180
+        self._after_the_pause()
+
+        self.assertEqual(1, self.curtain._motor.value)
+
+    def test_an_encoder_tick_during_the_pause_does_not_cancel_the_way_down(self):
+        self.curtain._encoder.steps = 214
+        self.curtain.move(300)
+        self.curtain.disable()
+
+        self.curtain._encoder.steps = 215
+        self.curtain._on_rotation()
+        self._after_the_pause()
+
         self.assertEqual(-1, self.curtain._motor.value)
 
 

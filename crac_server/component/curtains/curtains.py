@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
@@ -28,6 +29,9 @@ class Curtain:
         self._status_log = StatusLogger(logger, orientation, CurtainStatus)
         self._lock = threading.Lock()
         self._resting: Union[None, threading.Timer] = None
+        self._resting_direction = 0
+        self._last_direction = 0
+        self._stopped_at = 0.0
         self._encoder = RotaryEncoder(**encoder)
         self._closed_switch = DigitalInputDevice(**closed_switch)
         self._open_switch = DigitalInputDevice(**open_switch)
@@ -91,14 +95,10 @@ class Curtain:
                 return
 
             logger.debug("Curtain %s: from step %s to %s", self._orientation, self.steps(), step)
-            if step <= BOTTOM_STEP:
-                self._bring_down()
-            elif self.steps() < step - self._tolerance_steps:
+            direction = self._direction_to(step)
+            if direction:
                 self._target = step
-                self._drive(1)
-            elif self.steps() > step + self._tolerance_steps:
-                self._target = step
-                self._drive(-1)
+                self._drive(direction)
 
     def disable(self, power_motor: bool = False):
         """Bring the curtain down and disable its motor on the closed switch.
@@ -132,25 +132,42 @@ class Curtain:
         self._motor.enable_device.off()
         self._to_disable = False
 
+    def _direction_to(self, target: int) -> int:
+        """1 up, -1 down, 0 when already there."""
+        if target <= BOTTOM_STEP:
+            return 0 if self._is_down() else -1
+        if self.steps() < target - self._tolerance_steps:
+            return 1
+        if self.steps() > target + self._tolerance_steps:
+            return -1
+        return 0
+
     def _drive(self, direction: int):
-        """A motor never turns the other way while running, nor right after a
-        stop for a reversal: it rests for reverse_pause seconds first. The rest
-        runs on a timer, so the lock and the caller are free meanwhile."""
-        if self._resting or self._motor.value == -direction:
+        """Turning the other way waits until reverse_pause seconds have passed
+        since the stop, on a timer, so the lock and the caller are free. A
+        command during the rest does not make it longer."""
+        if self._resting:
+            self._resting_direction = direction
+            return
+        if self._motor.value == -direction:
             self._stop()
-            self._resting = threading.Timer(self._reverse_pause, self._after_rest, args=(direction, self._target))
+        rest = self._reverse_pause - (time.monotonic() - self._stopped_at) if self._last_direction == -direction else 0
+        if rest > 0:
+            self._resting_direction = direction
+            self._resting = threading.Timer(rest, self._after_rest)
             self._resting.daemon = True
             self._resting.start()
         else:
             self._start(direction)
 
-    def _after_rest(self, direction: int, target: Union[None, int]):
-        """Drive on unless the rest was cancelled or the target changed."""
+    def _after_rest(self):
+        """Head for the target of this moment, which may have changed."""
         with self._lock:
             if threading.current_thread() is not self._resting:
                 return
             self._resting = None
-            if self._target == target:
+            direction = self._resting_direction if self._target is None else self._direction_to(self._target)
+            if direction:
                 self._start(direction)
 
     def _start(self, direction: int):
@@ -164,13 +181,16 @@ class Curtain:
         if self._resting:
             self._resting.cancel()
             self._resting = None
+        if self._motor.value:
+            self._last_direction = self._motor.value
+            self._stopped_at = time.monotonic()
         self._motor.stop()
 
     def _on_rotation(self):
         """Stop at the target or at the safety step. A curtain going down runs
         until the closed switch, whatever the encoder says."""
         with self._lock:
-            if self._closing_to_the_switch():
+            if not self._motor.value or self._closing_to_the_switch():
                 return
             if (
                 self._target is None or
@@ -183,18 +203,23 @@ class Curtain:
                 self._target = None
 
     def _on_switch(self, switch: DigitalInputDevice):
-        """Stop and set the encoder; the closed switch also disables the motor
-        of a curtain being disabled."""
+        """Set the encoder, and stop a curtain running into the switch. On the
+        closed switch a curtain being disabled gets its motor disabled."""
         with self._lock:
-            self._target = None
-            self._stop()
             if switch is self._open_switch:
                 self._encoder.steps = self._full_travel
-            else:
-                self._encoder.steps = BOTTOM_STEP
-                logger.debug("Curtain %s: on the closed switch, to_disable=%s", self._orientation, self._to_disable)
-                if self._to_disable:
-                    self._disable_motor()
+                if self._motor.value == 1:
+                    self._stop()
+                    self._target = None
+                return
+            self._encoder.steps = BOTTOM_STEP
+            if self._motor.value == -1:
+                self._stop()
+                self._target = None
+            logger.debug("Curtain %s: on the closed switch, to_disable=%s", self._orientation, self._to_disable)
+            if self._to_disable and not self._motor.value:
+                self._stop()
+                self._disable_motor()
 
     def _closing_to_the_switch(self) -> bool:
         return self._target is not None and self._target <= BOTTOM_STEP and self._motor.value == -1
