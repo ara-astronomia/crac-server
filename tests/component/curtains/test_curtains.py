@@ -1,3 +1,4 @@
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -141,6 +142,15 @@ class TestCurtainDisable(unittest.TestCase):
         self.curtain.disable()
 
         self.assertFalse(self.curtain._motor.enable_device.value)
+
+    def test_an_automatic_disable_leaves_a_disabled_motor_off_and_says_so(self):
+        """Its motor cannot turn: the curtain is stopped, not being disabled."""
+        self.curtain._motor.enable_device.off()
+
+        self.curtain.disable()
+
+        self.assertEqual(0, self.curtain._motor.value)
+        self.assertEqual(CurtainStatus.CURTAIN_STOPPED, self.curtain.get_status())
 
     def test_a_curtain_left_disabled_halfway_ends_up_disabled_on_the_closed_switch(self):
         self.curtain._motor.enable_device.off()
@@ -510,6 +520,47 @@ class TestCurtainGuards(unittest.TestCase):
         self.assertEqual(CurtainStatus.CURTAIN_ERROR, self.curtain.get_status())
 
 
+    def test_a_move_during_the_pause_changes_where_the_curtain_goes(self):
+        self.curtain._reverse_pause = 0.2
+        self.curtain._drive(1)
+        self.curtain._stop()
+        self.curtain.move(60)
+
+        self.curtain.move(180)
+        time.sleep(0.4)
+
+        self.assertEqual(1, self.curtain._motor.value)
+
+    def test_a_move_during_the_pause_of_a_disable_is_ignored(self):
+        self.curtain._reverse_pause = 0.2
+        self.curtain._drive(1)
+        self.curtain.disable()
+
+        self.curtain.move(180)
+        time.sleep(0.4)
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_starting_towards_no_direction_does_not_move(self):
+        self.curtain._start(0)
+
+        self.assertEqual(0, self.curtain._motor.value)
+
+    def test_the_closed_switch_does_not_stop_a_curtain_going_up(self):
+        self.curtain._drive(1)
+
+        self.curtain._closed_switch.pin.drive_low()
+
+        self.assertEqual(1, self.curtain._motor.value)
+
+    def test_the_open_switch_does_not_stop_a_curtain_going_down(self):
+        self.curtain._drive(-1)
+
+        self.curtain._open_switch.pin.drive_low()
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+
 class TestSimulatedCurtain(unittest.TestCase):
 
     def setUp(self):
@@ -530,9 +581,10 @@ class TestSimulatedCurtain(unittest.TestCase):
         simulated._closed_switch.pin.drive_high()
         simulated._encoder.steps = 30
         simulated.disable()
-        first = simulated._thread
 
         simulated.disable()
         simulated.disable()
+        time.sleep(0.5)
 
-        self.assertIs(first, simulated._thread)
+        moving = [t for t in threading.enumerate() if t.name == f"simulated-motor-{simulated._orientation}"]
+        self.assertEqual(1, len(moving))

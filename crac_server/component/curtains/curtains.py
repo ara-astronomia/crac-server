@@ -86,10 +86,14 @@ class Curtain:
 
     def move(self, step: int):
         """Move towards step, unless the motor is disabled or the curtain is
-        already moving or resting before a reversal. Step 0 means down to the
-        closed switch."""
+        already moving; during a reversal rest only the target changes. Step 0
+        means down to the closed switch."""
         with self._lock:
-            if not self._motor.enable_device.value or self._resting:
+            if not self._motor.enable_device.value:
+                return
+            if self._resting:
+                if not self._to_disable:
+                    self._target = step
                 return
             if self.get_status() > CurtainStatus.CURTAIN_OPENED or self._motor.value:
                 return
@@ -123,7 +127,8 @@ class Curtain:
             self._motor.enable_device.on()
 
     def _bring_down(self):
-        if self._is_down():
+        """A disabled motor gets no direction it cannot follow."""
+        if self._is_down() or not self._motor.enable_device.value:
             return
         self._target = BOTTOM_STEP
         self._drive(-1)
@@ -149,6 +154,8 @@ class Curtain:
         if self._resting:
             self._resting_direction = direction
             return
+        if self._motor.value == direction:
+            return
         if self._motor.value == -direction:
             self._stop()
         rest = self._reverse_pause - (time.monotonic() - self._stopped_at) if self._last_direction == -direction else 0
@@ -173,7 +180,7 @@ class Curtain:
     def _start(self, direction: int):
         if direction == 1:
             self._motor.forward()
-        else:
+        elif direction == -1:
             self._motor.backward()
 
     def _stop(self):
