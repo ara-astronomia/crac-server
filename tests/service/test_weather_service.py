@@ -117,6 +117,26 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.assertIn("DANGER band is unreachable", captured.output[0])
         self.service._emergency_closure.assert_called_once()
 
+    async def test_a_different_failure_in_the_watch_is_logged_too(self):
+        self.service.weather_converter.convert.side_effect = UnreachableThresholdError("DANGER band unreachable")
+        self.roof.get_status.side_effect = KeyError("pin")
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_until_checked(times=2)
+            self.service.weather_converter.convert.side_effect = None
+            await self.__watch_until_checked(times=self.service.weather_converter.convert.call_count + 2)
+
+        messages = [record.getMessage() for record in captured.records]
+        self.assertTrue(any("UnreachableThresholdError" in message for message in messages))
+        self.assertTrue(any("KeyError" in message for message in messages))
+        self.assertIsNotNone(captured.records[0].exc_info)
+
+    async def test_the_watch_says_when_it_starts_and_how_often_it_checks(self):
+        with self.assertLogs(self.SERVICE_LOGGER, level="INFO") as captured:
+            await self.__watch_until_checked(times=1)
+
+        self.assertIn(str(self.service.check_interval), captured.records[0].getMessage())
+
     async def test_the_watch_waits_check_interval_between_two_checks(self):
         with patch("crac_server.service.weather_service.asyncio.sleep", side_effect=asyncio.CancelledError) as sleep:
             with self.assertRaises(asyncio.CancelledError):
@@ -220,13 +240,54 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
             WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
         ]
 
-        with self.assertLogs("crac_server.service.weather_service", level="INFO") as captured:
+        with (
+            patch("crac_server.service.weather_service.weather") as weather,
+            self.assertLogs("crac_server.service.weather_service", level="INFO") as captured,
+        ):
+            weather.return_value.is_expired.return_value = False
             for _ in range(3):
                 await service.GetStatus(None, None)
 
         self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
         self.assertIn("weather station unreachable", captured.records[0].getMessage())
         self.assertIn("recovered", captured.records[1].getMessage())
+
+    async def test_stale_data_after_a_failure_is_not_a_recovery(self):
+        """After a failed refresh the next readings use the cached data: they
+        succeed, but the source is still down until fresh data arrives."""
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = [
+            ConnectionError("weather station unreachable"),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_WARNING),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
+        ]
+
+        with (
+            patch("crac_server.service.weather_service.weather") as weather,
+            self.assertLogs("crac_server.service.weather_service", level="INFO") as captured,
+        ):
+            weather.return_value.is_expired.side_effect = [True, True, False]
+            for _ in range(3):
+                await service.GetStatus(None, None)
+            self.assertEqual(["ERROR"], [record.levelname for record in captured.records])
+
+            await service.GetStatus(None, None)
+
+        self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
+        self.assertIn("recovered", captured.records[1].getMessage())
+
+    async def test_a_reading_failure_keeps_its_traceback(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = KeyError("current")
+
+        with self.assertLogs("crac_server.service.weather_service", level="ERROR") as captured:
+            await service.GetStatus(None, None)
+
+        self.assertIn("KeyError", captured.records[0].getMessage())
+        self.assertIsNotNone(captured.records[0].exc_info)
 
     async def test_a_slow_reading_lets_the_other_rpcs_through(self):
         """The weather refreshes from a remote source: while that one stays

@@ -67,14 +67,25 @@ class WeatherService(WeatherServicer):
     async def watch(self):
         """Check the weather every check_interval seconds, for as long as the
         server runs, so that the closure does not wait for a client to ask.
-        A failed check is logged and the next one runs anyway."""
+        A failed check is logged, once per kind of failure, and the next one
+        runs anyway."""
+        logger.info("Weather watch: checking every %s seconds", self.check_interval)
         while True:
             try:
                 await self.check()
                 self._watch_log.record("running")
             except Exception as e:
-                self._watch_log.record("check failed", ErrorCause.UNEXPECTED_FAILURE, detail=str(e))
+                self._watch_log.record(
+                    f"check failed: {type(e).__name__}", ErrorCause.UNEXPECTED_FAILURE, detail=str(e), exc_info=e,
+                )
             await asyncio.sleep(self.check_interval)
+
+    def _record_read_failure(self, detail: str, exc_info=None):
+        """A failed refresh and the stale readings after it are one failure,
+        recovered only when fresh data arrives."""
+        self._read_log.record(
+            WeatherStatus.WEATHER_STATUS_UNSPECIFIED, ErrorCause.DEVICE_UNREACHABLE, detail=detail, exc_info=exc_info,
+        )
 
     async def check(self) -> WeatherResponse:
         """Read the weather and, when it is dangerous and the roof may be
@@ -85,9 +96,12 @@ class WeatherService(WeatherServicer):
             raise
         except Exception as e:
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)
-            self._read_log.record(response.status, ErrorCause.DEVICE_UNREACHABLE, detail=f"{type(e).__name__}: {e}")
+            self._record_read_failure(f"{type(e).__name__}: {e}", exc_info=e)
         else:
-            self._read_log.record(response.status)
+            if weather().is_expired():
+                self._record_read_failure("no fresh weather data, using the last reading")
+            else:
+                self._read_log.record(response.status)
         logger.debug("weather response")
         logger.debug(response)
 

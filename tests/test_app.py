@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,7 +35,11 @@ class TestServe(unittest.IsolatedAsyncioTestCase):
                 patch("crac_server.app.WeatherService") as weather_service, \
                 patch("crac_server.app.add_WeatherServicer_to_server") as add_weather:
             weather_service.return_value.watch = AsyncMock()
+            server.wait_for_termination.side_effect = self.__running_for_a_moment
             await serve()
 
         add_weather.assert_called_once_with(weather_service.return_value, server)
-        weather_service.return_value.watch.assert_called_once_with()
+        weather_service.return_value.watch.assert_awaited_once_with()
+
+    async def __running_for_a_moment(self):
+        await asyncio.sleep(0.01)
