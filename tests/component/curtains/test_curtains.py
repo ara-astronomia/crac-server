@@ -8,6 +8,22 @@ from crac_server.component.curtains.simulator.curtains import MockCurtain
 from crac_server.component.curtains.factory_curtain import build_curtain
 
 
+def _curtain(orientation=CurtainOrientation.CURTAIN_EAST):
+    return Curtain(
+        encoder={"a": 5, "b": 6, "max_steps": 215},
+        closed_switch={"pin": 12, "pull_up": True},
+        open_switch={"pin": 13, "pull_up": True},
+        motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
+        orientation=CurtainOrientation.Name(orientation),
+    )
+
+
+def _walk_down_to(curtain, steps):
+    while curtain._motor.value and curtain.steps() > steps:
+        curtain._encoder.steps = curtain.steps() - 1
+        curtain._on_rotation()
+
+
 class TestCurtainEnable(unittest.TestCase):
 
     def setUp(self):
@@ -44,13 +60,7 @@ class TestCurtainDisable(unittest.TestCase):
 
     def setUp(self):
         Device.pin_factory.reset()
-        self.curtain = Curtain(
-            encoder={"a": 5, "b": 6, "max_steps": 215},
-            closed_switch={"pin": 12, "pull_up": True},
-            open_switch={"pin": 13, "pull_up": True},
-            motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
-            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_WEST),
-        )
+        self.curtain = _curtain(CurtainOrientation.CURTAIN_WEST)
         self.curtain._motor.enable_device.on()
         self.curtain._encoder.steps = 199
 
@@ -80,14 +90,12 @@ class TestCurtainDisable(unittest.TestCase):
         return simulated
 
     def _walk_down_to(self, steps):
-        while self.curtain._motor.value and self.curtain.steps() > steps:
-            self.curtain._encoder.steps = self.curtain.steps() - 1
-            self.curtain._on_rotation()
+        _walk_down_to(self.curtain, steps)
 
     def test_the_simulated_encoder_turns_with_the_motor_even_without_a_target(self):
         simulated = self._simulated(30)
 
-        simulated._close()
+        simulated._drive(-1)
         simulated._thread.join(timeout=2)
 
         self.assertEqual(29, simulated.steps())
@@ -151,7 +159,7 @@ class TestCurtainDisable(unittest.TestCase):
     def test_a_simulated_curtain_disabled_while_opening_reaches_the_closed_switch(self):
         simulated = self._simulated(5)
         simulated._target = 150
-        simulated._open()
+        simulated._drive(1)
         time.sleep(0.5)
 
         simulated.disable()
@@ -166,13 +174,7 @@ class TestCurtainCloseToTheSwitch(unittest.TestCase):
 
     def setUp(self):
         Device.pin_factory.reset()
-        self.curtain = Curtain(
-            encoder={"a": 5, "b": 6, "max_steps": 215},
-            closed_switch={"pin": 12, "pull_up": True},
-            open_switch={"pin": 13, "pull_up": True},
-            motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
-            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
-        )
+        self.curtain = _curtain(CurtainOrientation.CURTAIN_EAST)
         self.curtain._motor.enable_device.on()
         self.curtain._encoder.steps = 50
 
@@ -181,9 +183,7 @@ class TestCurtainCloseToTheSwitch(unittest.TestCase):
         Device.pin_factory.reset()
 
     def _walk_down_to(self, steps):
-        while self.curtain._motor.value and self.curtain.steps() > steps:
-            self.curtain._encoder.steps = self.curtain.steps() - 1
-            self.curtain._on_rotation()
+        _walk_down_to(self.curtain, steps)
 
     def test_the_encoder_at_zero_does_not_stop_a_closing_curtain(self):
         self.curtain.move(0)
@@ -238,16 +238,6 @@ class TestCurtainCloseToTheSwitch(unittest.TestCase):
         self.assertEqual(0, self.curtain._motor.value)
 
 
-def _curtain(orientation=CurtainOrientation.CURTAIN_EAST):
-    return Curtain(
-        encoder={"a": 5, "b": 6, "max_steps": 215},
-        closed_switch={"pin": 12, "pull_up": True},
-        open_switch={"pin": 13, "pull_up": True},
-        motor={"forward": 19, "backward": 26, "enable": 20, "pwm": False},
-        orientation=CurtainOrientation.Name(orientation),
-    )
-
-
 class TestCurtainFullTravel(unittest.TestCase):
 
     def setUp(self):
@@ -277,7 +267,6 @@ class TestCurtainFullTravel(unittest.TestCase):
     def test_a_curtain_on_the_open_switch_is_open_whatever_the_encoder_says(self):
         self.curtain._encoder.steps = 150
         self.curtain._open_switch.pin.drive_low()
-        self.curtain._encoder.steps = 150
 
         self.assertEqual(CurtainStatus.CURTAIN_OPENED, self.curtain.get_status())
 
@@ -298,7 +287,7 @@ class TestCurtainFullTravel(unittest.TestCase):
         simulated._closed_switch.pin.drive_high()
         simulated._encoder.steps = 200
         simulated._target = 205
-        simulated._open()
+        simulated._drive(1)
         simulated._thread.join(timeout=3)
 
         self.assertEqual(205, simulated.steps())
@@ -324,12 +313,104 @@ class TestCurtainAtStartup(unittest.TestCase):
 
     def test_a_simulated_curtain_starts_disabled_on_its_closed_switch(self):
         simulated = build_curtain(CurtainOrientation.CURTAIN_EAST, mock=True)
+        self.addCleanup(simulated._stop)
 
         self.assertFalse(simulated._motor.enable_device.value)
         self.assertEqual(CurtainStatus.CURTAIN_DISABLED, simulated.get_status())
 
 
 class TestCurtainReversal(unittest.TestCase):
+    """The motor rests before turning the other way, without holding the lock:
+    the GPIO callbacks and the gRPC loop keep running meanwhile."""
+
+    PAUSE = 0.2
+
+    def setUp(self):
+        Device.pin_factory.reset()
+        self.curtain = _curtain()
+        self.curtain._reverse_pause = self.PAUSE
+        self.curtain._motor.enable_device.on()
+        self.curtain._encoder.steps = 100
+
+    def tearDown(self):
+        self.curtain._stop()
+        Device.pin_factory.reset()
+
+    def _after_the_pause(self):
+        time.sleep(self.PAUSE * 2)
+
+    def test_disabling_an_opening_curtain_returns_at_once_with_the_motor_stopped(self):
+        self.curtain.move(150)
+
+        started = time.monotonic()
+        self.curtain.disable()
+
+        self.assertLess(time.monotonic() - started, self.PAUSE / 2)
+        self.assertEqual(0, self.curtain._motor.value)
+        self.assertTrue(self.curtain._lock.acquire(timeout=0.05))
+        self.curtain._lock.release()
+
+    def test_after_the_pause_the_disabled_curtain_goes_down(self):
+        self.curtain.move(150)
+        self.curtain.disable()
+
+        self._after_the_pause()
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_a_curtain_at_rest_goes_down_without_pausing(self):
+        self.curtain.disable()
+
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_keeping_the_same_direction_does_not_pause(self):
+        self.curtain._drive(1)
+
+        self.curtain._drive(1)
+
+        self.assertEqual(1, self.curtain._motor.value)
+
+    def test_opening_a_curtain_that_is_closing_rests_first(self):
+        self.curtain._drive(-1)
+
+        self.curtain._drive(1)
+        self.assertEqual(0, self.curtain._motor.value)
+        self._after_the_pause()
+
+        self.assertEqual(1, self.curtain._motor.value)
+
+    def test_a_move_during_the_pause_does_not_start_the_motor(self):
+        self.curtain.move(150)
+        self.curtain.disable()
+
+        self.curtain.move(180)
+
+        self.assertEqual(0, self.curtain._motor.value)
+        self._after_the_pause()
+        self.assertEqual(-1, self.curtain._motor.value)
+
+    def test_a_closed_switch_reached_during_the_pause_cancels_the_restart(self):
+        self.curtain.move(150)
+        self.curtain.disable()
+
+        self.curtain._closed_switch.pin.drive_low()
+        self._after_the_pause()
+
+        self.assertEqual(0, self.curtain._motor.value)
+        self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
+
+    def test_a_second_command_during_the_pause_rests_again_before_starting(self):
+        self.curtain._drive(-1)
+        self.curtain._drive(1)
+
+        self.curtain._drive(-1)
+
+        self.assertEqual(0, self.curtain._motor.value)
+        self._after_the_pause()
+        self.assertEqual(-1, self.curtain._motor.value)
+
+
+class TestCurtainGuards(unittest.TestCase):
 
     def setUp(self):
         Device.pin_factory.reset()
@@ -341,54 +422,69 @@ class TestCurtainReversal(unittest.TestCase):
         self.curtain._stop()
         Device.pin_factory.reset()
 
-    def _disable_recording_pauses(self):
-        pauses = []
-        with patch("crac_server.component.curtains.curtains.sleep",
-                   side_effect=lambda seconds: pauses.append((seconds, self.curtain._motor.value))):
-            self.curtain.disable()
-        return pauses
+    def test_an_opening_curtain_stops_at_the_safety_step(self):
+        self.curtain.move(300)
+        self.curtain._encoder.steps = 215
 
-    def test_an_opening_curtain_stops_and_pauses_before_going_down(self):
+        self.curtain._on_rotation()
+
+        self.assertEqual(0, self.curtain._motor.value)
+
+    def test_a_curtain_with_its_motor_disabled_does_not_move(self):
+        self.curtain._motor.enable_device.off()
+
         self.curtain.move(150)
 
-        pauses = self._disable_recording_pauses()
+        self.assertEqual(0, self.curtain._motor.value)
 
-        self.assertEqual([(0.5, 0)], pauses)
-        self.assertEqual(-1, self.curtain._motor.value)
+    def test_a_moving_curtain_is_not_sent_elsewhere(self):
+        self.curtain.move(150)
 
-    def test_a_curtain_at_rest_goes_down_without_pausing(self):
-        pauses = self._disable_recording_pauses()
+        self.curtain.move(50)
 
-        self.assertEqual([], pauses)
-        self.assertEqual(-1, self.curtain._motor.value)
-
-    def _recording_pauses(self, start):
-        pauses = []
-        with patch("crac_server.component.curtains.curtains.sleep",
-                   side_effect=lambda seconds: pauses.append((seconds, self.curtain._motor.value))):
-            start()
-        return pauses
-
-    def test_closing_a_curtain_that_is_opening_stops_and_pauses_first(self):
-        self.curtain._open()
-
-        pauses = self._recording_pauses(self.curtain._close)
-
-        self.assertEqual([(0.5, 0)], pauses)
-        self.assertEqual(-1, self.curtain._motor.value)
-
-    def test_opening_a_curtain_that_is_closing_stops_and_pauses_first(self):
-        self.curtain._close()
-
-        pauses = self._recording_pauses(self.curtain._open)
-
-        self.assertEqual([(0.5, 0)], pauses)
         self.assertEqual(1, self.curtain._motor.value)
 
-    def test_keeping_the_same_direction_does_not_pause(self):
-        self.curtain._open()
+    def test_disabling_a_curtain_on_the_closed_switch_stops_its_motor(self):
+        self.curtain._drive(1)
+        self.curtain._closed_switch.pin.drive_low()
+        self.curtain._drive(1)
 
-        pauses = self._recording_pauses(self.curtain._open)
+        self.curtain.disable()
 
-        self.assertEqual([], pauses)
-        self.assertEqual(1, self.curtain._motor.value)
+        self.assertEqual(0, self.curtain._motor.value)
+        self.assertEqual(CurtainStatus.CURTAIN_DISABLED, self.curtain.get_status())
+
+    def test_both_switches_active_is_an_error(self):
+        self.curtain._closed_switch.pin.drive_low()
+        self.curtain._open_switch.pin.drive_low()
+        self.curtain._stop()
+
+        self.assertEqual(CurtainStatus.CURTAIN_ERROR, self.curtain.get_status())
+
+
+class TestSimulatedCurtain(unittest.TestCase):
+
+    def setUp(self):
+        Device.pin_factory.reset()
+
+    def tearDown(self):
+        Device.pin_factory.reset()
+
+    def test_repeated_disables_drive_a_single_simulated_motor(self):
+        simulated = MockCurtain(
+            encoder={"a": 7, "b": 8, "max_steps": 215},
+            closed_switch={"pin": 16, "pull_up": True},
+            open_switch={"pin": 21, "pull_up": True},
+            motor={"forward": 23, "backward": 24, "enable": 25, "pwm": False},
+            orientation=CurtainOrientation.Name(CurtainOrientation.CURTAIN_EAST),
+        )
+        self.addCleanup(simulated._stop)
+        simulated._closed_switch.pin.drive_high()
+        simulated._encoder.steps = 30
+        simulated.disable()
+        first = simulated._thread
+
+        simulated.disable()
+        simulated.disable()
+
+        self.assertIs(first, simulated._thread)

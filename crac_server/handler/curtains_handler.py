@@ -80,15 +80,15 @@ class CurtainsTelescopeHandler(AbstractCurtainsHandler):
         return super().handle(mediator)
 
 class CurtainsDisableHandler(AbstractCurtainsHandler):
-    """DISABLE brings each curtain down whatever it is doing, and the chain
-    stops here so that no move overrides it."""
+    """DISABLE brings each curtain down whatever it is doing and whatever the
+    roof and the telescope say, since it can do no harm; the chain stops here
+    so that no move overrides it."""
 
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         if mediator.action is CurtainsAction.DISABLE:
             mediator.curtain_east.disable(power_motor=True)
             mediator.curtain_west.disable(power_motor=True)
             self._next_handler = None
-            return super().handle(mediator)
         
         return super().handle(mediator)
     
@@ -106,16 +106,18 @@ class CurtainsEnableHandler(AbstractCurtainsHandler):
 class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
         if not mediator.is_disabled and telescope().speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
-            steps = self.__calculate_curtains_steps(mediator.curtain_east.full_travel)
-            mediator.curtain_east.move(steps["east"])
-            mediator.curtain_west.move(steps["west"])
+            steps = self._calculate_curtains_steps(mediator.curtain_east.full_travel)
+            for curtain, side in ((mediator.curtain_east, "east"), (mediator.curtain_west, "west")):
+                if steps.get(side) is not None:
+                    curtain.move(steps[side])
 
         return super().handle(mediator)
     
-    def __calculate_curtains_steps(self, full_travel: int):
+    def _calculate_curtains_steps(self, full_travel: int):
         """Both curtains down with the telescope parked or below their area,
         both fully open above it or outside it; otherwise the curtain on the
-        telescope's side follows its altitude and the other one is open."""
+        telescope's side follows its altitude and the other one is open. No
+        step for a curtain means leave it where it is."""
 
         aa_coords = telescope().aa_coords
         status = telescope().status

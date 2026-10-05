@@ -1,6 +1,5 @@
 import logging
 import unittest
-from unittest.mock import patch
 
 from gpiozero import Device
 
@@ -28,11 +27,8 @@ class TestCurtainStatusLogging(unittest.TestCase):
         Device.pin_factory.reset()
 
     def _no_state_recognized(self):
-        predicates = ["_is_danger", "_is_disabled", "_is_open", "_is_closed", "_is_stopped"]
-        patchers = [patch.object(self.curtain, name, return_value=False) for name in predicates]
-        for patcher in patchers:
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        """Both switches active at once: no position matches."""
+        self.curtain._open_switch.pin.drive_low()
 
     def test_unrecognized_state_is_logged_once_with_the_curtain_orientation(self):
         self._no_state_recognized()
@@ -47,9 +43,9 @@ class TestCurtainStatusLogging(unittest.TestCase):
     def test_recovery_is_logged_at_info(self):
         self._no_state_recognized()
         self.curtain.get_status()
-        with patch.object(self.curtain, "_is_closed", return_value=True):
-            with self.assertLogs(self.LOGGER, level="INFO") as captured:
-                self.curtain.get_status()
+        self.curtain._open_switch.pin.drive_high()
+        with self.assertLogs(self.LOGGER, level="INFO") as captured:
+            self.curtain.get_status()
         self.assertEqual(len(captured.records), 1)
         self.assertEqual(captured.records[0].levelno, logging.INFO)
 

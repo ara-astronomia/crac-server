@@ -1,6 +1,5 @@
 import logging
 import threading
-from time import sleep
 from typing import Union
 from gpiozero import RotaryEncoder, DigitalInputDevice, Motor
 from crac_server.config import Config
@@ -28,6 +27,7 @@ class Curtain:
         self._orientation = orientation
         self._status_log = StatusLogger(logger, orientation, CurtainStatus)
         self._lock = threading.Lock()
+        self._resting: Union[None, threading.Timer] = None
         self._encoder = RotaryEncoder(**encoder)
         self._closed_switch = DigitalInputDevice(**closed_switch)
         self._open_switch = DigitalInputDevice(**open_switch)
@@ -45,28 +45,35 @@ class Curtain:
         return self._encoder.steps
 
     def get_status(self) -> CurtainStatus:
-        """Read from the motor, the encoder and the switches."""
-        if self._is_danger():
+        """Each pin is read once, so that a motor starting halfway through
+        cannot make the reading inconsistent."""
+        motor = self._motor.value
+        enabled = self._motor.enable_device.value
+        closed = self._closed_switch.is_active
+        opened = self._open_switch.is_active
+        steps = self.steps()
+
+        if steps > self._safety_step:
             status = CurtainStatus.CURTAIN_DANGER
-        elif self._is_disabled():
+        elif closed and not motor and not enabled:
             status = CurtainStatus.CURTAIN_DISABLED
-        elif self._motor.value == 1:
+        elif motor == 1:
             status = CurtainStatus.CURTAIN_OPENING
-        elif self._motor.value == -1:
+        elif motor == -1:
             status = CurtainStatus.CURTAIN_DISABLING if self._to_disable else CurtainStatus.CURTAIN_CLOSING
-        elif self._is_open():
-            status = CurtainStatus.CURTAIN_OPENED
-        elif self._is_closed():
-            status = CurtainStatus.CURTAIN_CLOSED
-        elif self._is_stopped():
-            status = CurtainStatus.CURTAIN_STOPPED
-        else:
+        elif closed and opened:
             status = CurtainStatus.CURTAIN_ERROR
+        elif closed:
+            status = CurtainStatus.CURTAIN_CLOSED
+        elif opened or steps >= self._full_travel:
+            status = CurtainStatus.CURTAIN_OPENED
+        else:
+            status = CurtainStatus.CURTAIN_STOPPED
 
         if status is CurtainStatus.CURTAIN_ERROR:
             self._status_log.record(
                 status, ErrorCause.STATE_NOT_RECOGNIZED,
-                detail=f"closed={self._closed_switch.is_active} open={self._open_switch.is_active} motor={self._motor.value}",
+                detail=f"closed={closed} open={opened} motor={motor}",
             )
         else:
             self._status_log.record(status)
@@ -75,9 +82,10 @@ class Curtain:
 
     def move(self, step: int):
         """Move towards step, unless the motor is disabled or the curtain is
-        already moving. Step 0 means down to the closed switch."""
+        already moving or resting before a reversal. Step 0 means down to the
+        closed switch."""
         with self._lock:
-            if not self._motor.enable_device.value:
+            if not self._motor.enable_device.value or self._resting:
                 return
             if self.get_status() > CurtainStatus.CURTAIN_OPENED or self._motor.value:
                 return
@@ -87,10 +95,10 @@ class Curtain:
                 self._bring_down()
             elif self.steps() < step - self._tolerance_steps:
                 self._target = step
-                self._open()
+                self._drive(1)
             elif self.steps() > step + self._tolerance_steps:
                 self._target = step
-                self._close()
+                self._drive(-1)
 
     def disable(self, power_motor: bool = False):
         """Bring the curtain down and disable its motor on the closed switch.
@@ -118,29 +126,45 @@ class Curtain:
         if self._is_down():
             return
         self._target = BOTTOM_STEP
-        self._close()
+        self._drive(-1)
 
     def _disable_motor(self):
         self._motor.enable_device.off()
         self._to_disable = False
 
-    def _open(self):
-        self._stop_before_reversing(1)
-        self._motor.forward()
+    def _drive(self, direction: int):
+        """A motor never turns the other way while running, nor right after a
+        stop for a reversal: it rests for reverse_pause seconds first. The rest
+        runs on a timer, so the lock and the caller are free meanwhile."""
+        if self._resting or self._motor.value == -direction:
+            self._stop()
+            self._resting = threading.Timer(self._reverse_pause, self._after_rest, args=(direction, self._target))
+            self._resting.daemon = True
+            self._resting.start()
+        else:
+            self._start(direction)
 
-    def _close(self):
-        self._stop_before_reversing(-1)
-        self._motor.backward()
+    def _after_rest(self, direction: int, target: Union[None, int]):
+        """Drive on unless the rest was cancelled or the target changed."""
+        with self._lock:
+            if threading.current_thread() is not self._resting:
+                return
+            self._resting = None
+            if self._target == target:
+                self._start(direction)
+
+    def _start(self, direction: int):
+        if direction == 1:
+            self._motor.forward()
+        else:
+            self._motor.backward()
 
     def _stop(self):
+        """Stops the motor and cancels a pending restart after a rest."""
+        if self._resting:
+            self._resting.cancel()
+            self._resting = None
         self._motor.stop()
-
-    def _stop_before_reversing(self, direction: int):
-        """A motor never turns the other way while running: it stops and rests
-        for reverse_pause seconds first."""
-        if self._motor.value == -direction:
-            self._stop()
-            sleep(self._reverse_pause)
 
     def _on_rotation(self):
         """Stop at the target or at the safety step. A curtain going down runs
@@ -175,26 +199,6 @@ class Curtain:
     def _closing_to_the_switch(self) -> bool:
         return self._target is not None and self._target <= BOTTOM_STEP and self._motor.value == -1
 
-    def _is_danger(self) -> bool:
-        return self.steps() > self._safety_step
-
     def _is_down(self) -> bool:
         """Only the closed switch says the curtain is down."""
         return self._closed_switch.is_active
-
-    def _is_disabled(self) -> bool:
-        return self._is_down() and not self._motor.value and not self._motor.enable_device.value
-
-    def _is_open(self) -> bool:
-        """Full travel is read from the encoder: the curtains run out of
-        travel before reaching the open switch."""
-        return (
-            (self._open_switch.is_active or self.steps() >= self._full_travel) and
-            not self._closed_switch.is_active and not self._motor.value
-        )
-
-    def _is_closed(self) -> bool:
-        return self._closed_switch.is_active and not self._open_switch.is_active and not self._motor.value
-
-    def _is_stopped(self) -> bool:
-        return not self._closed_switch.is_active and not self._open_switch.is_active and not self._motor.value

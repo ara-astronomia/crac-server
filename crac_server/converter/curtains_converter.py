@@ -98,7 +98,7 @@ class CurtainsConverter:
             key=ButtonKey.KEY_CURTAINS,
             label=name_enable_button,
             metadata=metadata_enable_button,
-            is_disabled=mediator.is_disabled,
+            is_disabled=mediator.is_disabled and metadata_enable_button is CurtainsAction.ENABLE,
             button_color=ButtonColor(text_color=text_color, background_color=background_color),
         )
 
