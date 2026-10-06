@@ -167,8 +167,8 @@ tests/                      # rispecchia la struttura di crac_server/
 ## Convenzioni di stile
 
 Valgono le convenzioni Python delle PEP: in particolare PEP 8 (stile e nomi)
-e PEP 257 (docstring). Le regole qui sotto le precisano dove il progetto è
-più restrittivo; in caso di dubbio, vince la PEP.
+e PEP 257 (docstring). Le regole qui sotto sono più restrittive e prevalgono
+dove ne parlano; per tutto il resto vale la PEP.
 
 - **Async/sync safety (gRPC) — mandato critico**: i servicer sono `async def`.
   Non chiamare mai codice bloccante direttamente al loro interno (attese
