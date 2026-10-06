@@ -174,7 +174,27 @@ tests/                      # rispecchia la struttura di crac_server/
   chiamare da lì metodi `async` (es. `ROOF.close()`) senza un event loop è
   un bug ricorrente.
 - Naming: moduli/package `snake_case`, classi `PascalCase`, funzioni/variabili
-  `snake_case`, costanti `UPPER_SNAKE_CASE`, membri privati con prefisso `_`.
+  `snake_case`, costanti `UPPER_SNAKE_CASE`, in inglese.
+- Membri interni con un trattino basso (`_nome`), anche quando una sottoclasse
+  li usa. Mai `__nome__`: è riservato ai metodi speciali di Python e non
+  rende niente privato. `__nome` (name mangling) solo se serve davvero
+  nascondere il membro alle sottoclassi.
+- **Commenti**: docstring sì, commenti inline no. Se un blocco ha bisogno di
+  un commento per farsi capire, va riscritto: un metodo o una costante con un
+  nome che dica quello che direbbe il commento. Il codice commentato si
+  cancella, c'è git.
+- Docstring e blocchi di commento al massimo di **3 righe**. Dicono cosa fa
+  il codice adesso, mai com'era prima né di quanto è migliorato: la storia
+  del difetto sta nel commit e nella PR.
+- Docstring, commenti, messaggi di log ed eccezioni in **inglese**. Mai
+  numeri di issue nel codice (`#44`): invecchiano, e il motivo legato a una
+  storia va nel commit o nella PR.
+- In `config.ini` i commenti servono, perché li legge chi configura il
+  servizio: spiegano cablaggi e soglie che il nome della chiave non dice.
+  Anche lì in inglese e corti.
+- Nei test, asserzioni standard di `unittest.mock`
+  (`assert_called_once_with`, `assert_not_called`, `assert_has_calls`).
+  Da evitare solo le ricostruzioni a mano su `call_args_list`.
 - Import in tre gruppi separati da riga vuota: stdlib, third-party (grpc,
   astropy, ecc.), moduli locali.
 
