@@ -122,6 +122,10 @@ Log del servizio: `journalctl -u crac-server -f`. All'avvio deve comparire
 partire da solo la chiusura d'emergenza, anche con crac-cloud spento. Se la
 riga manca, quella protezione non gira.
 
+A ogni avvio del servizio, deploy compreso, le tende scendono fino al
+finecorsa di chiusura e si disattivano, da qualunque posizione. Per usarle
+vanno riattivate da crac-cloud.
+
 # Test
 
 ## unit tests:

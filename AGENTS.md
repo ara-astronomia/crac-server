@@ -61,6 +61,31 @@ tests/                      # rispecchia la struttura di crac_server/
   non esce subito, perché `asyncio.run()` si unisce al thread rimasto dentro
   `wait_for_active` - aspetta il `roof_timeout` residuo (50s), e su
   `docker compose stop` scadono prima i 10 secondi di grazia.
+- **Le tende si chiudono sul finecorsa, si aprono sull'encoder**: una tenda è
+  giù solo se il finecorsa di chiusura è attivo, e in discesa l'encoder non
+  la ferma. In salita il finecorsa di apertura non si raggiunge: l'apertura
+  totale è `n_step_corsa`, e `n_step_sicurezza` è sia l'arresto di sicurezza
+  sia il massimo dell'encoder. All'avvio `build_curtain()` chiama
+  `disable(power_motor=True)`: ogni tenda scende e si disattiva.
+- **Chi riaccende il motore di una tenda**: solo `enable()` e il DISABLE
+  dell'operatore (`disable(power_motor=True)`, primo handler della catena in
+  `CurtainsService`, quindi vale anche a tetto chiuso o telescopio spento).
+  Le disattivazioni automatiche (tetto, telescopio, meteo) chiamano
+  `disable()` a ogni poll e non lo riaccendono mai: una tenda giù con il
+  finecorsa guasto sembra a metà corsa.
+- **Inversione del motore delle tende**: prima di girare nell'altro verso il
+  motore resta fermo `reverse_pause` secondi contati dallo stop, su un
+  `threading.Timer`. Un comando durante la pausa non la allunga, cambia solo
+  il bersaglio; a fine pausa la tenda va verso il bersaglio di quel momento.
+  Il lock di `Curtain` è un `Lock` semplice preso solo dai metodi pubblici e
+  dalle callback GPIO: un metodo che lo tiene non deve chiamarne un altro
+  che lo prende, e nessuno deve dormire tenendolo (blocca l'event loop gRPC
+  e le callback di lgpio, che arrivano tutte da un thread solo).
+- **La tenda simulata si muove anche con il motore disabilitato**
+  (`MockCurtain` guarda solo `motor.value`) e parte sempre sul finecorsa:
+  sullo stack non si riproducono né una tenda a metà corsa all'avvio né una
+  tenda col motore spento fuori dal finecorsa. Questi casi li coprono solo i
+  test automatici.
 - **Driver telescopio "indigo"**: non forza più la connessione al device da
   solo - il telescopio va connesso manualmente dal pannello INDIGO prima
   che crac lo usi (replica il workflow reale: l'operatore collega il
@@ -127,8 +152,8 @@ tests/                      # rispecchia la struttura di crac_server/
 - **Un driver telescopio esterno si registra come entry point**, non va
   copiato dentro questo repo: nel `pyproject.toml` del pacchetto di terzi,
   `[project.entry-points."crac_server.telescope_drivers"]` con
-  `nome = "mio_pacchetto.telescope:Telescope"`. `config.ini` continua a
-  usare un nome breve (`driver = nome`), esattamente come oggi con
+  `name = "my_package.telescope:Telescope"`. `config.ini` continua a
+  usare un nome breve (`driver = name`), esattamente come oggi con
   `indigo`/`simulator` - anche questi due sono registrati nello stesso
   modo, nel `pyproject.toml` di questo repo, non hardcoded nel factory
   (`crac_server/component/telescope/__init__.py`). Il contratto da
@@ -182,6 +207,10 @@ tests/                      # rispecchia la struttura di crac_server/
 
 ## Convenzioni di stile
 
+Valgono le convenzioni Python delle PEP: in particolare PEP 8 (stile e nomi)
+e PEP 257 (docstring). Le regole qui sotto sono più restrittive e prevalgono
+dove ne parlano; per tutto il resto vale la PEP.
+
 - **Async/sync safety (gRPC) — mandato critico**: i servicer sono `async def`.
   Non chiamare mai codice bloccante direttamente al loro interno (attese
   GPIO, richieste sincrone tipo `urllib`) - usare `asyncio.to_thread()` /
@@ -190,7 +219,27 @@ tests/                      # rispecchia la struttura di crac_server/
   chiamare da lì metodi `async` (es. `ROOF.close()`) senza un event loop è
   un bug ricorrente.
 - Naming: moduli/package `snake_case`, classi `PascalCase`, funzioni/variabili
-  `snake_case`, costanti `UPPER_SNAKE_CASE`, membri privati con prefisso `_`.
+  `snake_case`, costanti `UPPER_SNAKE_CASE`, in inglese.
+- Membri interni con un trattino basso (`_on_switch`), anche quando una sottoclasse
+  li usa. Mai `__on_switch__`: è riservato ai metodi speciali di Python e non
+  rende niente privato. `__on_switch` (name mangling) solo se serve davvero
+  nascondere il membro alle sottoclassi.
+- **Commenti**: docstring sì, commenti inline no. Se un blocco ha bisogno di
+  un commento per farsi capire, va riscritto: un metodo o una costante con un
+  nome che dica quello che direbbe il commento. Il codice commentato si
+  cancella, c'è git.
+- Docstring e blocchi di commento al massimo di **3 righe**. Dicono cosa fa
+  il codice adesso, mai com'era prima né di quanto è migliorato: la storia
+  del difetto sta nel commit e nella PR.
+- Docstring, commenti, messaggi di log ed eccezioni in **inglese**. Mai
+  numeri di issue nel codice (`#44`): invecchiano, e il motivo legato a una
+  storia va nel commit o nella PR.
+- In `config.ini` i commenti servono, perché li legge chi configura il
+  servizio: spiegano cablaggi e soglie che il nome della chiave non dice.
+  Anche lì in inglese e corti.
+- Nei test, asserzioni standard di `unittest.mock`
+  (`assert_called_once_with`, `assert_not_called`, `assert_has_calls`).
+  Da evitare solo le ricostruzioni a mano su `call_args_list`.
 - Import in tre gruppi separati da riga vuota: stdlib, third-party (grpc,
   astropy, ecc.), moduli locali.
 
