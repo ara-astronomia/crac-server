@@ -116,8 +116,8 @@ tests/                      # rispecchia la struttura di crac_server/
 - **Un driver telescopio esterno si registra come entry point**, non va
   copiato dentro questo repo: nel `pyproject.toml` del pacchetto di terzi,
   `[project.entry-points."crac_server.telescope_drivers"]` con
-  `nome = "mio_pacchetto.telescope:Telescope"`. `config.ini` continua a
-  usare un nome breve (`driver = nome`), esattamente come oggi con
+  `name = "my_package.telescope:Telescope"`. `config.ini` continua a
+  usare un nome breve (`driver = name`), esattamente come oggi con
   `indigo`/`simulator` - anche questi due sono registrati nello stesso
   modo, nel `pyproject.toml` di questo repo, non hardcoded nel factory
   (`crac_server/component/telescope/__init__.py`). Il contratto da
@@ -175,9 +175,9 @@ tests/                      # rispecchia la struttura di crac_server/
   un bug ricorrente.
 - Naming: moduli/package `snake_case`, classi `PascalCase`, funzioni/variabili
   `snake_case`, costanti `UPPER_SNAKE_CASE`, in inglese.
-- Membri interni con un trattino basso (`_nome`), anche quando una sottoclasse
-  li usa. Mai `__nome__`: è riservato ai metodi speciali di Python e non
-  rende niente privato. `__nome` (name mangling) solo se serve davvero
+- Membri interni con un trattino basso (`_on_switch`), anche quando una sottoclasse
+  li usa. Mai `__on_switch__`: è riservato ai metodi speciali di Python e non
+  rende niente privato. `__on_switch` (name mangling) solo se serve davvero
   nascondere il membro alle sottoclassi.
 - **Commenti**: docstring sì, commenti inline no. Se un blocco ha bisogno di
   un commento per farsi capire, va riscritto: un metodo o una costante con un
