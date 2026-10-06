@@ -7,7 +7,8 @@ from crac_server.app import main
 class TestMain(unittest.TestCase):
 
     def setUp(self):
-        # asyncio.run is mocked: do not create a real, unconsumed coroutine.
+        """asyncio.run is mocked, so serve() is too: a real coroutine would
+        never be awaited."""
         serve_patch = patch(
             "crac_server.app.serve", new_callable=Mock,
             return_value=sentinel.serve_coroutine,
