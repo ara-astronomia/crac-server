@@ -1,7 +1,8 @@
+import asyncio
 import unittest
-from unittest.mock import Mock, patch, sentinel
+from unittest.mock import AsyncMock, MagicMock, Mock, patch, sentinel
 
-from crac_server.app import main
+from crac_server.app import main, serve
 
 
 class TestMain(unittest.TestCase):
@@ -37,3 +38,22 @@ class TestMain(unittest.TestCase):
         self.mocked_serve.assert_called_once_with()
         mocked_run.assert_called_once_with(sentinel.serve_coroutine)
         mocked_exit.assert_not_called()
+
+
+class TestServe(unittest.IsolatedAsyncioTestCase):
+
+    async def test_the_weather_is_watched_by_the_same_service_that_answers_the_clients(self):
+        server = MagicMock(start=AsyncMock(), wait_for_termination=AsyncMock())
+        with patch("crac_server.app.build_components"), \
+                patch("crac_server.app.grpc.aio.server", return_value=server), \
+                patch("crac_server.app.WeatherService") as weather_service, \
+                patch("crac_server.app.add_WeatherServicer_to_server") as add_weather:
+            weather_service.return_value.watch = AsyncMock()
+            server.wait_for_termination.side_effect = self.__running_for_a_moment
+            await serve()
+
+        add_weather.assert_called_once_with(weather_service.return_value, server)
+        weather_service.return_value.watch.assert_awaited_once_with()
+
+    async def __running_for_a_moment(self):
+        await asyncio.sleep(0.01)

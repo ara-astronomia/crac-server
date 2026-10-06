@@ -1,7 +1,13 @@
 import asyncio
+from datetime import datetime
+import json
+from pathlib import Path
+import os
+from threading import Thread
 from time import sleep
 import unittest
 from unittest.mock import MagicMock, PropertyMock, patch
+from urllib.error import URLError
 from gpiozero import Device
 from crac_protobuf.button_pb2 import ButtonType  # type: ignore
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
@@ -15,6 +21,7 @@ from crac_server.component.roof.simulator.roof_pins import simulated_roof
 from crac_server.component.telescope import telescope
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.component.weather import weather
+from crac_server.component.weather.weather import Weather
 from crac_server.service.weather_service import WeatherService
 
 class TestWeatherService(unittest.IsolatedAsyncioTestCase):
@@ -23,20 +30,19 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
         self.weather_service = WeatherService()
     
     async def test_get_status(self):
-        wind_speed = PropertyMock(return_value=(7, "km/h"))
-        type(weather()).wind_speed = wind_speed  # type: ignore
-        wind_gust_speed = PropertyMock(return_value=(12, "km/h"))
-        type(weather()).wind_gust_speed = wind_gust_speed  # type: ignore
-        humidity = PropertyMock(return_value=(70, "%"))
-        type(weather()).humidity = humidity  # type: ignore
-        temperature = PropertyMock(return_value=(27, "°C"))
-        type(weather()).temperature = temperature  # type: ignore
-        rain_rate = PropertyMock(return_value=(4, "mm/h"))
-        type(weather()).rain_rate = rain_rate  # type: ignore
-        barometer = PropertyMock(return_value=(1063, "mbar"))
-        type(weather()).barometer = barometer  # type: ignore
-        barometer_trend = PropertyMock(return_value=(-3, "mbar"))
-        type(weather()).barometer_trend = barometer_trend  # type: ignore
+        readings = {
+            "wind_speed": (7, "km/h"),
+            "wind_gust_speed": (12, "km/h"),
+            "humidity": (70, "%"),
+            "temperature": (27, "°C"),
+            "rain_rate": (4, "mm/h"),
+            "barometer": (1063, "mbar"),
+            "barometer_trend": (-3, "mbar"),
+        }
+        for name, value in readings.items():
+            patcher = patch.object(type(weather()), name, new_callable=PropertyMock, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
         response = await self.weather_service.GetStatus(None, None)
         for chart in response.charts:
@@ -70,10 +76,139 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
 
     async def test_status_danger_close_crac(self):
         self.weather_service.weather_converter.convert = MagicMock(return_value=WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER))
-        type(telescope()).polling = True  # type: ignore
         self.weather_service._emergency_closure = MagicMock()
-        await self.weather_service.GetStatus(None, None)
+        with (
+            patch("crac_server.service.weather_service.roof") as roof,
+            patch.object(type(telescope()), "polling", new_callable=PropertyMock, return_value=True),
+        ):
+            roof.return_value.get_status.return_value = RoofStatus.ROOF_OPENED
+            await self.weather_service.GetStatus(None, None)
         self.weather_service._emergency_closure.assert_called_once()
+
+
+class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
+    """
+    The safety decision must not depend on a client polling GetStatus: the
+    service checks the weather by itself, and closes only what can be closed.
+    """
+
+    SERVICE_LOGGER = "crac_server.service.weather_service"
+
+    def setUp(self):
+        roof_patcher = patch("crac_server.service.weather_service.roof")
+        self.roof = roof_patcher.start().return_value
+        self.addCleanup(roof_patcher.stop)
+        self.roof.get_status.return_value = RoofStatus.ROOF_OPENED
+        telescope_patcher = patch("crac_server.service.weather_service.telescope")
+        telescope_patcher.start().return_value.polling = True
+        self.addCleanup(telescope_patcher.stop)
+
+        self.service = WeatherService()
+        self.service.check_interval = 0.01
+        self.service.weather_converter = MagicMock()
+        self.service.weather_converter.convert.return_value = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER)
+        self.service._emergency_closure = MagicMock()
+
+    async def test_danger_starts_the_closure_without_any_client(self):
+        await self.__watch_until_checked(times=1)
+
+        self.service._emergency_closure.assert_called_once()
+
+    async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
+        self.service.weather_converter.convert.side_effect = self.__unreachable_threshold_then_danger()
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_until_checked(times=2)
+
+        self.assertIn("DANGER band is unreachable", captured.output[0])
+        self.service._emergency_closure.assert_called_once()
+
+    async def test_a_different_failure_in_the_watch_is_logged_too(self):
+        self.service.weather_converter.convert.side_effect = UnreachableThresholdError("DANGER band unreachable")
+        self.roof.get_status.side_effect = KeyError("pin")
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_until_checked(times=2)
+            self.service.weather_converter.convert.side_effect = None
+            await self.__watch_until_checked(times=self.service.weather_converter.convert.call_count + 2)
+
+        messages = [record.getMessage() for record in captured.records]
+        self.assertTrue(any("UnreachableThresholdError" in message for message in messages))
+        self.assertTrue(any("KeyError" in message for message in messages))
+        self.assertIsNotNone(captured.records[0].exc_info)
+
+    async def test_the_watch_says_when_it_starts_and_how_often_it_checks(self):
+        with self.assertLogs(self.SERVICE_LOGGER, level="INFO") as captured:
+            await self.__watch_until_checked(times=1)
+
+        self.assertIn(str(self.service.check_interval), captured.records[0].getMessage())
+
+    async def test_the_watch_waits_check_interval_between_two_checks(self):
+        with patch("crac_server.service.weather_service.asyncio.sleep", side_effect=asyncio.CancelledError) as sleep:
+            with self.assertRaises(asyncio.CancelledError):
+                await self.service.watch()
+
+        sleep.assert_awaited_once_with(self.service.check_interval)
+
+    async def test_a_closed_roof_needs_no_closure(self):
+        self.roof.get_status.return_value = RoofStatus.ROOF_CLOSED
+
+        await self.service.GetStatus(None, None)
+
+        self.service._emergency_closure.assert_not_called()
+
+    async def test_a_roof_in_error_may_be_open_and_is_closed(self):
+        self.roof.get_status.return_value = RoofStatus.ROOF_ERROR
+
+        await self.service.GetStatus(None, None)
+
+        self.service._emergency_closure.assert_called_once()
+
+    async def test_a_closure_in_progress_is_not_started_twice(self):
+        self.service.t = MagicMock()
+
+        await self.service.GetStatus(None, None)
+        await self.__watch_until_checked(times=3)
+
+        self.service._emergency_closure.assert_not_called()
+
+    async def __watch_until_checked(self, times):
+        """Run the watch until the given number of checks is over, which is
+        when the next one starts reading, then wait for the closure thread
+        they may have started."""
+        task = asyncio.create_task(self.service.watch())
+        try:
+            async with asyncio.timeout(2):
+                while self.service.weather_converter.convert.call_count <= times:
+                    await asyncio.sleep(0.001)
+        finally:
+            task.cancel()
+        if isinstance(self.service.t, Thread):
+            self.service.t.join()
+
+    def __unreachable_threshold_then_danger(self):
+        yield UnreachableThresholdError("weather.chart.wind: the DANGER band is unreachable")
+        while True:
+            yield WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER)
+
+
+class TestWeatherServiceCheckInterval(unittest.TestCase):
+
+    def test_a_missing_check_interval_fails_at_startup(self):
+        with patch("crac_server.service.weather_service.Config.getValue", return_value=""):
+            with self.assertRaises(ValueError):
+                WeatherService()
+
+    def test_an_interval_that_is_not_a_number_of_at_least_30_seconds_fails_at_startup(self):
+        for value in ("abc", "29.9", "0", "-5", "nan", "inf"):
+            with self.subTest(check_interval=value):
+                with patch.dict(os.environ, {"WEATHER_CHECK_INTERVAL": value}):
+                    with self.assertRaises(ValueError):
+                        WeatherService()
+
+    def test_30_seconds_is_accepted(self):
+        with patch.dict(os.environ, {"WEATHER_CHECK_INTERVAL": "30"}):
+            self.assertEqual(30, WeatherService().check_interval)
 
 
 class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):
@@ -101,6 +236,101 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
         response = await service.GetStatus(None, None)
 
         self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
+
+    async def test_a_reading_that_keeps_failing_is_logged_once_and_so_is_its_recovery(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = [
+            ConnectionError("weather station unreachable"),
+            ConnectionError("weather station unreachable"),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
+        ]
+
+        with (
+            patch("crac_server.service.weather_service.weather") as weather,
+            self.assertLogs("crac_server.service.weather_service", level="INFO") as captured,
+        ):
+            weather.return_value.is_expired.return_value = False
+            for _ in range(3):
+                await service.GetStatus(None, None)
+
+        self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
+        self.assertIn("weather station unreachable", captured.records[0].getMessage())
+        self.assertIn("recovered", captured.records[1].getMessage())
+
+    async def test_http_failures_are_logged_once_until_fresh_data_recovers(self):
+        service = WeatherService()
+        time_format = "%Y-%m-%d %H:%M:%S"
+        source = Weather("http://primary.test", "http://fallback.test",
+                         time_format, 600, 0, url_timeout=1)
+        fixture = Path(__file__).resolve().parents[2] / "crac_server/static/meteo_mock.json"
+        payload = json.loads(fixture.read_text())
+        payload["time"] = datetime.now().strftime(time_format)
+        http_response = MagicMock()
+        http_response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+
+        with (
+            patch("crac_server.service.weather_service.weather", return_value=source),
+            patch("urllib.request.urlopen", side_effect=URLError("offline")) as urlopen,
+            self.assertLogs("crac_server", level="INFO") as captured,
+        ):
+            for _ in range(3):
+                response = await service.check()
+                self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
+            self.assertEqual(6, urlopen.call_count)
+            self.assertEqual(["ERROR"], [record.levelname for record in captured.records])
+            self.assertIsNotNone(captured.records[0].exc_info)
+
+            urlopen.side_effect = None
+            urlopen.return_value = http_response
+            for _ in range(2):
+                response = await service.check()
+                self.assertEqual(WeatherStatus.WEATHER_STATUS_NORMAL, response.status)
+            self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
+            self.assertIn("recovered", captured.records[1].getMessage())
+
+            source.updated_at = "2000-01-01 00:00:00"
+            urlopen.side_effect = URLError("offline again")
+            await service.check()
+            self.assertEqual(["ERROR", "INFO", "ERROR"],
+                             [record.levelname for record in captured.records])
+
+    async def test_stale_data_after_a_failure_is_not_a_recovery(self):
+        """After a failed refresh the next readings use the cached data: they
+        succeed, but the source is still down until fresh data arrives."""
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = [
+            ConnectionError("weather station unreachable"),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_WARNING),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL),
+        ]
+
+        with (
+            patch("crac_server.service.weather_service.weather") as weather,
+            self.assertLogs("crac_server.service.weather_service", level="INFO") as captured,
+        ):
+            weather.return_value.is_expired.side_effect = [True, True, False]
+            for _ in range(3):
+                await service.GetStatus(None, None)
+            self.assertEqual(["ERROR"], [record.levelname for record in captured.records])
+
+            await service.GetStatus(None, None)
+
+        self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
+        self.assertIn("recovered", captured.records[1].getMessage())
+
+    async def test_a_reading_failure_keeps_its_traceback(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = KeyError("current")
+
+        with self.assertLogs("crac_server.service.weather_service", level="ERROR") as captured:
+            await service.GetStatus(None, None)
+
+        self.assertIn("KeyError", captured.records[0].getMessage())
+        self.assertIsNotNone(captured.records[0].exc_info)
 
     async def test_a_slow_reading_lets_the_other_rpcs_through(self):
         """The weather refreshes from a remote source: while that one stays

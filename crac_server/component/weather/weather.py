@@ -115,7 +115,7 @@ class Weather:
             
             return json_result["current"], json_result["time"]
         except (HTTPError, URLError, TimeoutError) as error:
-            logger.error("Fallback url in error")
+            logger.debug("Fallback weather URL failed", exc_info=True)
             self.last_attempt_at = datetime.now()
             raise error
 
@@ -141,7 +141,7 @@ class Weather:
             try:
                 self.json, self.updated_at = self._retrieve_data()
             except (HTTPError, URLError, TimeoutError):
-                logger.error("url in error")
+                logger.debug("Primary weather URL failed; trying fallback", exc_info=True)
                 self.json, self.updated_at = self._retrieve_fallback_data()
             if (datetime.now() - self.updated_at).total_seconds() >= self._time_expired * 3:
                 self.last_attempt_at = datetime.now()
