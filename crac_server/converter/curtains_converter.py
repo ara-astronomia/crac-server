@@ -27,12 +27,12 @@ class CurtainsMediator:
     def __init__(self, request: CurtainsRequest) -> None:
         self.request = request
         self._action = request.action
-        self._button_east = curtain_east()
-        self._button_west = curtain_west()
-        self._status_east = self.button_east.get_status()
-        self._status_west = self.button_west.get_status()
-        self._steps_east = self.button_east.steps()
-        self._steps_west = self.button_west.steps()
+        self._curtain_east = curtain_east()
+        self._curtain_west = curtain_west()
+        self._status_east = self.curtain_east.get_status()
+        self._status_west = self.curtain_west.get_status()
+        self._steps_east = self.curtain_east.steps()
+        self._steps_west = self.curtain_west.steps()
         self._is_disabled = False
 
     @property
@@ -40,12 +40,12 @@ class CurtainsMediator:
         return self._action
 
     @property
-    def button_east(self) -> Curtain:
-        return self._button_east
+    def curtain_east(self) -> Curtain:
+        return self._curtain_east
 
     @property
-    def button_west(self) -> Curtain:
-        return self._button_west
+    def curtain_west(self) -> Curtain:
+        return self._curtain_west
 
     @property
     def status_east(self) -> CurtainStatus:
@@ -98,16 +98,8 @@ class CurtainsConverter:
             key=ButtonKey.KEY_CURTAINS,
             label=name_enable_button,
             metadata=metadata_enable_button,
-            is_disabled=mediator.is_disabled,
+            is_disabled=mediator.is_disabled and metadata_enable_button is CurtainsAction.ENABLE,
             button_color=ButtonColor(text_color=text_color, background_color=background_color),
-        )
-
-        calibrate_button = ButtonGui(
-            key=ButtonKey.KEY_CALIBRATE,
-            label=ButtonLabel.LABEL_CALIBRATE,
-            is_disabled=True,
-            metadata=CurtainsAction.CALIBRATE_CURTAINS,
-            button_color=ButtonColor(text_color="white", background_color="red"),
         )
 
         return CurtainsResponse(
@@ -115,8 +107,5 @@ class CurtainsConverter:
                 curtain_east_entry, 
                 curtain_west_entry
             ), 
-            buttons_gui=[
-                enable_button, 
-                calibrate_button
-            ]
+            buttons_gui=[enable_button]
         )
