@@ -25,20 +25,19 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
         self.weather_service = WeatherService()
     
     async def test_get_status(self):
-        wind_speed = PropertyMock(return_value=(7, "km/h"))
-        type(weather()).wind_speed = wind_speed  # type: ignore
-        wind_gust_speed = PropertyMock(return_value=(12, "km/h"))
-        type(weather()).wind_gust_speed = wind_gust_speed  # type: ignore
-        humidity = PropertyMock(return_value=(70, "%"))
-        type(weather()).humidity = humidity  # type: ignore
-        temperature = PropertyMock(return_value=(27, "°C"))
-        type(weather()).temperature = temperature  # type: ignore
-        rain_rate = PropertyMock(return_value=(4, "mm/h"))
-        type(weather()).rain_rate = rain_rate  # type: ignore
-        barometer = PropertyMock(return_value=(1063, "mbar"))
-        type(weather()).barometer = barometer  # type: ignore
-        barometer_trend = PropertyMock(return_value=(-3, "mbar"))
-        type(weather()).barometer_trend = barometer_trend  # type: ignore
+        readings = {
+            "wind_speed": (7, "km/h"),
+            "wind_gust_speed": (12, "km/h"),
+            "humidity": (70, "%"),
+            "temperature": (27, "°C"),
+            "rain_rate": (4, "mm/h"),
+            "barometer": (1063, "mbar"),
+            "barometer_trend": (-3, "mbar"),
+        }
+        for name, value in readings.items():
+            patcher = patch.object(type(weather()), name, new_callable=PropertyMock, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
         response = await self.weather_service.GetStatus(None, None)
         for chart in response.charts:
@@ -72,9 +71,11 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
 
     async def test_status_danger_close_crac(self):
         self.weather_service.weather_converter.convert = MagicMock(return_value=WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER))
-        type(telescope()).polling = True  # type: ignore
         self.weather_service._emergency_closure = MagicMock()
-        with patch("crac_server.service.weather_service.roof") as roof:
+        with (
+            patch("crac_server.service.weather_service.roof") as roof,
+            patch.object(type(telescope()), "polling", new_callable=PropertyMock, return_value=True),
+        ):
             roof.return_value.get_status.return_value = RoofStatus.ROOF_OPENED
             await self.weather_service.GetStatus(None, None)
         self.weather_service._emergency_closure.assert_called_once()
