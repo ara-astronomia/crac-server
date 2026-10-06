@@ -61,6 +61,31 @@ tests/                      # rispecchia la struttura di crac_server/
   non esce subito, perché `asyncio.run()` si unisce al thread rimasto dentro
   `wait_for_active` - aspetta il `roof_timeout` residuo (50s), e su
   `docker compose stop` scadono prima i 10 secondi di grazia.
+- **Le tende si chiudono sul finecorsa, si aprono sull'encoder**: una tenda è
+  giù solo se il finecorsa di chiusura è attivo, e in discesa l'encoder non
+  la ferma. In salita il finecorsa di apertura non si raggiunge: l'apertura
+  totale è `n_step_corsa`, e `n_step_sicurezza` è sia l'arresto di sicurezza
+  sia il massimo dell'encoder. All'avvio `build_curtain()` chiama
+  `disable(power_motor=True)`: ogni tenda scende e si disattiva.
+- **Chi riaccende il motore di una tenda**: solo `enable()` e il DISABLE
+  dell'operatore (`disable(power_motor=True)`, primo handler della catena in
+  `CurtainsService`, quindi vale anche a tetto chiuso o telescopio spento).
+  Le disattivazioni automatiche (tetto, telescopio, meteo) chiamano
+  `disable()` a ogni poll e non lo riaccendono mai: una tenda giù con il
+  finecorsa guasto sembra a metà corsa.
+- **Inversione del motore delle tende**: prima di girare nell'altro verso il
+  motore resta fermo `reverse_pause` secondi contati dallo stop, su un
+  `threading.Timer`. Un comando durante la pausa non la allunga, cambia solo
+  il bersaglio; a fine pausa la tenda va verso il bersaglio di quel momento.
+  Il lock di `Curtain` è un `Lock` semplice preso solo dai metodi pubblici e
+  dalle callback GPIO: un metodo che lo tiene non deve chiamarne un altro
+  che lo prende, e nessuno deve dormire tenendolo (blocca l'event loop gRPC
+  e le callback di lgpio, che arrivano tutte da un thread solo).
+- **La tenda simulata si muove anche con il motore disabilitato**
+  (`MockCurtain` guarda solo `motor.value`) e parte sempre sul finecorsa:
+  sullo stack non si riproducono né una tenda a metà corsa all'avvio né una
+  tenda col motore spento fuori dal finecorsa. Questi casi li coprono solo i
+  test automatici.
 - **Driver telescopio "indigo"**: non forza più la connessione al device da
   solo - il telescopio va connesso manualmente dal pannello INDIGO prima
   che crac lo usi (replica il workflow reale: l'operatore collega il

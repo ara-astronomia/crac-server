@@ -119,6 +119,10 @@ lo stack di test lo passa nel suo `docker-compose.yml`.
 
 Log del servizio: `journalctl -u crac-server -f`.
 
+A ogni avvio del servizio, deploy compreso, le tende scendono fino al
+finecorsa di chiusura e si disattivano, da qualunque posizione. Per usarle
+vanno riattivate da crac-cloud.
+
 # Test
 
 ## unit tests:
