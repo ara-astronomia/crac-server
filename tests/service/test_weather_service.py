@@ -1,9 +1,13 @@
 import asyncio
+from datetime import datetime
+import json
+from pathlib import Path
 import os
 from threading import Thread
 from time import sleep
 import unittest
 from unittest.mock import MagicMock, PropertyMock, patch
+from urllib.error import URLError
 from gpiozero import Device
 from crac_protobuf.button_pb2 import ButtonType  # type: ignore
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
@@ -17,6 +21,7 @@ from crac_server.component.roof.simulator.roof_pins import simulated_roof
 from crac_server.component.telescope import telescope
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.component.weather import weather
+from crac_server.component.weather.weather import Weather
 from crac_server.service.weather_service import WeatherService
 
 class TestWeatherService(unittest.IsolatedAsyncioTestCase):
@@ -252,6 +257,43 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
         self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
         self.assertIn("weather station unreachable", captured.records[0].getMessage())
         self.assertIn("recovered", captured.records[1].getMessage())
+
+    async def test_http_failures_are_logged_once_until_fresh_data_recovers(self):
+        service = WeatherService()
+        time_format = "%Y-%m-%d %H:%M:%S"
+        source = Weather("http://primary.test", "http://fallback.test",
+                         time_format, 600, 0, url_timeout=1)
+        fixture = Path(__file__).resolve().parents[2] / "crac_server/static/meteo_mock.json"
+        payload = json.loads(fixture.read_text())
+        payload["time"] = datetime.now().strftime(time_format)
+        http_response = MagicMock()
+        http_response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+
+        with (
+            patch("crac_server.service.weather_service.weather", return_value=source),
+            patch("urllib.request.urlopen", side_effect=URLError("offline")) as urlopen,
+            self.assertLogs("crac_server", level="INFO") as captured,
+        ):
+            for _ in range(3):
+                response = await service.check()
+                self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
+            self.assertEqual(6, urlopen.call_count)
+            self.assertEqual(["ERROR"], [record.levelname for record in captured.records])
+            self.assertIsNotNone(captured.records[0].exc_info)
+
+            urlopen.side_effect = None
+            urlopen.return_value = http_response
+            for _ in range(2):
+                response = await service.check()
+                self.assertEqual(WeatherStatus.WEATHER_STATUS_NORMAL, response.status)
+            self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
+            self.assertIn("recovered", captured.records[1].getMessage())
+
+            source.updated_at = "2000-01-01 00:00:00"
+            urlopen.side_effect = URLError("offline again")
+            await service.check()
+            self.assertEqual(["ERROR", "INFO", "ERROR"],
+                             [record.levelname for record in captured.records])
 
     async def test_stale_data_after_a_failure_is_not_a_recovery(self):
         """After a failed refresh the next readings use the cached data: they
