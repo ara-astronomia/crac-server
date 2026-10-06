@@ -108,6 +108,17 @@ tests/                      # rispecchia la struttura di crac_server/
 - **Dopo il park non si tocca `MOUNT_TRACKING`**: parcheggiare spegne già
   il tracking da solo, e il comando arriverebbe a mount parcheggiato (dove
   viene rifiutato) o in pieno park.
+- **La sicurezza meteo gira da sola**: `WeatherService.watch()` parte con il
+  server (`app.serve()`) e chiama `check()` ogni `[weather] check_interval`
+  secondi (obbligatoria, almeno 30: altrimenti il server non parte).
+  `GetStatus` chiama lo stesso `check()`, quindi crac-cloud non serve più
+  per far partire la chiusura d'emergenza. La guardia contro due chiusure
+  insieme è `self.t`, ed è sicura solo perché ciclo e RPC girano sullo
+  stesso event loop, senza `await` fra il controllo e l'assegnazione: non
+  aggiungerne uno lì in mezzo. A tetto `ROOF_CLOSED` la chiusura non parte.
+  Ogni guasto di lettura, compreso il dato in cache scaduto dopo un
+  aggiornamento fallito, si scrive una volta con `StatusLogger`; la ripresa
+  solo con un dato fresco.
 - **Coda comandi telescopio** (`Telescope._jobs`): `_enqueue()` deduplica sul
   job intero (stesso dizionario azione+argomenti già in coda) - senza dedup,
   un client che pollasse più spesso del ciclo interno di retrieve() farebbe
@@ -163,6 +174,11 @@ tests/                      # rispecchia la struttura di crac_server/
 - **Test roof**: serve `Device.pin_factory.reset()` in `setUpClass`/
   `tearDown`, e `roof.cache_clear()` se il test vuole un tetto nuovo:
   l'istanza tenuta dalla cache trattiene i pin GPIO mock gia' riservati.
+- **Mai assegnare attributi a una classe in un test** (`type(telescope()).polling
+  = True`, `type(weather()).wind_speed = PropertyMock(...)`): resta per tutti
+  i test dopo. Usare `patch.object(..., new_callable=PropertyMock)`, che
+  dura solo il test. Un `polling` vero rimasto così ha fatto partire una
+  chiusura d'emergenza vera in un test con meteo DANGER, appendendo la suite.
 
 ## Convenzioni di stile
 
