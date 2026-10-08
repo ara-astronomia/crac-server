@@ -10,6 +10,7 @@ from crac_protobuf.emergency_closure_pb2 import (
     EmergencyClosure,  # type: ignore
     EmergencyClosureBlockReason,  # type: ignore
     EmergencyClosureStatus,  # type: ignore
+    EmergencyClosureTrigger,  # type: ignore
 )
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
 from crac_protobuf.telescope_pb2 import TelescopeStatus  # type: ignore
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 WAIT_STEP = 0.1
 TELESCOPE_STATUSES_FROM_COORDINATES = range(TelescopeStatus.PARKED, TelescopeStatus.NORTHWEST + 1)
+TELESCOPE_FAILURES = (TelescopeStatus.LOST, TelescopeStatus.ERROR)
 CAUSE_BY_BLOCK_REASON = {
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN: ErrorCause.DEVICE_UNREACHABLE,
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED: ErrorCause.MOVEMENT_NOT_CONFIRMED,
@@ -95,7 +97,10 @@ class EmergencyClosureProcedure:
             )
 
     def _start(self) -> None:
-        logger.info("Emergency closure started, triggers: %s", self._triggers)
+        logger.info(
+            "Emergency closure started, triggers: %s",
+            ", ".join(EmergencyClosureTrigger.Name(trigger) for trigger in self._triggers),
+        )
         self._set(EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_IN_PROGRESS)
         self._task = asyncio.get_running_loop().create_task(self._close())
 
@@ -120,7 +125,8 @@ class EmergencyClosureProcedure:
 
     async def _park_telescope(self) -> None:
         telescope().polling_start()
-        if not await self._wait_until(self._telescope_readable, self.max_reading_age):
+        await self._wait_until(self._telescope_readable_or_failed, self.max_reading_age)
+        if not self._telescope_readable():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
         if telescope().status <= TelescopeStatus.SECURE:
             return
@@ -130,6 +136,9 @@ class EmergencyClosureProcedure:
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
         if telescope().status > TelescopeStatus.SECURE:
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED)
+
+    def _telescope_readable_or_failed(self) -> bool:
+        return self._telescope_readable() or telescope().status in TELESCOPE_FAILURES
 
     def _telescope_safe_or_unreadable(self) -> bool:
         return not self._telescope_readable() or telescope().status <= TelescopeStatus.SECURE

@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -146,6 +147,18 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
                 self.east.disable.assert_not_called()
                 self.roof.close.assert_not_awaited()
 
+    async def test_a_telescope_lost_or_in_error_blocks_without_waiting_for_a_reading(self):
+        for status in (TelescopeStatus.LOST, TelescopeStatus.ERROR):
+            with self.subTest(status=status):
+                self.setUp()
+                self.procedure.max_reading_age = 60
+                self.telescope.status = status
+
+                async with asyncio.timeout(1):
+                    state = await self.__closure()
+
+                self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
+
     async def test_coordinates_missing_out_of_range_or_too_old_block_the_closure(self):
         cases = {
             "missing": lambda: setattr(self.telescope, "aa_coords", None),
@@ -207,6 +220,12 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_INTERNAL_ERROR)
         self.assertIsNotNone(captured.records[0].exc_info)
         self.roof.close.assert_not_awaited()
+
+    async def test_the_start_names_its_triggers(self):
+        with self.assertLogs(MODULE, level="INFO") as captured:
+            await self.__closure()
+
+        self.assertIn("EMERGENCY_CLOSURE_TRIGGER_WEATHER", captured.records[0].getMessage())
 
     async def test_a_block_is_logged_once(self):
         self.telescope.status = TelescopeStatus.LOST
