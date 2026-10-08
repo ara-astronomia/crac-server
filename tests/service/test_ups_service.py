@@ -1,6 +1,10 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from crac_protobuf.chart_pb2 import ChartStatus
+from crac_protobuf.emergency_closure_pb2 import (
+    EmergencyClosure,  # type: ignore
+    EmergencyClosureStatus,  # type: ignore
+)
 from crac_protobuf.ups_pb2 import UpsStatus
 from crac_server.component.ups import ups
 from crac_server.converter.chart_builder import UnreachableThresholdError
@@ -22,6 +26,14 @@ THRESHOLDS = {
 def getfloat_side_effect(key, section):
     return THRESHOLDS[section][key]
 
+
+
+def setUpModule():
+    """These tests patch Config for the UPS: the emergency closure, built on
+    first use, must not read its timeouts through that patch."""
+    patcher = patch("crac_server.service.ups_service.emergency_closure")
+    patcher.start().return_value.state.return_value = EmergencyClosure()
+    unittest.addModuleCleanup(patcher.stop)
 
 class TestUpsServiceStartupValidation(unittest.TestCase):
     """La config delle soglie va validata all'avvio, non ad ogni poll."""
@@ -155,6 +167,18 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
         self.assertEqual(4, len(response.charts))
         self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
+
+    def test_every_response_carries_the_closure_state(self):
+        state = EmergencyClosure(status=EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_BLOCKED)
+        for reading in (self._ok_reading, ConnectionError("unreachable")):
+            with self.subTest(reading=reading):
+                ups().status_for = MagicMock(side_effect=reading if isinstance(reading, Exception) else lambda device: reading())
+                with patch("crac_server.service.ups_service.emergency_closure") as closure:
+                    closure.return_value.state.return_value = state
+
+                    response = self.ups_service.GetStatus(None, None)
+
+                self.assertEqual(state, response.emergency_closure)
 
     def test_get_status_builds_current_chart_when_present(self):
         ups().status_for = MagicMock(return_value={**self._ok_reading(), "output_current": "3"})

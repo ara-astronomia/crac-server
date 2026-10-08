@@ -137,13 +137,25 @@ tests/                      # rispecchia la struttura di crac_server/
   server (`app.serve()`) e chiama `check()` ogni `[weather] check_interval`
   secondi (obbligatoria, almeno 30: altrimenti il server non parte).
   `GetStatus` chiama lo stesso `check()`, quindi crac-cloud non serve più
-  per far partire la chiusura d'emergenza. La guardia contro due chiusure
-  insieme è `self.t`, ed è sicura solo perché ciclo e RPC girano sullo
-  stesso event loop, senza `await` fra il controllo e l'assegnazione: non
-  aggiungerne uno lì in mezzo. A tetto `ROOF_CLOSED` la chiusura non parte.
+  per far partire la chiusura d'emergenza. `check()` passa il meteo a
+  `emergency_closure().report()`; un meteo sconosciuto non passa niente.
   Ogni guasto di lettura, compreso il dato in cache scaduto dopo un
   aggiornamento fallito, si scrive una volta con `StatusLogger`; la ripresa
   solo con un dato fresco.
+- **Chiusura d'emergenza unica** (`service/emergency_closure.py`): ogni
+  fonte (oggi solo il meteo) chiama `report(trigger, critical)` a ogni
+  controllo, e la risposta meteo e quella UPS portano `state()`. La procedura
+  è un task sull'event loop: la guardia contro due chiusure insieme è il task
+  stesso, sicura perché `report()` non contiene `await` - non aggiungerne.
+  Il tetto non si muove se la posizione del telescopio non è leggibile
+  (coordinate presenti, in range, stato che viene da loro, lettura entro
+  `[emergency_closure] max_reading_age`) o se park o tende non arrivano in
+  tempo: la chiusura passa a `BLOCKED` con il motivo. Se nessuno legge il
+  telescopio, la procedura avvia lei il polling. Solo `TELESCOPE_UNKNOWN`
+  riparte da solo, al primo `report()` con la posizione di nuovo leggibile;
+  gli altri blocchi aspettano il tetto chiuso o la fine del pericolo.
+  `max_reading_age` deve stare sopra i 60 s che `park()` del driver INDIGO
+  passa ad aspettare lo slew, perché intanto la posizione non si rilegge.
 - **Coda comandi telescopio** (`Telescope._jobs`): `_enqueue()` deduplica sul
   job intero (stesso dizionario azione+argomenti già in coda) - senza dedup,
   un client che pollasse più spesso del ciclo interno di retrieve() farebbe
