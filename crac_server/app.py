@@ -26,6 +26,7 @@ from crac_server.service.cover_mirror_service import CoverMirrorService
 from crac_server.service.geographic_service import GeographicServicer
 from crac_server.service.image_config_service import ImageConfigServicer
 from crac_server.service.ups_service import UpsService
+from crac_server.service.emergency_closure import emergency_closure
 from crac_server.component.button_control import switches
 from crac_server.component.cover_mirror import cover_mirror
 from crac_server.component.curtains.factory_curtain import curtain_east, curtain_west
@@ -50,7 +51,7 @@ def build_components():
     logger.info(f'Configuration: {config_path()}')
     Device.ensure_pin_factory()
     logger.info(f'GPIO pin factory: {type(Device.pin_factory).__name__}')
-    for build in (roof, curtain_east, curtain_west, telescope, weather, switches, cover_mirror, ups):
+    for build in (roof, curtain_east, curtain_west, telescope, weather, switches, cover_mirror, ups, emergency_closure):
         build()
 
 
