@@ -5,6 +5,8 @@ from crac_protobuf.cover_mirror_pb2 import (
     CoverMirrorResponse,  # type: ignore
     CoverMirrorStatus,  # type: ignore
 )
+from crac_server.component.button_control import switches
+from crac_protobuf.button_pb2 import ButtonStatus  # type: ignore
 from crac_server.converter.cover_mirror_converter import (
     CoverMirrorConverter,
     CoverMirrorMediator,
@@ -29,6 +31,20 @@ class AbstractCoverMirrorHandler(AbstractHandler):
         if self._next_handler:
             return self._next_handler.handle(mediator)
         return CoverMirrorConverter().convert(mediator)
+
+
+class CoverMirrorSwitchHandler(AbstractCoverMirrorHandler):
+    """
+    Twin of TelescopeSwitchHandler: when the telescope power switch is off,
+    the mirror cover must not accept commands.
+    """
+
+    def handle(self, mediator: CoverMirrorMediator) -> CoverMirrorResponse:
+        if switches()["TELE_SWITCH"].get_status() is ButtonStatus.OFF:
+            mediator.is_disabled = True
+            self._next_handler = None
+
+        return super().handle(mediator)
 
 
 class CoverMirrorHandler(AbstractCoverMirrorHandler):
