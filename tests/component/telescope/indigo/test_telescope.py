@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, EquatorialCoords, TelescopeSpeed, TelescopeStatus
-from crac_server.component.telescope.indigo.telescope import LOST_AFTER_SECONDS, Telescope
+from crac_server.component.telescope.indigo.telescope import LOST_AFTER_SECONDS, STALE_CONNECTION_SECONDS, Telescope
 
 
 class ImmediateThread:
@@ -353,6 +353,7 @@ class TestIndigoTelescope(unittest.TestCase):
 
     def test_flat_turns_tracking_off_only_after_slew_completes(self):
         states = iter([{"state": "Ok"}, {"state": "Busy"}, {"state": "Busy"}, {"state": "Ok"}])
+        self.telescope._polling = True
 
         self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: next(states)
         with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
@@ -361,6 +362,40 @@ class TestIndigoTelescope(unittest.TestCase):
         last_tracking = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"][-1]
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
+
+    def _wait_with(self, coords_states, polling=True):
+        """Run the slew wait over the given coordinate states, the last one
+        repeated, and return how many were read."""
+        reads = []
+
+        def get_property(device, name, timeout=0):
+            state = coords_states[min(len(reads), len(coords_states) - 1)]
+            reads.append(state)
+            return state
+
+        self.telescope._polling = polling
+        self.mock_client.get_property.side_effect = get_property
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
+            self.telescope._Telescope__wait_for_slew_completion()
+        return len(reads)
+
+    def test_slew_wait_has_no_deadline_while_indigo_reports_busy(self):
+        busy = {"state": "Busy"}
+        reads = self._wait_with([busy] * 2000 + [{"state": "Ok"}])
+        self.assertEqual(reads, 2001)
+
+    def test_slew_wait_ends_on_alert(self):
+        self.assertEqual(self._wait_with([{"state": "Busy"}, {"state": "Alert"}]), 2)
+
+    def test_slew_wait_ends_when_the_property_disappears(self):
+        self.assertEqual(self._wait_with([{"state": "Busy"}, None]), 2)
+
+    def test_slew_wait_ends_when_the_device_goes_silent(self):
+        self.mock_client.seconds_since_last_message.return_value = STALE_CONNECTION_SECONDS + 1
+        self.assertEqual(self._wait_with([{"state": "Busy"}]), 2)
+
+    def test_slew_wait_ends_when_polling_stops(self):
+        self.assertEqual(self._wait_with([{"state": "Busy"}], polling=False), 1)
 
     def test_rounded_radec2altaz(self):
         eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)

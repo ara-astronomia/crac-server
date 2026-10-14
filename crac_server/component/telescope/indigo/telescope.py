@@ -209,13 +209,9 @@ class Telescope(TelescopeBase):
                         )
 
     def __wait_for_slew_completion(self):
-        """Block until MOUNT_EQUATORIAL_COORDINATES leaves the Busy state.
-
-        There is no deadline: the slew ends when INDIGO says so, Ok or Alert.
-        Busy is awaited first, for at most 5s: right after a command the cache
-        can still hold the previous "Ok", the INDIGO broadcast not having
-        arrived yet.
-        """
+        """Wait, with no deadline, for INDIGO to end the slew (Ok or Alert), or to
+        stop talking: property gone or device silent. Runs on the polling thread,
+        whose retrieve() reconnects a dead connection, so it also ends with polling."""
         busy_deadline = time.monotonic() + 5.0
         while time.monotonic() < busy_deadline:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
@@ -223,9 +219,11 @@ class Telescope(TelescopeBase):
                 break
             time.sleep(0.1)
 
-        while True:
+        while self._polling:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
-            if coords and coords.get("state") != "Busy":
+            if not coords or coords.get("state") != "Busy":
+                return
+            if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
                 return
             time.sleep(0.3)
 
