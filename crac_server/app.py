@@ -69,8 +69,9 @@ async def serve():
     add_TelescopeServicer_to_server(
         TelescopeService(), server
     )
+    weather_service = WeatherService()
     add_WeatherServicer_to_server(
-        WeatherService(), server
+        weather_service, server
     )
     add_CoverMirrorServicer_to_server(
         CoverMirrorService(), server
@@ -88,7 +89,9 @@ async def serve():
         f'{Config.getValue("loopback_ip", "server")}:{Config.getValue("port", "server")}')
     logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
     await server.start()
+    weather_watch = asyncio.create_task(weather_service.watch())
     await server.wait_for_termination()
+    weather_watch.cancel()
 
 
 def main():

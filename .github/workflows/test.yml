@@ -8,6 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.1.0
@@ -15,4 +16,6 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --no-dev
-      - run: uv run python -m unittest discover
+      # A hung suite is aborted after 5 minutes and faulthandler prints the
+      # stack of every thread, so the log shows where it got stuck.
+      - run: uv run timeout -s ABRT 300 python -X faulthandler -m unittest discover

@@ -33,7 +33,7 @@ class StatusLogger:
         fresh start, not the recovery of a failure nobody is following."""
         self._last_recorded = None
 
-    def record(self, status, cause: str = None, detail: str = None) -> None:
+    def record(self, status, cause: str = None, detail: str = None, exc_info=None) -> None:
         """The stacklevel keeps filename and lineno in the log pointing at the
         component that detected the failure, instead of at this module."""
         current = (status, cause)
@@ -49,6 +49,7 @@ class StatusLogger:
                 "[%s] %s: %s%s",
                 self._component, status_name, cause,
                 f" ({detail})" if detail else "",
+                exc_info=exc_info,
                 stacklevel=2,
             )
         elif was_failing:

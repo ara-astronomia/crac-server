@@ -117,7 +117,10 @@ il default committato pilota il GPIO vero, e senza override gpiozero cerca
 hardware che non c'e' e il processo non parte. `.env.example` lo contiene gia',
 lo stack di test lo passa nel suo `docker-compose.yml`.
 
-Log del servizio: `journalctl -u crac-server -f`.
+Log del servizio: `journalctl -u crac-server -f`. All'avvio deve comparire
+`Weather watch: checking every N seconds`: e' il controllo del meteo che fa
+partire da solo la chiusura d'emergenza, anche con crac-cloud spento. Se la
+riga manca, quella protezione non gira.
 
 A ogni avvio del servizio, deploy compreso, le tende scendono fino al
 finecorsa di chiusura e si disattivano, da qualunque posizione. Per usarle
