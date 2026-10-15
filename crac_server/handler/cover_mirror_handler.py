@@ -5,8 +5,8 @@ from crac_protobuf.cover_mirror_pb2 import (
     CoverMirrorResponse,  # type: ignore
     CoverMirrorStatus,  # type: ignore
 )
-from crac_server.component.button_control import switches
 from crac_protobuf.button_pb2 import ButtonStatus  # type: ignore
+from crac_server.component.button_control import switches
 from crac_server.converter.cover_mirror_converter import (
     CoverMirrorConverter,
     CoverMirrorMediator,

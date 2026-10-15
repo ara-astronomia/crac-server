@@ -18,6 +18,5 @@ class CoverMirrorService(CoverMirrorServicer):
         logger.debug("Request " + str(request))
         cover_mirror_mediator = CoverMirrorMediator(request)
         switch_handler = CoverMirrorSwitchHandler()
-        cover_mirror_handler = CoverMirrorHandler()
-        switch_handler._next_handler = cover_mirror_handler
+        switch_handler.set_next(CoverMirrorHandler())
         return switch_handler.handle(cover_mirror_mediator)
