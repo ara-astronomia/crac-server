@@ -461,10 +461,63 @@ class TestIndigoTelescope(unittest.TestCase):
         self.telescope._movement_failed = True
         self.assertEqual(self._read_once(TelescopeStatus.LOST), TelescopeStatus.LOST)
 
-    def test_the_next_command_clears_a_failed_movement(self):
+    def test_starting_the_next_command_keeps_the_failed_movement(self):
         self.telescope._movement_failed = True
         self.telescope._jobs.append({"action": MagicMock(__name__="park")})
-        self.assertEqual(self._read_once(TelescopeStatus.EAST), TelescopeStatus.EAST)
+        self.assertEqual(self._read_once(TelescopeStatus.EAST), TelescopeStatus.ERROR)
+
+    def _note(self, *states, target=(5.0, 60.0)):
+        for state in states:
+            self.telescope._Telescope__note_coords_state({"state": state, "items": [
+                {"name": "RA", "value": 1.0, "target": target[0]},
+                {"name": "DEC", "value": 2.0, "target": target[1]},
+            ]})
+
+    def test_a_movement_ending_in_ok_clears_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self._note("Ok", "Busy", "Busy", "Ok")
+        self.assertFalse(self.telescope._movement_failed)
+
+    def test_a_movement_ending_in_alert_keeps_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self._note("Ok", "Busy", "Alert")
+        self.assertTrue(self.telescope._movement_failed)
+
+    def test_a_still_reading_without_a_movement_keeps_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self._note("Ok", "Ok")
+        self.assertTrue(self.telescope._movement_failed)
+
+    def _fail_a_slew_towards(self, target):
+        still = {"state": "Busy", "items": [
+            {"name": "RA", "value": 1.0, "target": target[0]},
+            {"name": "DEC", "value": 45.0, "target": target[1]},
+        ]}
+        self.assertFalse(self._wait_with([still])[0])
+        self.telescope._movement_failed = True
+
+    def test_the_failed_slew_resumed_and_completed_keeps_the_failed_movement(self):
+        self._fail_a_slew_towards((5.0, 60.0))
+        self._note("Busy", "Ok", target=(5.0, 60.0))
+        self.assertTrue(self.telescope._movement_failed)
+
+    def test_a_new_slew_after_the_failed_one_clears_it(self):
+        self._fail_a_slew_towards((5.0, 60.0))
+        self._note("Busy", "Ok", target=(7.0, 30.0))
+        self.assertFalse(self.telescope._movement_failed)
+
+    def test_a_crac_movement_ending_in_ok_clears_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self._wait_with([self._busy(1.0), {"state": "Ok"}])
+        self.assertFalse(self.telescope._movement_failed)
+
+    def test_a_movement_from_indigo_seen_by_the_polling_clears_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        for state in ("Busy", "Ok"):
+            self._stub_properties({"MOUNT_EQUATORIAL_COORDINATES": {
+                "state": state, "items": [{"name": "RA", "value": 1.0}, {"name": "DEC", "value": 2.0}]}})
+            self.telescope._Telescope__retrieve_eq_coords()
+        self.assertFalse(self.telescope._movement_failed)
 
     def test_rounded_radec2altaz(self):
         eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)

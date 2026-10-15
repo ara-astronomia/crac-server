@@ -48,6 +48,7 @@ class Telescope(ABC):
         self._polling = False
         self._jobs = deque()
         self._jobs_lock = Lock()
+        self._movement_failed = False
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._status_log = StatusLogger(logger, "Telescope", TelescopeStatus)
@@ -153,7 +154,6 @@ class Telescope(ABC):
                     job = self._jobs.popleft()
                     logger.info("Running job %s on the telescope", job['action'].__name__)
                     args = {key: val for key ,val in job.items() if key != "action"}
-                    self._movement_failed = False
                     job['action'](**args)
 
                 self.eq_coords, self.aa_coords, self.speed, status = self.retrieve()
@@ -168,9 +168,6 @@ class Telescope(ABC):
             self._reset()
 
     def _reset(self):
-        """_movement_failed is set by a driver when a movement it was asked
-        for did not complete: the status stays ERROR until the next command."""
-        self._movement_failed = False
         self._status_log.forget()
         self._speed_log.forget()
         self.status = TelescopeStatus.DISCONNECTED

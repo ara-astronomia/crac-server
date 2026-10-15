@@ -45,6 +45,8 @@ class Telescope(TelescopeBase):
         self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
         self._unreachable_since = None
+        self._coords_state = None
+        self._failed_target = None
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.
@@ -227,21 +229,37 @@ class Telescope(TelescopeBase):
         while self._polling:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
             if not coords:
+                self._failed_target = None
                 return False
             if coords.get("state") != "Busy":
+                if coords.get("state") == "Ok":
+                    self._movement_failed = False
+                self._coords_state = coords.get("state")
                 return True
             values = self.__coords_values(coords)
             if values != last_values:
                 last_values = values
                 still_since = time.monotonic()
             elif time.monotonic() - still_since > config.Config.getRequiredFloat("slew_still_timeout", "telescope"):
+                target = self.__coords_values(coords, "target")
+                self._failed_target = None if None in target else target
+                self._coords_state = "Busy"
                 return False
             time.sleep(0.3)
         return True
 
+    def __note_coords_state(self, coords: dict):
+        """A movement INDIGO ends in Ok after Busy, also one started from the INDIGO
+        panel, clears a failed movement - unless it has the failed one's target:
+        then it is that same slew, resumed, and the command it belonged to did not run to its end."""
+        state = coords.get("state")
+        if state == "Ok" and self._coords_state == "Busy" and self.__coords_values(coords, "target") != self._failed_target:
+            self._movement_failed = False
+        self._coords_state = state
+
     @staticmethod
-    def __coords_values(coords: dict) -> tuple:
-        values = {item.get("name"): item.get("value") for item in coords.get("items", [])}
+    def __coords_values(coords: dict, field: str = "value") -> tuple:
+        values = {item.get("name"): item.get(field) for item in coords.get("items", [])}
         return (values.get("RA"), values.get("DEC"))
 
     def retrieve(self) -> TelescopeReading:
@@ -396,6 +414,7 @@ class Telescope(TelescopeBase):
         prop = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES")
         ra, dec = None, None
         if prop:
+            self.__note_coords_state(prop)
             for coord in prop.get("items", []):
                 if coord.get("name") == "RA":
                     ra = round(float(coord["value"]), 5)
