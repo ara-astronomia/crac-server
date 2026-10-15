@@ -20,6 +20,8 @@ class TestPinFactory(unittest.TestCase):
         """gpiozero closes a collected device in __del__, which takes the
         reservation lock: if the collector runs while a new device holds it,
         a plain lock hangs the suite."""
+        gc.disable()
+        self.addCleanup(gc.enable)
         holder = Holder()
         holder.device = OutputDevice(17)
         holder.cycle = holder
