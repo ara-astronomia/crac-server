@@ -30,14 +30,14 @@ jobs:
           chmod 600 ~/.ssh/cloud_ara ~/.ssh/crac_server
           cat > ~/.ssh/config <<'EOF'
           Host cloud.ara
-            HostName 185.78.18.95
+            HostName ${{ secrets.CLOUD_ARA_HOST }}
             User indigo
             IdentityFile ~/.ssh/cloud_ara
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
 
           Host crac.server.ara.local
-            HostName 192.168.178.22
+            HostName ${{ secrets.CRAC_SERVER_HOST }}
             User pi
             IdentityFile ~/.ssh/crac_server
             ProxyJump cloud.ara
