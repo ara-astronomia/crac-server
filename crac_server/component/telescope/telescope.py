@@ -48,6 +48,7 @@ class Telescope(ABC):
         self._polling = False
         self._jobs = deque()
         self._jobs_lock = Lock()
+        self._movement_failed = False
         self._has_tracking_off_capability = config.Config.getBoolean("tracking_off", "telescope")
         self._flat_coordinate = AltazimutalCoords(alt=config.Config.getFloat("flat_alt", "telescope"), az=config.Config.getFloat("flat_az", "telescope"))
         self._status_log = StatusLogger(logger, "Telescope", TelescopeStatus)
@@ -63,7 +64,8 @@ class Telescope(ABC):
         """The status is assigned from several points of the polling loop and
         from whatever retrieve() returns, so the transition is caught here
         instead of at each assignment."""
-        self._status_log.record(value, ERROR_CAUSE_BY_STATUS.get(value))
+        movement_failed = value == TelescopeStatus.ERROR and self._movement_failed
+        self._status_log.record(value, ErrorCause.MOVEMENT_NOT_CONFIRMED if movement_failed else ERROR_CAUSE_BY_STATUS.get(value))
         self._status = value
 
     @abstractmethod
@@ -154,7 +156,8 @@ class Telescope(ABC):
                     args = {key: val for key ,val in job.items() if key != "action"}
                     job['action'](**args)
 
-                self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
+                self.eq_coords, self.aa_coords, self.speed, status = self.retrieve()
+                self.status = TelescopeStatus.ERROR if self._movement_failed and TelescopeStatus.SECURE < status < TelescopeStatus.LOST else status
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR

@@ -22,6 +22,8 @@ class TestRoofButtonInError(unittest.TestCase):
 
     def _button(self, motor_on):
         roof_control = RoofControl()
+        for device in (roof_control.motor, roof_control.roof_closed_switch, roof_control.roof_open_switch):
+            self.addCleanup(device.close)
         roof_control.roof_open_switch.pin.drive_low()
         roof_control.roof_closed_switch.pin.drive_low()
         roof_control.motor.value = motor_on
