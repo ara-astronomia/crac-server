@@ -63,7 +63,8 @@ class Telescope(ABC):
         """The status is assigned from several points of the polling loop and
         from whatever retrieve() returns, so the transition is caught here
         instead of at each assignment."""
-        self._status_log.record(value, ERROR_CAUSE_BY_STATUS.get(value))
+        movement_failed = value == TelescopeStatus.ERROR and self._movement_failed
+        self._status_log.record(value, ErrorCause.MOVEMENT_NOT_CONFIRMED if movement_failed else ERROR_CAUSE_BY_STATUS.get(value))
         self._status = value
 
     @abstractmethod
@@ -152,9 +153,11 @@ class Telescope(ABC):
                     job = self._jobs.popleft()
                     logger.info("Running job %s on the telescope", job['action'].__name__)
                     args = {key: val for key ,val in job.items() if key != "action"}
+                    self._movement_failed = False
                     job['action'](**args)
 
-                self.eq_coords, self.aa_coords, self.speed, self.status = self.retrieve()
+                self.eq_coords, self.aa_coords, self.speed, status = self.retrieve()
+                self.status = TelescopeStatus.ERROR if self._movement_failed and status < TelescopeStatus.LOST else status
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
@@ -165,6 +168,9 @@ class Telescope(ABC):
             self._reset()
 
     def _reset(self):
+        """_movement_failed is set by a driver when a movement it was asked
+        for did not complete: the status stays ERROR until the next command."""
+        self._movement_failed = False
         self._status_log.forget()
         self._speed_log.forget()
         self.status = TelescopeStatus.DISCONNECTED

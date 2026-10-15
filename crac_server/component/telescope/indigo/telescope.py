@@ -151,7 +151,8 @@ class Telescope(TelescopeBase):
                         }
                     )
 
-        self.__wait_for_slew_completion()
+        if not self.__wait_for_slew_completion():
+            self._movement_failed = True
 
     def __retrieve_status_park(self) -> bool:
         prop = self._client.get_property(self._name, "MOUNT_PARK", timeout=0)
@@ -195,7 +196,9 @@ class Telescope(TelescopeBase):
                 )
 
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            self.__wait_for_slew_completion()
+            if not self.__wait_for_slew_completion():
+                self._movement_failed = True
+                return
             self.__call(
                             {"newSwitchVector":
                                 {
@@ -208,10 +211,10 @@ class Telescope(TelescopeBase):
                             }
                         )
 
-    def __wait_for_slew_completion(self):
-        """Wait, with no deadline, for INDIGO to end the slew (Ok or Alert), or to
-        stop talking: property gone or device silent. Runs on the polling thread,
-        whose retrieve() reconnects a dead connection, so it also ends with polling."""
+    def __wait_for_slew_completion(self) -> bool:
+        """False when the slew did not complete: RA/DEC still for slew_still_timeout
+        while Busy, or the property gone. INDIGO republishes them every 0.5s while
+        Busy, so a moving mount is waited for as long as it takes."""
         busy_deadline = time.monotonic() + 5.0
         while time.monotonic() < busy_deadline:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
@@ -219,13 +222,27 @@ class Telescope(TelescopeBase):
                 break
             time.sleep(0.1)
 
+        last_values = None
+        still_since = time.monotonic()
         while self._polling:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
-            if not coords or coords.get("state") != "Busy":
-                return
-            if self._client.seconds_since_last_message(self._name) > STALE_CONNECTION_SECONDS:
-                return
+            if not coords:
+                return False
+            if coords.get("state") != "Busy":
+                return True
+            values = self.__coords_values(coords)
+            if values != last_values:
+                last_values = values
+                still_since = time.monotonic()
+            elif time.monotonic() - still_since > config.Config.getRequiredFloat("slew_still_timeout", "telescope"):
+                return False
             time.sleep(0.3)
+        return True
+
+    @staticmethod
+    def __coords_values(coords: dict) -> tuple:
+        values = {item.get("name"): item.get("value") for item in coords.get("items", [])}
+        return (values.get("RA"), values.get("DEC"))
 
     def retrieve(self) -> TelescopeReading:
         """Read the mount state.

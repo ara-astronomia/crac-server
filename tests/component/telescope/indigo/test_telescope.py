@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, EquatorialCoords, TelescopeSpeed, TelescopeStatus
-from crac_server.component.telescope.indigo.telescope import LOST_AFTER_SECONDS, STALE_CONNECTION_SECONDS, Telescope
+from crac_server.component.telescope.indigo.telescope import LOST_AFTER_SECONDS, Telescope
+from crac_server.component.telescope.telescope import TelescopeReading
 
 
 class ImmediateThread:
@@ -363,10 +364,15 @@ class TestIndigoTelescope(unittest.TestCase):
         items = {i["name"]: i["value"] for i in last_tracking["newSwitchVector"]["items"]}
         self.assertEqual(items, {"ON": False, "OFF": True})
 
+    @staticmethod
+    def _busy(ra):
+        return {"state": "Busy", "items": [{"name": "RA", "value": ra}, {"name": "DEC", "value": 45.0}]}
+
     def _wait_with(self, coords_states, polling=True):
         """Run the slew wait over the given coordinate states, the last one
-        repeated, and return how many were read."""
+        repeated, on a clock that advances only while the wait sleeps."""
         reads = []
+        clock = [0.0]
 
         def get_property(device, name, timeout=0):
             state = coords_states[min(len(reads), len(coords_states) - 1)]
@@ -375,27 +381,90 @@ class TestIndigoTelescope(unittest.TestCase):
 
         self.telescope._polling = polling
         self.mock_client.get_property.side_effect = get_property
-        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
-            self.telescope._Telescope__wait_for_slew_completion()
-        return len(reads)
+        with patch("crac_server.component.telescope.indigo.telescope.time") as fake_time:
+            fake_time.monotonic.side_effect = lambda: clock[0]
+            fake_time.sleep.side_effect = lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+            arrived = self.telescope._Telescope__wait_for_slew_completion()
+        return arrived, len(reads), clock[0]
 
-    def test_slew_wait_has_no_deadline_while_indigo_reports_busy(self):
-        busy = {"state": "Busy"}
-        reads = self._wait_with([busy] * 2000 + [{"state": "Ok"}])
+    def test_slew_wait_has_no_deadline_while_the_coordinates_move(self):
+        moving = [self._busy(i * 0.01) for i in range(2000)]
+        arrived, reads, elapsed = self._wait_with(moving + [{"state": "Ok"}])
+        self.assertTrue(arrived)
         self.assertEqual(reads, 2001)
+        self.assertGreater(elapsed, 500)
+
+    def test_slew_with_still_coordinates_fails_after_slew_still_timeout(self):
+        arrived, _, elapsed = self._wait_with([self._busy(1.0)])
+        self.assertFalse(arrived)
+        self.assertGreater(elapsed, 30)
+        self.assertLess(elapsed, 31)
 
     def test_slew_wait_ends_on_alert(self):
-        self.assertEqual(self._wait_with([{"state": "Busy"}, {"state": "Alert"}]), 2)
+        arrived, reads, _ = self._wait_with([self._busy(1.0), {"state": "Alert"}])
+        self.assertTrue(arrived)
+        self.assertEqual(reads, 2)
 
-    def test_slew_wait_ends_when_the_property_disappears(self):
-        self.assertEqual(self._wait_with([{"state": "Busy"}, None]), 2)
-
-    def test_slew_wait_ends_when_the_device_goes_silent(self):
-        self.mock_client.seconds_since_last_message.return_value = STALE_CONNECTION_SECONDS + 1
-        self.assertEqual(self._wait_with([{"state": "Busy"}]), 2)
+    def test_slew_fails_when_the_property_disappears(self):
+        arrived, reads, _ = self._wait_with([self._busy(1.0), None])
+        self.assertFalse(arrived)
+        self.assertEqual(reads, 2)
 
     def test_slew_wait_ends_when_polling_stops(self):
-        self.assertEqual(self._wait_with([{"state": "Busy"}], polling=False), 1)
+        arrived, reads, _ = self._wait_with([self._busy(1.0)], polling=False)
+        self.assertTrue(arrived)
+        self.assertEqual(reads, 1)
+
+    def _stub_still_slew(self):
+        """A slew that starts and never moves."""
+        self.telescope._polling = True
+        self.mock_client.get_property.side_effect = lambda device, name, timeout=2.0: (
+            self._busy(1.0) if name == "MOUNT_EQUATORIAL_COORDINATES" else None
+        )
+
+    def test_flat_whose_slew_fails_keeps_tracking_and_reports_the_failure(self):
+        self._stub_still_slew()
+        with patch("crac_server.component.telescope.indigo.telescope.config.Config.getRequiredFloat", return_value=0.0), \
+             patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
+            self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
+        tracking_commands = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"]
+        self.assertEqual(len(tracking_commands), 1, "only the one set_speed sends before the slew")
+        self.assertTrue(self.telescope._movement_failed)
+
+    def test_park_whose_slew_fails_reports_the_failure(self):
+        self._stub_still_slew()
+        with patch("crac_server.component.telescope.indigo.telescope.config.Config.getRequiredFloat", return_value=0.0), \
+             patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
+            self.telescope.park(TelescopeSpeed.SPEED_TRACKING)
+        self.assertTrue(self.telescope._movement_failed)
+
+    def _read_once(self, status):
+        """One cycle of the polling loop, with retrieve() reading status."""
+        def retrieve():
+            self.telescope._polling = False
+            return TelescopeReading(None, None, TelescopeSpeed.SPEED_NOT_TRACKING, status)
+
+        self.telescope._polling = True
+        with patch.object(self.telescope, "retrieve", side_effect=retrieve), \
+             patch.object(self.telescope, "_reset"), \
+             patch("crac_server.component.telescope.telescope.sleep"):
+            self.telescope._Telescope__read()
+        return self.telescope.status
+
+    def test_a_failed_movement_shows_error_over_the_position(self):
+        self.telescope._movement_failed = True
+        with self.assertLogs("crac_server.component.telescope.telescope", level="ERROR") as logs:
+            self.assertEqual(self._read_once(TelescopeStatus.EAST), TelescopeStatus.ERROR)
+        self.assertIn("movement_not_confirmed", logs.output[-1])
+
+    def test_a_lost_telescope_is_shown_lost_even_after_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self.assertEqual(self._read_once(TelescopeStatus.LOST), TelescopeStatus.LOST)
+
+    def test_the_next_command_clears_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self.telescope._jobs.append({"action": MagicMock(__name__="park")})
+        self.assertEqual(self._read_once(TelescopeStatus.EAST), TelescopeStatus.EAST)
 
     def test_rounded_radec2altaz(self):
         eq_coords = EquatorialCoords(ra=9.364493538084828, dec=47.962112290530065)
