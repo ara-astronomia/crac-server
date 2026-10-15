@@ -50,6 +50,7 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.telescope.status = TelescopeStatus.NORTHEAST
         self.telescope.aa_coords = AltazimutalCoords(alt=45, az=30)
         self.telescope.speed = TelescopeSpeed.SPEED_TRACKING
+        self.telescope.movement_failed = False
         self.telescope.seconds_since_last_reading.return_value = 0
         self.telescope.queue_park.side_effect = self.__park
         self.roof = MagicMock()
@@ -151,6 +152,16 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
                 self.telescope.queue_park.assert_not_called()
                 self.east.disable.assert_not_called()
                 self.roof.close.assert_not_awaited()
+
+    async def test_a_movement_that_failed_high_up_is_parked_again(self):
+        self.telescope.status = TelescopeStatus.ERROR
+        self.telescope.movement_failed = True
+
+        state = await self.__closure()
+
+        self.telescope.queue_park.assert_called_once_with()
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
 
     async def test_a_telescope_lost_or_in_error_blocks_without_waiting_for_a_reading(self):
         for status in (TelescopeStatus.LOST, TelescopeStatus.ERROR):

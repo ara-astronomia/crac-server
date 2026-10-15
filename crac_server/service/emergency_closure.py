@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 WAIT_STEP = 0.1
 TELESCOPE_STATUSES_FROM_COORDINATES = range(TelescopeStatus.PARKED, TelescopeStatus.NORTHWEST + 1)
-TELESCOPE_FAILURES = (TelescopeStatus.LOST, TelescopeStatus.ERROR)
 RETRIED_BLOCK_REASONS = (
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN,
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED,
@@ -151,7 +150,9 @@ class EmergencyClosureProcedure:
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED)
 
     def _telescope_read_or_failed(self) -> bool:
-        return self._telescope_read_since_start() or telescope().status in TELESCOPE_FAILURES
+        mount = telescope()
+        failed = mount.status == TelescopeStatus.LOST or mount.status == TelescopeStatus.ERROR and not mount.movement_failed
+        return self._telescope_read_since_start() or failed
 
     def _telescope_read_since_start(self) -> bool:
         """Readable, and read after the closure started: while a park or flat
@@ -188,14 +189,15 @@ class EmergencyClosureProcedure:
 
     def _telescope_readable(self) -> bool:
         """Coordinates read from the mount, in range, recent enough, and a
-        status that comes from them."""
+        status that comes from them, or the ERROR of a movement that failed."""
         mount = telescope()
         coords = mount.aa_coords
         return (
             coords is not None and
             -90 <= coords.alt <= 90 and
             0 <= coords.az < 360 and
-            mount.status in TELESCOPE_STATUSES_FROM_COORDINATES and
+            (mount.status in TELESCOPE_STATUSES_FROM_COORDINATES or
+             mount.status == TelescopeStatus.ERROR and mount.movement_failed) and
             mount.seconds_since_last_reading() <= self.max_reading_age
         )
 

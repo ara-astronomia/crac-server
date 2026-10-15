@@ -158,8 +158,11 @@ tests/                      # rispecchia la struttura di crac_server/
   `report()` con la posizione leggibile, restando `BLOCKED` mentre riprovano
   (un log solo, `status_since` del primo blocco); tende, tetto ed errori
   interni aspettano il tetto chiuso o la fine del pericolo.
-  `max_reading_age` deve stare sopra i 60 s che `park()` del driver INDIGO
-  passa ad aspettare lo slew, perché intanto la posizione non si rilegge.
+  Durante un park o un flat di crac la posizione non si rilegge e lo slew non
+  ha scadenza: uno slew più lungo di `max_reading_age` blocca la chiusura
+  come `TELESCOPE_UNKNOWN`, che riparte alla lettura seguente. L'`ERROR` di
+  un movimento fallito (`movement_failed`) ha coordinate vere: la chiusura lo
+  legge e rimanda il park, che è anche ciò che toglie l'errore.
 - **Coda comandi telescopio** (`Telescope._jobs`): `_enqueue()` deduplica sul
   job intero (stesso dizionario azione+argomenti già in coda) - senza dedup,
   un client che pollasse più spesso del ciclo interno di retrieve() farebbe

@@ -132,6 +132,12 @@ class Telescope(ABC):
     def polling(self):
         return self._polling
 
+    @property
+    def movement_failed(self) -> bool:
+        """The last park, flat or slew stopped on the way: an ERROR with this
+        set still comes with coordinates read from the mount."""
+        return self._movement_failed
+
     def seconds_since_last_reading(self) -> float:
         """Age of the last retrieve() that succeeded, infinite when none did
         since the polling started."""
