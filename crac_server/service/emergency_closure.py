@@ -13,7 +13,7 @@ from crac_protobuf.emergency_closure_pb2 import (
     EmergencyClosureTrigger,  # type: ignore
 )
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
-from crac_protobuf.telescope_pb2 import TelescopeStatus  # type: ignore
+from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus  # type: ignore
 
 from crac_server.component.button_control import switches
 from crac_server.component.curtains.factory_curtain import curtain_east, curtain_west
@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 WAIT_STEP = 0.1
 TELESCOPE_STATUSES_FROM_COORDINATES = range(TelescopeStatus.PARKED, TelescopeStatus.NORTHWEST + 1)
 TELESCOPE_FAILURES = (TelescopeStatus.LOST, TelescopeStatus.ERROR)
+TELESCOPE_SPEEDS_AT_REST = (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING)
+RETRIED_BLOCK_REASONS = (
+    EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN,
+    EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED,
+)
 CAUSE_BY_BLOCK_REASON = {
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN: ErrorCause.DEVICE_UNREACHABLE,
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED: ErrorCause.MOVEMENT_NOT_CONFIRMED,
@@ -82,7 +87,7 @@ class EmergencyClosureProcedure:
             self._set(EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_COMPLETED)
         elif self._status != EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_BLOCKED:
             self._start()
-        elif self._block_reason == EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN:
+        elif self._block_reason in RETRIED_BLOCK_REASONS:
             telescope().polling_start()
             if self._telescope_readable():
                 self._start()
@@ -108,6 +113,7 @@ class EmergencyClosureProcedure:
         try:
             await self._park_telescope()
             await self._lower_curtains()
+            self._require_telescope_safe()
             if not await roof().close():
                 raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_ROOF_NOT_CLOSED)
             await asyncio.to_thread(telescope().polling_end)
@@ -128,20 +134,35 @@ class EmergencyClosureProcedure:
         await self._wait_until(self._telescope_readable_or_failed, self.max_reading_age)
         if not self._telescope_readable():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
-        if telescope().status <= TelescopeStatus.SECURE:
+        if self._telescope_safe():
             return
         telescope().queue_park()
         await self._wait_until(self._telescope_safe_or_unreadable, self.park_timeout)
+        self._require_telescope_safe()
+
+    def _require_telescope_safe(self) -> None:
         if not self._telescope_readable():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
-        if telescope().status > TelescopeStatus.SECURE:
+        if not self._telescope_safe():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED)
 
     def _telescope_readable_or_failed(self) -> bool:
         return self._telescope_readable() or telescope().status in TELESCOPE_FAILURES
 
     def _telescope_safe_or_unreadable(self) -> bool:
-        return not self._telescope_readable() or telescope().status <= TelescopeStatus.SECURE
+        return not self._telescope_readable() or self._telescope_safe()
+
+    def _telescope_safe(self) -> bool:
+        """Readable, at rest and low enough for the roof to pass over it,
+        judged on the coordinates: the PARKED switch of a mount turns true
+        as soon as a park starts, and some drivers echo it even when they
+        drop the park."""
+        mount = telescope()
+        return (
+            self._telescope_readable() and
+            mount.speed in TELESCOPE_SPEEDS_AT_REST and
+            mount.aa_coords.alt <= Config.getFloat("max_secure_alt", "telescope")
+        )
 
     async def _lower_curtains(self) -> None:
         curtain_east().disable()
