@@ -140,7 +140,7 @@ class EmergencyClosureProcedure:
         if self._telescope_safe():
             return
         telescope().queue_park()
-        await self._wait_until(self._telescope_safe_or_unreadable, self.park_timeout)
+        await self._wait_until(self._telescope_safe_or_lost, self.park_timeout)
         self._require_telescope_safe()
 
     def _require_telescope_safe(self) -> None:
@@ -163,8 +163,10 @@ class EmergencyClosureProcedure:
             telescope().seconds_since_last_reading() <= monotonic() - self._started_at
         )
 
-    def _telescope_safe_or_unreadable(self) -> bool:
-        return not self._telescope_readable() or self._telescope_safe()
+    def _telescope_safe_or_lost(self) -> bool:
+        """Only LOST ends the wait early: a park that succeeds clears a failed
+        movement a moment before the next reading replaces its ERROR."""
+        return self._telescope_safe() or telescope().status == TelescopeStatus.LOST
 
     def _telescope_safe(self) -> bool:
         """Read since the start, not slewing and low enough for the roof: the

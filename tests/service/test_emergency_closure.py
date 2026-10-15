@@ -163,6 +163,20 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.roof.close.assert_awaited_once_with()
         self.assertEqual(COMPLETED, state.status)
 
+    async def test_a_failed_movement_cleared_before_the_next_reading_is_not_a_block(self):
+        self.telescope.status = TelescopeStatus.ERROR
+        self.telescope.movement_failed = True
+        self.telescope.queue_park.side_effect = self.__park_clearing_the_error_first
+
+        state = await self.__closure()
+
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    def __park_clearing_the_error_first(self):
+        self.telescope.movement_failed = False
+        asyncio.get_running_loop().call_later(0.15, self.__park)
+
     async def test_a_telescope_lost_or_in_error_blocks_without_waiting_for_a_reading(self):
         for status in (TelescopeStatus.LOST, TelescopeStatus.ERROR):
             with self.subTest(status=status):
