@@ -45,6 +45,7 @@ class Telescope(TelescopeBase):
         self._client = get_indigo_client(hostname, port)
         self._park_position_synced = False
         self._unreachable_since = None
+        self._coords_state = None
 
     def __sync_park_position(self):
         """Align the mount park position to the configured park_alt/park_az.
@@ -151,7 +152,8 @@ class Telescope(TelescopeBase):
                         }
                     )
 
-        self.__wait_for_slew_completion()
+        if not self.__wait_for_slew_completion():
+            self._movement_failed = True
 
     def __retrieve_status_park(self) -> bool:
         prop = self._client.get_property(self._name, "MOUNT_PARK", timeout=0)
@@ -195,7 +197,11 @@ class Telescope(TelescopeBase):
                 )
 
         if speed is TelescopeSpeed.SPEED_NOT_TRACKING:
-            self.__wait_for_slew_completion()
+            if not self.__wait_for_slew_completion():
+                self._movement_failed = True
+                return
+            if not self._polling:
+                return
             self.__call(
                             {"newSwitchVector":
                                 {
@@ -208,49 +214,47 @@ class Telescope(TelescopeBase):
                             }
                         )
 
-    def __wait_for_slew_completion(self, timeout: float = 60.0):
-        """Block until MOUNT_EQUATORIAL_COORDINATES leaves the Busy state.
-
-        Busy is awaited first, on a shorter deadline: right after a command the
-        cache can still hold the previous "Ok", the INDIGO broadcast not having
-        arrived yet.
-        """
-        deadline = time.monotonic() + timeout
-
-        busy_deadline = min(deadline, time.monotonic() + 5.0)
+    def __wait_for_slew_completion(self) -> bool:
+        """False when the slew did not complete: RA/DEC still for slew_still_timeout
+        while Busy, or the property gone. INDIGO republishes them every 0.5s while
+        Busy, so a moving mount is waited for as long as it takes."""
+        busy_deadline = time.monotonic() + 5.0
+        saw_busy = False
         while time.monotonic() < busy_deadline:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
             if coords and coords.get("state") == "Busy":
+                saw_busy = True
                 break
             time.sleep(0.1)
 
-        baseline = self.__coords_values(coords) if coords else None
-        while time.monotonic() < deadline:
+        last_values = None
+        still_since = time.monotonic()
+        while self._polling:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
-            if coords and coords.get("state") != "Busy":
-                return
+            if not coords:
+                return False
+            if coords.get("state") != "Busy":
+                if coords.get("state") == "Ok" and saw_busy:
+                    self._movement_failed = False
+                self._coords_state = coords.get("state")
+                return True
+            saw_busy = True
+            values = self.__coords_values(coords)
+            if values != last_values:
+                last_values = values
+                still_since = time.monotonic()
+            elif time.monotonic() - still_since > config.Config.getRequiredFloat("slew_still_timeout", "telescope"):
+                self._coords_state = "Busy"
+                return False
             time.sleep(0.3)
+        return True
 
-        if baseline is not None and coords and self.__coords_values(coords) == baseline:
-            self.__log_suspected_indigo_stall(timeout)
-        else:
-            logger.error(f"[Telescope] Slew did not complete within {timeout}s, giving up waiting")
-
-    def __log_suspected_indigo_stall(self, timeout: float):
-        """RA/DEC never moved for the whole wait: not a real hang of the
-        mount, which would still show through a state change even stuck in
-        Alert, but INDIGO's own driver thread stalling under its global bus
-        lock while writing to some other slow client (bus_mutex/json_mutex,
-        capped at 5s per client by SO_SNDTIMEO - see
-        analisi-blocco-montatura-indigo-2026-09-17.md).
-        """
-        quiet = self._client.seconds_since_last_message()
-        where = "the whole bus" if quiet > INDIGO_STALL_SECONDS else "only this device"
-        logger.warning(
-            f"[Telescope] Slew did not complete within {timeout}s and RA/DEC never moved - "
-            f"likely an INDIGO-side stall, not a real mount hang ({where} silent for {quiet:.0f}s). "
-            'Check `ss -tn "sport = :7624"` on the INDIGO host for a client with a growing send queue.'
-        )
+    def __note_coords_state(self, state: str):
+        """A movement INDIGO ends in Ok after Busy clears a failed movement: one
+        started from the INDIGO panel, or the failed slew itself resumed."""
+        if state == "Ok" and self._coords_state == "Busy":
+            self._movement_failed = False
+        self._coords_state = state
 
     @staticmethod
     def __coords_values(coords: dict) -> tuple:
@@ -409,6 +413,7 @@ class Telescope(TelescopeBase):
         prop = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES")
         ra, dec = None, None
         if prop:
+            self.__note_coords_state(prop.get("state"))
             for coord in prop.get("items", []):
                 if coord.get("name") == "RA":
                     ra = round(float(coord["value"]), 5)

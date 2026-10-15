@@ -136,7 +136,9 @@ class TelescopeConverter:
         return ButtonColor(text_color=text_color, background_color=background_color)
     
     def __text_metadata_connect_button(self, status):
-        if status < TelescopeStatus.LOST:
+        """ERROR is a connected telescope whose last movement failed: it can be
+        disconnected like any other connected one."""
+        if status < TelescopeStatus.LOST or status == TelescopeStatus.ERROR:
             label = ButtonLabel.LABEL_TELESCOPE_CONNECTED
             metadata = TelescopeAction.TELESCOPE_DISCONNECT
         else:
