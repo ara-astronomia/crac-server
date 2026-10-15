@@ -457,6 +457,33 @@ class TestIndigoTelescope(unittest.TestCase):
             self.assertEqual(self._read_once(TelescopeStatus.EAST), TelescopeStatus.ERROR)
         self.assertIn("movement_not_confirmed", logs.output[-1])
 
+    def test_a_failed_movement_in_a_safe_position_shows_the_position(self):
+        for safe in (TelescopeStatus.PARKED, TelescopeStatus.FLATTER, TelescopeStatus.SECURE):
+            self.telescope._movement_failed = True
+            self.assertEqual(self._read_once(safe), safe)
+
+    def test_a_command_indigo_never_starts_does_not_clear_a_failed_movement(self):
+        self.telescope._movement_failed = True
+        self._wait_with([{"state": "Ok"}])
+        self.assertTrue(self.telescope._movement_failed)
+
+    def test_a_flat_whose_polling_stops_while_waiting_sends_nothing_more(self):
+        self.telescope._polling = True
+        coords = iter([self._busy(1.0)])
+
+        def get_property(device, name, timeout=2.0):
+            if name != "MOUNT_EQUATORIAL_COORDINATES":
+                return None
+            self.telescope._polling = False
+            return next(coords, self._busy(1.0))
+
+        self.mock_client.get_property.side_effect = get_property
+        with patch("crac_server.component.telescope.indigo.telescope.time.sleep"):
+            self.telescope.flat(TelescopeSpeed.SPEED_NOT_TRACKING)
+        tracking_commands = [s for s in self.sent_scripts if s.get("newSwitchVector", {}).get("name") == "MOUNT_TRACKING"]
+        self.assertEqual(len(tracking_commands), 1, "only the one set_speed sends before the slew")
+        self.assertFalse(self.telescope._movement_failed)
+
     def test_a_lost_telescope_is_shown_lost_even_after_a_failed_movement(self):
         self.telescope._movement_failed = True
         self.assertEqual(self._read_once(TelescopeStatus.LOST), TelescopeStatus.LOST)

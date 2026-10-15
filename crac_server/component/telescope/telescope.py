@@ -157,7 +157,7 @@ class Telescope(ABC):
                     job['action'](**args)
 
                 self.eq_coords, self.aa_coords, self.speed, status = self.retrieve()
-                self.status = TelescopeStatus.ERROR if self._movement_failed and status < TelescopeStatus.LOST else status
+                self.status = TelescopeStatus.ERROR if self._movement_failed and TelescopeStatus.SECURE < status < TelescopeStatus.LOST else status
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR

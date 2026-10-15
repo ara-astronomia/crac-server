@@ -200,6 +200,8 @@ class Telescope(TelescopeBase):
             if not self.__wait_for_slew_completion():
                 self._movement_failed = True
                 return
+            if not self._polling:
+                return
             self.__call(
                             {"newSwitchVector":
                                 {
@@ -217,9 +219,11 @@ class Telescope(TelescopeBase):
         while Busy, or the property gone. INDIGO republishes them every 0.5s while
         Busy, so a moving mount is waited for as long as it takes."""
         busy_deadline = time.monotonic() + 5.0
+        saw_busy = False
         while time.monotonic() < busy_deadline:
             coords = self._client.get_property(self._name, "MOUNT_EQUATORIAL_COORDINATES", timeout=0)
             if coords and coords.get("state") == "Busy":
+                saw_busy = True
                 break
             time.sleep(0.1)
 
@@ -230,10 +234,11 @@ class Telescope(TelescopeBase):
             if not coords:
                 return False
             if coords.get("state") != "Busy":
-                if coords.get("state") == "Ok":
+                if coords.get("state") == "Ok" and saw_busy:
                     self._movement_failed = False
                 self._coords_state = coords.get("state")
                 return True
+            saw_busy = True
             values = self.__coords_values(coords)
             if values != last_values:
                 last_values = values
