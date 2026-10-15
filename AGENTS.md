@@ -151,9 +151,13 @@ tests/                      # rispecchia la struttura di crac_server/
   (coordinate presenti, in range, stato che viene da loro, lettura entro
   `[emergency_closure] max_reading_age`) o se park o tende non arrivano in
   tempo: la chiusura passa a `BLOCKED` con il motivo. Se nessuno legge il
-  telescopio, la procedura avvia lei il polling. Solo `TELESCOPE_UNKNOWN`
-  riparte da solo, al primo `report()` con la posizione di nuovo leggibile;
-  gli altri blocchi aspettano il tetto chiuso o la fine del pericolo.
+  telescopio, la procedura avvia lei il polling. Il tetto parte solo con una
+  lettura successiva all'avvio della chiusura, il telescopio non in slew e
+  sotto `max_secure_alt` (lo switch PARKED da solo non basta), ricontrollato
+  dopo le tende. `TELESCOPE_UNKNOWN` e `PARK_NOT_REACHED` ripartono al primo
+  `report()` con la posizione leggibile, restando `BLOCKED` mentre riprovano
+  (un log solo, `status_since` del primo blocco); tende, tetto ed errori
+  interni aspettano il tetto chiuso o la fine del pericolo.
   `max_reading_age` deve stare sopra i 60 s che `park()` del driver INDIGO
   passa ad aspettare lo slew, perché intanto la posizione non si rilegge.
 - **Coda comandi telescopio** (`Telescope._jobs`): `_enqueue()` deduplica sul

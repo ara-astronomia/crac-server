@@ -2,7 +2,7 @@ import asyncio
 from functools import lru_cache
 import logging
 from threading import Lock
-from time import time
+from time import monotonic, time
 
 from crac_protobuf.button_pb2 import ButtonType  # type: ignore
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 WAIT_STEP = 0.1
 TELESCOPE_STATUSES_FROM_COORDINATES = range(TelescopeStatus.PARKED, TelescopeStatus.NORTHWEST + 1)
 TELESCOPE_FAILURES = (TelescopeStatus.LOST, TelescopeStatus.ERROR)
-TELESCOPE_SPEEDS_AT_REST = (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING)
 RETRIED_BLOCK_REASONS = (
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN,
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED,
@@ -65,6 +64,7 @@ class EmergencyClosureProcedure:
         self._triggers = []
         self._critical = set()
         self._task = None
+        self._started_at = 0.0
         self._log = StatusLogger(logger, "Emergency closure", EmergencyClosureStatus)
 
     def report(self, trigger, critical: bool) -> None:
@@ -90,7 +90,7 @@ class EmergencyClosureProcedure:
         elif self._block_reason in RETRIED_BLOCK_REASONS:
             telescope().polling_start()
             if self._telescope_readable():
-                self._start()
+                self._start(retry=True)
 
     def state(self) -> EmergencyClosure:
         with self._lock:
@@ -101,12 +101,16 @@ class EmergencyClosureProcedure:
                 status_since=self._status_since,
             )
 
-    def _start(self) -> None:
-        logger.info(
-            "Emergency closure started, triggers: %s",
-            ", ".join(EmergencyClosureTrigger.Name(trigger) for trigger in self._triggers),
-        )
-        self._set(EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_IN_PROGRESS)
+    def _start(self, retry: bool = False) -> None:
+        """A retry stays BLOCKED while it runs, so a block that keeps coming
+        back is logged once and keeps the time it first happened."""
+        self._started_at = monotonic()
+        if not retry:
+            logger.info(
+                "Emergency closure started, triggers: %s",
+                ", ".join(EmergencyClosureTrigger.Name(trigger) for trigger in self._triggers),
+            )
+            self._set(EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_IN_PROGRESS)
         self._task = asyncio.get_running_loop().create_task(self._close())
 
     async def _close(self) -> None:
@@ -131,8 +135,8 @@ class EmergencyClosureProcedure:
 
     async def _park_telescope(self) -> None:
         telescope().polling_start()
-        await self._wait_until(self._telescope_readable_or_failed, self.max_reading_age)
-        if not self._telescope_readable():
+        await self._wait_until(self._telescope_read_or_failed, self.max_reading_age)
+        if not self._telescope_read_since_start():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
         if self._telescope_safe():
             return
@@ -141,26 +145,34 @@ class EmergencyClosureProcedure:
         self._require_telescope_safe()
 
     def _require_telescope_safe(self) -> None:
-        if not self._telescope_readable():
+        if not self._telescope_read_since_start():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
         if not self._telescope_safe():
             raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED)
 
-    def _telescope_readable_or_failed(self) -> bool:
-        return self._telescope_readable() or telescope().status in TELESCOPE_FAILURES
+    def _telescope_read_or_failed(self) -> bool:
+        return self._telescope_read_since_start() or telescope().status in TELESCOPE_FAILURES
+
+    def _telescope_read_since_start(self) -> bool:
+        """Readable, and read after the closure started: while a park or flat
+        of crac runs the position is not read again, and the one from before
+        would still look recent."""
+        return (
+            self._telescope_readable() and
+            telescope().seconds_since_last_reading() <= monotonic() - self._started_at
+        )
 
     def _telescope_safe_or_unreadable(self) -> bool:
         return not self._telescope_readable() or self._telescope_safe()
 
     def _telescope_safe(self) -> bool:
-        """Readable, at rest and low enough for the roof to pass over it,
-        judged on the coordinates: the PARKED switch of a mount turns true
-        as soon as a park starts, and some drivers echo it even when they
-        drop the park."""
+        """Read since the start, not slewing and low enough for the roof: the
+        PARKED switch turns true as soon as a park starts, and a parked mount
+        can report its coordinates in Alert, so a speed in error is accepted."""
         mount = telescope()
         return (
-            self._telescope_readable() and
-            mount.speed in TELESCOPE_SPEEDS_AT_REST and
+            self._telescope_read_since_start() and
+            mount.speed != TelescopeSpeed.SPEED_SLEWING and
             mount.aa_coords.alt <= Config.getFloat("max_secure_alt", "telescope")
         )
 

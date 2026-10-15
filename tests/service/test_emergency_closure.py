@@ -1,4 +1,5 @@
 import asyncio
+from time import monotonic
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -201,7 +202,6 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
     async def test_a_parked_switch_is_not_enough_to_close_the_roof(self):
         cases = {
             "park still slewing": (TelescopeSpeed.SPEED_SLEWING, 1),
-            "speed unknown": (TelescopeSpeed.SPEED_ERROR, 1),
             "park dropped but echoed": (TelescopeSpeed.SPEED_TRACKING, 60),
         }
         for case, (speed, alt) in cases.items():
@@ -217,6 +217,29 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
                 self.telescope.queue_park.assert_called_once_with()
                 self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED)
                 self.roof.close.assert_not_awaited()
+
+    async def test_a_parked_mount_with_its_coordinates_in_alert_is_safe(self):
+        self.telescope.status = TelescopeStatus.PARKED
+        self.telescope.speed = TelescopeSpeed.SPEED_ERROR
+        self.telescope.aa_coords = AltazimutalCoords(alt=0.5, az=359)
+
+        state = await self.__closure()
+
+        self.telescope.queue_park.assert_not_called()
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_reading_from_before_the_closure_is_not_trusted(self):
+        self.telescope.status = TelescopeStatus.SECURE
+        self.telescope.aa_coords = AltazimutalCoords(alt=5, az=30)
+        read_at = monotonic() - 0.2
+        self.telescope.seconds_since_last_reading.side_effect = lambda: monotonic() - read_at
+
+        state = await self.__closure()
+
+        self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
+        self.east.disable.assert_not_called()
+        self.roof.close.assert_not_awaited()
 
     async def test_a_telescope_moved_while_the_curtains_go_down_keeps_the_roof_open(self):
         self.east.goes_down = False
@@ -321,6 +344,19 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(2, self.telescope.queue_park.call_count)
         self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_park_retried_in_vain_is_logged_once_and_keeps_its_time(self):
+        self.telescope.queue_park.side_effect = None
+        with patch(f"{MODULE}.time", return_value=1000):
+            first = await self.__closure()
+
+        with self.assertNoLogs(MODULE, level="INFO"):
+            with patch(f"{MODULE}.time", return_value=2000):
+                again = await self.__closure()
+
+        self.assertEqual(2, self.telescope.queue_park.call_count)
+        self.assertEqual(BLOCKED, again.status)
+        self.assertEqual(first.status_since, again.status_since)
 
     async def test_curtains_or_roof_blocks_are_not_retried(self):
         self.west.goes_down = False
