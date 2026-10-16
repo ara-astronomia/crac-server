@@ -14,6 +14,7 @@ from crac_protobuf.ups_pb2 import (
 from crac_server.component.ups import ups
 from crac_server.config import Config
 from crac_server.converter.chart_builder import build_chart, UnreachableThresholdError
+from crac_server.service.emergency_closure import emergency_closure
 from typing import Union
 
 
@@ -183,6 +184,7 @@ class UpsService(UpsServicer):
                 UpsDevice(name=device, status=self.calculate_status(charts))
             )
         response.status = self._overall_status(response.charts, unreadable)
+        response.emergency_closure.CopyFrom(emergency_closure().state())
         logger.debug(f"ups response is {response}")
         return response
 

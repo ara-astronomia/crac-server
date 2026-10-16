@@ -17,8 +17,9 @@ from crac_protobuf.telescope_pb2 import (
 from crac_server import config
 from crac_server.status_log import ErrorCause, StatusLogger
 from datetime import datetime, UTC
+import math
 from threading import Lock, Thread
-from time import sleep
+from time import monotonic, sleep
 from typing import NamedTuple, Optional
 
 
@@ -131,6 +132,19 @@ class Telescope(ABC):
     def polling(self):
         return self._polling
 
+    @property
+    def movement_failed(self) -> bool:
+        """The last park, flat or slew stopped on the way: an ERROR with this
+        set still comes with coordinates read from the mount."""
+        return self._movement_failed
+
+    def seconds_since_last_reading(self) -> float:
+        """Age of the last retrieve() that succeeded, infinite when none did
+        since the polling started."""
+        if self._last_reading_at is None:
+            return math.inf
+        return monotonic() - self._last_reading_at
+
     def is_below_curtains_area(self, alt: float) -> bool:
         return alt <= config.Config.getFloat("max_secure_alt", "telescope")
 
@@ -158,6 +172,7 @@ class Telescope(ABC):
 
                 self.eq_coords, self.aa_coords, self.speed, status = self.retrieve()
                 self.status = TelescopeStatus.ERROR if self._movement_failed and TelescopeStatus.SECURE < status < TelescopeStatus.LOST else status
+                self._last_reading_at = monotonic()
             except:
                 logger.error("Error in completing job", exc_info=1)
                 self.status = TelescopeStatus.ERROR
@@ -174,6 +189,7 @@ class Telescope(ABC):
         self.eq_coords: EquatorialCoords = None
         self.aa_coords: AltazimutalCoords = None
         self.speed: TelescopeSpeed = TelescopeSpeed.SPEED_ERROR
+        self._last_reading_at = None
 
     def _retrieve_aa_coords(self, eq_coords):
         if eq_coords:

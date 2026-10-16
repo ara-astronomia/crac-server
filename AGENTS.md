@@ -137,13 +137,32 @@ tests/                      # rispecchia la struttura di crac_server/
   server (`app.serve()`) e chiama `check()` ogni `[weather] check_interval`
   secondi (obbligatoria, almeno 30: altrimenti il server non parte).
   `GetStatus` chiama lo stesso `check()`, quindi crac-cloud non serve più
-  per far partire la chiusura d'emergenza. La guardia contro due chiusure
-  insieme è `self.t`, ed è sicura solo perché ciclo e RPC girano sullo
-  stesso event loop, senza `await` fra il controllo e l'assegnazione: non
-  aggiungerne uno lì in mezzo. A tetto `ROOF_CLOSED` la chiusura non parte.
+  per far partire la chiusura d'emergenza. `check()` passa il meteo a
+  `emergency_closure().report()`; un meteo sconosciuto non passa niente.
   Ogni guasto di lettura, compreso il dato in cache scaduto dopo un
   aggiornamento fallito, si scrive una volta con `StatusLogger`; la ripresa
   solo con un dato fresco.
+- **Chiusura d'emergenza unica** (`service/emergency_closure.py`): ogni
+  fonte (oggi solo il meteo) chiama `report(trigger, critical)` a ogni
+  controllo, e la risposta meteo e quella UPS portano `state()`. La procedura
+  è un task sull'event loop: la guardia contro due chiusure insieme è il task
+  stesso, sicura perché `report()` non contiene `await` - non aggiungerne.
+  Il tetto non si muove se la posizione del telescopio non è leggibile
+  (coordinate presenti, in range, stato che viene da loro, lettura entro
+  `[emergency_closure] max_reading_age`) o se park o tende non arrivano in
+  tempo: la chiusura passa a `BLOCKED` con il motivo. Se nessuno legge il
+  telescopio, la procedura avvia lei il polling. Il tetto parte solo con una
+  lettura successiva all'avvio della chiusura, il telescopio non in slew e
+  sotto `max_secure_alt` (lo switch PARKED da solo non basta), ricontrollato
+  dopo le tende. `TELESCOPE_UNKNOWN` e `PARK_NOT_REACHED` ripartono al primo
+  `report()` con la posizione leggibile, restando `BLOCKED` mentre riprovano
+  (un log solo, `status_since` del primo blocco); tende, tetto ed errori
+  interni aspettano il tetto chiuso o la fine del pericolo.
+  Durante un park o un flat di crac la posizione non si rilegge e lo slew non
+  ha scadenza: uno slew più lungo di `max_reading_age` blocca la chiusura
+  come `TELESCOPE_UNKNOWN`, che riparte alla lettura seguente. L'`ERROR` di
+  un movimento fallito (`movement_failed`) ha coordinate vere: la chiusura lo
+  legge e rimanda il park, che è anche ciò che toglie l'errore.
 - **Coda comandi telescopio** (`Telescope._jobs`): `_enqueue()` deduplica sul
   job intero (stesso dizionario azione+argomenti già in coda) - senza dedup,
   un client che pollasse più spesso del ciclo interno di retrieve() farebbe
