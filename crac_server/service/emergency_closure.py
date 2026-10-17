@@ -136,13 +136,12 @@ class EmergencyClosureProcedure:
         """The petals move on their own servos, independent of the mount, so
         they are closed even when the telescope cannot be read. Best effort:
         a cover mirror that fails must not stop the roof from closing."""
-        status = await asyncio.to_thread(cover_mirror().get_status)
-        if status in (CoverMirrorStatus.COVER_MIRROR_CLOSED, CoverMirrorStatus.COVER_MIRROR_CLOSING):
-            return
         try:
-            await cover_mirror().close()
+            status = await asyncio.to_thread(cover_mirror().get_status)
+            if status not in (CoverMirrorStatus.COVER_MIRROR_CLOSED, CoverMirrorStatus.COVER_MIRROR_CLOSING):
+                await cover_mirror().close()
         except Exception:
-            logger.warning("The cover mirror did not take the close command", exc_info=True)
+            logger.warning("The cover mirror could not be closed", exc_info=True)
 
     async def _park_telescope(self) -> None:
         telescope().polling_start()

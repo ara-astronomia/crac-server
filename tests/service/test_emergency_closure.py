@@ -169,6 +169,23 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.roof.close.assert_awaited_once_with()
         self.assertEqual(COMPLETED, state.status)
 
+    async def test_a_cover_mirror_in_error_is_told_to_close_anyway(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_ERROR
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_status_that_cannot_be_read_does_not_stop_the_closure(self):
+        self.cover_mirror.get_status.side_effect = OSError("indigo gone")
+
+        with self.assertLogs(MODULE, level="WARNING"):
+            state = await self.__closure()
+
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
     async def test_the_closure_is_in_progress_while_it_runs(self):
         self.procedure.report(WEATHER, True)
 
