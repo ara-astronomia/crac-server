@@ -493,14 +493,38 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(BLOCKED, again.status)
         self.assertEqual(first.status_since, again.status_since)
 
-    async def test_curtains_or_roof_blocks_are_not_retried(self):
-        self.west.goes_down = False
+    async def test_a_roof_block_is_not_retried(self):
+        self.roof.close = AsyncMock(return_value=False)
         await self.__closure()
 
         state = await self.__closure()
 
-        self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_CURTAINS_NOT_DISABLED)
-        self.assertEqual(1, self.east.disable.call_count)
+        self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_ROOF_NOT_CLOSED)
+        self.assertEqual(1, self.roof.close.await_count)
+
+    async def test_curtains_lowered_by_hand_resume_the_blocked_closure(self):
+        self.west.goes_down = False
+        await self.__closure()
+
+        self.west.goes_down = True
+        state = await self.__closure()
+
+        self.assertEqual(COMPLETED, state.status)
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(2, self.west.disable.call_count)
+
+    async def test_curtains_still_stuck_keep_the_block_and_its_time(self):
+        self.west.goes_down = False
+        with patch(f"{MODULE}.time", return_value=1000):
+            first = await self.__closure()
+
+        with self.assertNoLogs(MODULE, level="INFO"):
+            with patch(f"{MODULE}.time", return_value=2000):
+                again = await self.__closure()
+
+        self.__assert_blocked(again, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_CURTAINS_NOT_DISABLED)
+        self.assertEqual(first.status_since, again.status_since)
+        self.assertEqual(2, self.west.disable.call_count)
 
     async def test_a_blocked_closure_with_the_roof_found_closed_is_completed(self):
         self.roof.close = AsyncMock(return_value=False)
