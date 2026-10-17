@@ -14,6 +14,7 @@ from crac_protobuf.emergency_closure_pb2 import (
 )
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus  # type: ignore
+from crac_server.component.button_control import ButtonControl
 from crac_server.component.roof.simulator.roof_pins import simulated_roof
 from crac_server.config import Config
 from crac_server.service.emergency_closure import EmergencyClosureProcedure
@@ -70,6 +71,9 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
             patcher = patch(f"{MODULE}.{name}", return_value=component)
             patcher.start()
             self.addCleanup(patcher.stop)
+        switch_off = patch.object(ButtonControl, "off")
+        self.switch_off = switch_off.start()
+        self.addCleanup(switch_off.stop)
         self.procedure = EmergencyClosureProcedure()
 
     def __park(self):
@@ -105,6 +109,7 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.west.disable.assert_called_once_with()
         self.roof.close.assert_awaited_once_with()
         self.telescope.polling_end.assert_called_once_with()
+        self.switch_off.assert_not_called()
         self.assertEqual(COMPLETED, state.status)
         self.assertEqual([WEATHER], list(state.triggers))
         self.assertEqual(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_UNSPECIFIED, state.block_reason)
@@ -171,6 +176,17 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_cover_mirror_in_error_is_told_to_close_anyway(self):
         self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_ERROR
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_is_commanded_once_not_on_every_retry(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_ERROR
+        self.telescope.status = TelescopeStatus.LOST
+        await self.__closure()
+        self.telescope.status = TelescopeStatus.NORTHEAST
 
         state = await self.__closure()
 

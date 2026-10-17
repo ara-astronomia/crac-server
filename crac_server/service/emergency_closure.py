@@ -110,11 +110,12 @@ class EmergencyClosureProcedure:
                 ", ".join(EmergencyClosureTrigger.Name(trigger) for trigger in self._triggers),
             )
             self._set(EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_IN_PROGRESS)
-        self._task = asyncio.get_running_loop().create_task(self._close())
+        self._task = asyncio.get_running_loop().create_task(self._close(retry))
 
-    async def _close(self) -> None:
+    async def _close(self, retry: bool = False) -> None:
         try:
-            await self._close_cover_mirror()
+            if not retry:
+                await self._close_cover_mirror()
             await self._park_telescope()
             await self._lower_curtains()
             self._require_telescope_safe()
@@ -135,7 +136,9 @@ class EmergencyClosureProcedure:
     async def _close_cover_mirror(self) -> None:
         """The petals move on their own servos, independent of the mount, so
         they are closed even when the telescope cannot be read. Best effort:
-        a cover mirror that fails must not stop the roof from closing."""
+        a cover mirror that fails must not stop the roof from closing. Sent
+        once per closure, not on its retries: a cover without power would
+        otherwise be commanded again at every check."""
         try:
             status = await asyncio.to_thread(cover_mirror().get_status)
             if status not in (CoverMirrorStatus.COVER_MIRROR_CLOSED, CoverMirrorStatus.COVER_MIRROR_CLOSING):
