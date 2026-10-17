@@ -8,10 +8,9 @@ from crac_protobuf.button_pb2 import (
 from crac_protobuf.button_pb2_grpc import ButtonServicer
 from crac_server.converter.button_converter import ButtonMediator
 from crac_server.handler.button_handler import (
-    ButtonActionHandler, 
-    ButtonFlatHandler, 
-    ButtonTelescopeHandler, 
-    ButtonWeatherHandler,
+    ButtonActionHandler,
+    ButtonFlatHandler,
+    ButtonTelescopeHandler,
 )
 import asyncio
 
@@ -24,13 +23,12 @@ class ButtonService(ButtonServicer):
         logger.debug("Request " + str(request))
         button_mediator = ButtonMediator(request)
 
-        weather_handler = ButtonWeatherHandler()
         telescope_handler = ButtonTelescopeHandler()
         flat_handler = ButtonFlatHandler()
         button_action_handler = ButtonActionHandler()
-        weather_handler.set_next(telescope_handler).set_next(flat_handler).set_next(button_action_handler)
+        telescope_handler.set_next(flat_handler).set_next(button_action_handler)
         
-        return weather_handler.handle(button_mediator)
+        return telescope_handler.handle(button_mediator)
 
     async def GetStatus(self, request, context):
         tele_switch_button = self.SetAction(
