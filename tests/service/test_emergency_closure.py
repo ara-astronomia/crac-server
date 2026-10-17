@@ -60,7 +60,7 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.east, self.west = FakeCurtain(), FakeCurtain()
         self.cover_mirror = MagicMock()
         self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_CLOSED
-        self.cover_mirror.close = AsyncMock()
+        self.cover_mirror.close = AsyncMock(return_value=True)
         for name, component in {
             "telescope": self.telescope,
             "roof": self.roof,
@@ -191,6 +191,33 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         state = await self.__closure()
 
         self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_unreadable_at_first_is_commanded_on_the_retry(self):
+        self.cover_mirror.get_status.side_effect = OSError("indigo gone")
+        self.telescope.status = TelescopeStatus.LOST
+        with self.assertLogs(MODULE, level="WARNING"):
+            await self.__closure()
+        self.cover_mirror.get_status.side_effect = None
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        self.telescope.status = TelescopeStatus.NORTHEAST
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_command_not_sent_is_sent_again_on_the_retry(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        self.cover_mirror.close.return_value = False
+        self.telescope.status = TelescopeStatus.LOST
+        await self.__closure()
+        self.cover_mirror.close.return_value = True
+        self.telescope.status = TelescopeStatus.NORTHEAST
+
+        state = await self.__closure()
+
+        self.assertEqual(2, self.cover_mirror.close.await_count)
         self.assertEqual(COMPLETED, state.status)
 
     async def test_a_cover_mirror_status_that_cannot_be_read_does_not_stop_the_closure(self):
