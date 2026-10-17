@@ -92,6 +92,11 @@ class EmergencyClosureProcedure:
             telescope().polling_start()
             if self._telescope_readable():
                 self._start(retry=True)
+            else:
+                self._set(
+                    EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_BLOCKED,
+                    EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN,
+                )
 
     def state(self) -> EmergencyClosure:
         with self._lock:

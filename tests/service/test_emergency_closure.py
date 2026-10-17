@@ -526,6 +526,20 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.status_since, again.status_since)
         self.assertEqual(2, self.west.disable.call_count)
 
+    async def test_a_retried_block_with_the_telescope_unreadable_names_the_telescope(self):
+        self.west.goes_down = False
+        with patch(f"{MODULE}.time", return_value=1000):
+            first = await self.__closure()
+        self.west.goes_down = True
+        self.telescope.status = TelescopeStatus.LOST
+
+        with patch(f"{MODULE}.time", return_value=2000):
+            again = await self.__closure()
+
+        self.__assert_blocked(again, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
+        self.assertEqual(first.status_since, again.status_since)
+        self.assertEqual(1, self.west.disable.call_count)
+
     async def test_a_blocked_closure_with_the_roof_found_closed_is_completed(self):
         self.roof.close = AsyncMock(return_value=False)
         await self.__closure()
