@@ -154,10 +154,14 @@ tests/                      # rispecchia la struttura di crac_server/
   telescopio, la procedura avvia lei il polling. Il tetto parte solo con una
   lettura successiva all'avvio della chiusura, il telescopio non in slew e
   sotto `max_secure_alt` (lo switch PARKED da solo non basta), ricontrollato
-  dopo le tende. `TELESCOPE_UNKNOWN` e `PARK_NOT_REACHED` ripartono al primo
-  `report()` con la posizione leggibile, restando `BLOCKED` mentre riprovano
-  (un log solo, `status_since` del primo blocco); tende, tetto ed errori
-  interni aspettano il tetto chiuso o la fine del pericolo.
+  dopo le tende. `TELESCOPE_UNKNOWN`, `PARK_NOT_REACHED` e
+  `CURTAINS_NOT_DISABLED` ripartono al primo `report()` con la posizione
+  leggibile, restando `BLOCKED` mentre riprovano (un log solo, `status_since`
+  del primo blocco): le tende riprendono quando l'operatore le abbassa a mano
+  coi pulsanti in loco. Con la posizione illeggibile il motivo diventa
+  `TELESCOPE_UNKNOWN`, così l'avviso indica il telescopio e non chiede di
+  abbassare tende già abbassate. Tetto ed errori interni aspettano il tetto
+  chiuso o la fine del pericolo.
   Durante un park o un flat di crac la posizione non si rilegge e lo slew non
   ha scadenza: uno slew più lungo di `max_reading_age` blocca la chiusura
   come `TELESCOPE_UNKNOWN`, che riparte alla lettura seguente. L'`ERROR` di

@@ -30,6 +30,7 @@ TELESCOPE_STATUSES_FROM_COORDINATES = range(TelescopeStatus.PARKED, TelescopeSta
 RETRIED_BLOCK_REASONS = (
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN,
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_PARK_NOT_REACHED,
+    EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_CURTAINS_NOT_DISABLED,
 )
 CAUSE_BY_BLOCK_REASON = {
     EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN: ErrorCause.DEVICE_UNREACHABLE,
@@ -91,6 +92,11 @@ class EmergencyClosureProcedure:
             telescope().polling_start()
             if self._telescope_readable():
                 self._start(retry=True)
+            else:
+                self._set(
+                    EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_BLOCKED,
+                    EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN,
+                )
 
     def state(self) -> EmergencyClosure:
         with self._lock:
