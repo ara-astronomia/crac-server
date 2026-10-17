@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from gpiozero import Device
 
-from crac_protobuf.button_pb2 import ButtonType  # type: ignore
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
+from crac_protobuf.cover_mirror_pb2 import CoverMirrorStatus  # type: ignore
 from crac_protobuf.emergency_closure_pb2 import (
     EmergencyClosureBlockReason,  # type: ignore
     EmergencyClosureStatus,  # type: ignore
@@ -14,6 +14,7 @@ from crac_protobuf.emergency_closure_pb2 import (
 )
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
 from crac_protobuf.telescope_pb2 import AltazimutalCoords, TelescopeSpeed, TelescopeStatus  # type: ignore
+from crac_server.component.button_control import ButtonControl
 from crac_server.component.roof.simulator.roof_pins import simulated_roof
 from crac_server.config import Config
 from crac_server.service.emergency_closure import EmergencyClosureProcedure
@@ -57,17 +58,22 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.roof.get_status.return_value = RoofStatus.ROOF_OPENED
         self.roof.close = AsyncMock(side_effect=self.__close_roof)
         self.east, self.west = FakeCurtain(), FakeCurtain()
-        self.tele_switch = MagicMock()
+        self.cover_mirror = MagicMock()
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_CLOSED
+        self.cover_mirror.close = AsyncMock(return_value=True)
         for name, component in {
             "telescope": self.telescope,
             "roof": self.roof,
             "curtain_east": self.east,
             "curtain_west": self.west,
-            "switches": {ButtonType.Name(ButtonType.TELE_SWITCH): self.tele_switch},
+            "cover_mirror": self.cover_mirror,
         }.items():
             patcher = patch(f"{MODULE}.{name}", return_value=component)
             patcher.start()
             self.addCleanup(patcher.stop)
+        switch_off = patch.object(ButtonControl, "off")
+        self.switch_off = switch_off.start()
+        self.addCleanup(switch_off.stop)
         self.procedure = EmergencyClosureProcedure()
 
     def __park(self):
@@ -103,7 +109,7 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         self.west.disable.assert_called_once_with()
         self.roof.close.assert_awaited_once_with()
         self.telescope.polling_end.assert_called_once_with()
-        self.tele_switch.off.assert_called_once_with()
+        self.switch_off.assert_not_called()
         self.assertEqual(COMPLETED, state.status)
         self.assertEqual([WEATHER], list(state.triggers))
         self.assertEqual(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_UNSPECIFIED, state.block_reason)
@@ -115,6 +121,111 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
         state = await self.__closure()
 
         self.telescope.queue_park.assert_not_called()
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_an_open_cover_mirror_is_closed_before_the_telescope_is_parked(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        order = []
+
+        def park():
+            order.append("park")
+            self.__park()
+
+        self.cover_mirror.close.side_effect = lambda: order.append("cover")
+        self.telescope.queue_park.side_effect = park
+
+        state = await self.__closure()
+
+        self.assertEqual(["cover", "park"], order)
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_closed_cover_mirror_is_not_commanded_again(self):
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_not_awaited()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_already_closing_is_left_alone(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_CLOSING
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_not_awaited()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_an_open_cover_mirror_is_closed_even_when_the_telescope_is_unreadable(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        self.telescope.status = TelescopeStatus.LOST
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_TELESCOPE_UNKNOWN)
+        self.roof.close.assert_not_awaited()
+
+    async def test_a_cover_mirror_that_fails_to_close_does_not_stop_the_closure(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        self.cover_mirror.close.side_effect = OSError("indigo not answering")
+
+        with self.assertLogs(MODULE, level="WARNING"):
+            state = await self.__closure()
+
+        self.roof.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_in_error_is_told_to_close_anyway(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_ERROR
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_is_commanded_once_not_on_every_retry(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_ERROR
+        self.telescope.status = TelescopeStatus.LOST
+        await self.__closure()
+        self.telescope.status = TelescopeStatus.NORTHEAST
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_unreadable_at_first_is_commanded_on_the_retry(self):
+        self.cover_mirror.get_status.side_effect = OSError("indigo gone")
+        self.telescope.status = TelescopeStatus.LOST
+        with self.assertLogs(MODULE, level="WARNING"):
+            await self.__closure()
+        self.cover_mirror.get_status.side_effect = None
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        self.telescope.status = TelescopeStatus.NORTHEAST
+
+        state = await self.__closure()
+
+        self.cover_mirror.close.assert_awaited_once_with()
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_command_not_sent_is_sent_again_on_the_retry(self):
+        self.cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_OPENED
+        self.cover_mirror.close.return_value = False
+        self.telescope.status = TelescopeStatus.LOST
+        await self.__closure()
+        self.cover_mirror.close.return_value = True
+        self.telescope.status = TelescopeStatus.NORTHEAST
+
+        state = await self.__closure()
+
+        self.assertEqual(2, self.cover_mirror.close.await_count)
+        self.assertEqual(COMPLETED, state.status)
+
+    async def test_a_cover_mirror_status_that_cannot_be_read_does_not_stop_the_closure(self):
+        self.cover_mirror.get_status.side_effect = OSError("indigo gone")
+
+        with self.assertLogs(MODULE, level="WARNING"):
+            state = await self.__closure()
+
         self.roof.close.assert_awaited_once_with()
         self.assertEqual(COMPLETED, state.status)
 
@@ -294,7 +405,6 @@ class TestEmergencyClosure(unittest.IsolatedAsyncioTestCase):
 
         self.__assert_blocked(state, EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_ROOF_NOT_CLOSED)
         self.telescope.polling_end.assert_not_called()
-        self.tele_switch.off.assert_not_called()
 
     async def test_an_unexpected_failure_blocks_the_closure_and_is_logged(self):
         self.east.disable.side_effect = OSError("gpio busy")
@@ -488,12 +598,14 @@ class TestEmergencyClosureReachesTheRoof(unittest.IsolatedAsyncioTestCase):
         telescope.seconds_since_last_reading.return_value = 0
         curtain = MagicMock()
         curtain.get_status.return_value = CurtainStatus.CURTAIN_DISABLED
+        cover_mirror = MagicMock()
+        cover_mirror.get_status.return_value = CoverMirrorStatus.COVER_MIRROR_CLOSED
         for name, double in {
             "roof": self.roof,
             "telescope": telescope,
             "curtain_east": curtain,
             "curtain_west": curtain,
-            "switches": {ButtonType.Name(ButtonType.TELE_SWITCH): MagicMock()},
+            "cover_mirror": cover_mirror,
         }.items():
             patcher = patch(f"{MODULE}.{name}", return_value=double)
             patcher.start()

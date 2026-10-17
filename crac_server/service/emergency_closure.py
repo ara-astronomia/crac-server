@@ -4,8 +4,8 @@ import logging
 from threading import Lock
 from time import monotonic, time
 
-from crac_protobuf.button_pb2 import ButtonType  # type: ignore
 from crac_protobuf.curtains_pb2 import CurtainStatus  # type: ignore
+from crac_protobuf.cover_mirror_pb2 import CoverMirrorStatus  # type: ignore
 from crac_protobuf.emergency_closure_pb2 import (
     EmergencyClosure,  # type: ignore
     EmergencyClosureBlockReason,  # type: ignore
@@ -15,8 +15,8 @@ from crac_protobuf.emergency_closure_pb2 import (
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
 from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus  # type: ignore
 
-from crac_server.component.button_control import switches
 from crac_server.component.curtains.factory_curtain import curtain_east, curtain_west
+from crac_server.component.cover_mirror import cover_mirror
 from crac_server.component.roof import roof
 from crac_server.component.telescope import telescope
 from crac_server.config import Config
@@ -64,6 +64,7 @@ class EmergencyClosureProcedure:
         self._critical = set()
         self._task = None
         self._started_at = 0.0
+        self._cover_mirror_commanded = False
         self._log = StatusLogger(logger, "Emergency closure", EmergencyClosureStatus)
 
     def report(self, trigger, critical: bool) -> None:
@@ -105,6 +106,7 @@ class EmergencyClosureProcedure:
         back is logged once and keeps the time it first happened."""
         self._started_at = monotonic()
         if not retry:
+            self._cover_mirror_commanded = False
             logger.info(
                 "Emergency closure started, triggers: %s",
                 ", ".join(EmergencyClosureTrigger.Name(trigger) for trigger in self._triggers),
@@ -114,13 +116,13 @@ class EmergencyClosureProcedure:
 
     async def _close(self) -> None:
         try:
+            await self._close_cover_mirror()
             await self._park_telescope()
             await self._lower_curtains()
             self._require_telescope_safe()
             if not await roof().close():
                 raise EmergencyBlock(EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_ROOF_NOT_CLOSED)
             await asyncio.to_thread(telescope().polling_end)
-            switches()[ButtonType.Name(ButtonType.TELE_SWITCH)].off()
             logger.info("Emergency closure completed")
             self._set(EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_COMPLETED)
         except EmergencyBlock as block:
@@ -131,6 +133,24 @@ class EmergencyClosureProcedure:
                 EmergencyClosureBlockReason.EMERGENCY_CLOSURE_BLOCK_REASON_INTERNAL_ERROR,
                 exc_info=e,
             )
+
+    async def _close_cover_mirror(self) -> None:
+        """The petals move on their own servos, independent of the mount, so
+        they are closed even when the telescope cannot be read. Best effort:
+        a cover mirror that fails must not stop the roof from closing.
+        Commanded until INDIGO takes the command, then never again in the
+        same closure: a cover without power would otherwise be commanded at
+        every retry."""
+        if self._cover_mirror_commanded:
+            return
+        try:
+            status = await asyncio.to_thread(cover_mirror().get_status)
+            if status in (CoverMirrorStatus.COVER_MIRROR_CLOSED, CoverMirrorStatus.COVER_MIRROR_CLOSING):
+                self._cover_mirror_commanded = True
+            else:
+                self._cover_mirror_commanded = await cover_mirror().close()
+        except Exception:
+            logger.warning("The cover mirror could not be closed", exc_info=True)
 
     async def _park_telescope(self) -> None:
         telescope().polling_start()

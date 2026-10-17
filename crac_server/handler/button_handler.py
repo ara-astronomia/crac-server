@@ -1,24 +1,18 @@
 import logging
 from crac_server.component.telescope import telescope
-from crac_server.component.weather import weather
 from crac_server.converter.button_converter import (
     ButtonConverter, 
     ButtonMediator,
 )
-from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
 from crac_protobuf.button_pb2 import (
     ButtonAction,  # type: ignore
     ButtonType,  # type: ignore
     ButtonResponse,  # type: ignore
-    ButtonStatus,   # type: ignore
 )
 from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
     TelescopeStatus,  # type: ignore
-)
-from crac_protobuf.chart_pb2 import (
-    WeatherStatus,  # type: ignore
 )
 
 
@@ -31,25 +25,6 @@ class AbstractButtonHandler(AbstractHandler):
             return self._next_handler.handle(mediator)
         
         return ButtonConverter().convert(mediator)
-
-
-class ButtonWeatherHandler(AbstractButtonHandler):
-    def handle(self, mediator: ButtonMediator) -> ButtonResponse:
-        logger.debug("In weather handler")
-        if (
-            mediator.status is ButtonStatus.OFF and 
-            mediator.type == ButtonType.TELE_SWITCH
-        ):
-            logger.debug(f"In turn on or check action {mediator.action} for {mediator.type}")
-            weather_converter = WeatherConverter()
-            weather_response = weather_converter.convert(weather())
-            logger.debug(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER:
-                logger.info(f"In status danger {weather_response.status}")
-                mediator.is_disabled = True
-                self._next_handler = None
-
-        return super().handle(mediator)
 
 
 class ButtonTelescopeHandler(AbstractButtonHandler):
