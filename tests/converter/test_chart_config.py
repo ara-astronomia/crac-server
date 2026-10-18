@@ -26,9 +26,6 @@ def bands(chart):
 
 
 class TestConfiguredBands(unittest.TestCase):
-    """The levels of a chart all come from its section: scale is the drawing,
-    warning and danger are ranges, normal is whatever no range claims."""
-
     def test_danger_above(self):
         chart = build(
             {"wind_speed": {"scale": "0..40", "warning": "10..", "danger": "36.."}},
@@ -128,9 +125,6 @@ class TestConfiguredBands(unittest.TestCase):
 
 
 class TestConfiguredStatus(unittest.TestCase):
-    """Where two ranges overlap the more severe level wins, so the boundary
-    between two levels is written once, in the lower one."""
-
     def _status(self, value):
         chart = build(
             {"wind_speed": {"scale": "0..40", "warning": "10..", "danger": "36.."}},
@@ -153,9 +147,6 @@ class TestConfiguredStatus(unittest.TestCase):
 
 
 class TestBrokenConfigurations(unittest.TestCase):
-    """A threshold written wrong must not pass: the level it stands for would
-    be off while everybody believes it is on."""
-
     def test_a_section_without_scale_is_refused(self):
         with self.assertRaises(ChartConfigError) as ctx:
             build({"metric": {"warning": "10.."}}, "metric", value=0)

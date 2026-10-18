@@ -44,9 +44,7 @@ class WeatherConverter:
         return response
 
     def validate_config(self):
-        """Build every chart once with a placeholder reading, so that a broken
-        threshold stops the startup instead of surfacing at the first check.
-        """
+        """Build every chart once, so a broken threshold stops the startup."""
         for section, title, urn in CHARTS:
             build_chart_from_config(
                 section, value=0, title=title, urn=urn, unit_of_measurement=""

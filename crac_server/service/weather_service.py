@@ -51,10 +51,9 @@ class WeatherService(WeatherServicer):
         return await self.check()
 
     async def watch(self):
-        """Check the weather every check_interval seconds, for as long as the
-        server runs, so that the closure does not wait for a client to ask.
-        A failed check is logged, once per kind of failure, and the next one
-        runs anyway."""
+        """Check the weather every check_interval seconds, so that the closure
+        does not wait for a client to ask. A failed check is logged, once
+        per kind of failure, and the next one runs anyway."""
         logger.info("Weather watch: checking every %s seconds", self.check_interval)
         while True:
             try:

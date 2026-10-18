@@ -7,22 +7,12 @@ SCALE_KEY = "scale"
 
 
 class ChartConfigError(ValueError):
-    """Raised when a chart section cannot be turned into bands. A broken
-    configuration must stop who reads it, not pass as an unknown reading.
-    """
+    pass
 
 
 def build_chart_from_config(
     section: str, *, value: float, title: str, urn: str, unit_of_measurement: str
 ) -> Chart:
-    """Build a chart out of a config.ini section.
-
-    The section holds the scale of the gauge and the ranges of each level:
-    an open side ("36..") has no outer end, a comma repeats the level, and
-    where ranges overlap the more severe level wins. The normal level is
-    not written: it is whatever no range claims. A section with no level
-    builds an informative chart, one that classifies no reading.
-    """
     keys = Config.get_section_keys(section)
     _reject_unknown_keys(section, keys)
     scale = _scale(section, keys)
@@ -103,8 +93,6 @@ def _clamped_to_scale(section, level, range_, scale, text):
 
 
 def _normal(scale, claimed):
-    """Whatever no level claims, as normal bands. A section with no level
-    claims nothing: the chart stays informative and classifies no reading."""
     if not claimed:
         return tuple()
     lower = scale[0]
@@ -119,9 +107,9 @@ def _normal(scale, claimed):
 
 
 def _subtract(intervals, removed):
-    """The parts of each interval that no removed interval covers: the wire
-    carries non overlapping bands, so a gauge never paints a milder level
-    over a more severe one."""
+    """The parts no removed interval covers: the wire carries non
+    overlapping bands, so a gauge never paints a milder level over a
+    more severe one."""
     remaining = []
     for lower, upper in sorted(intervals):
         pieces = [(lower, upper)]

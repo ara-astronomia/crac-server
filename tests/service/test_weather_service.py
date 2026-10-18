@@ -231,11 +231,8 @@ class TestWeatherServiceStartupValidation(unittest.TestCase):
 
 
 class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):
-    """
-    A weather reading that fails is reported as UNSPECIFIED, which is honest:
-    the data is not there. A misconfigured threshold is a different thing, and
-    reporting it the same way hides a protection that is not running.
-    """
+    """A misconfigured threshold reported as an unreadable weather hides a
+    protection that is not running."""
 
     async def test_reraises_an_unreachable_threshold_instead_of_reporting_unspecified(self):
         service = WeatherService()

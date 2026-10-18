@@ -29,11 +29,9 @@ class UpsService(UpsServicer):
         self._validate_metrics()
 
     def _validate_metrics(self):
-        """
-        Validate the configuration at startup. A broken one found while polling
-        would discard every device on every call, blaming the UPS for a mistake
-        of ours.
-        """
+        """Validate the configuration at startup: a broken one found while
+        polling would discard every device on every call, blaming the UPS
+        for a mistake of ours."""
         self._configured_devices()
         try:
             enabled = Config.get_section("ups_metrics")
@@ -47,11 +45,9 @@ class UpsService(UpsServicer):
         self._reject_unusable_thresholds_of(enabled)
 
     def _configured_devices(self):
-        """
-        Names are written by hand: a stray space would build an urn no client
-        can match, and an empty entry a device that can never be read, pinning
-        the overall status to UNSPECIFIED forever.
-        """
+        """Names are written by hand: a stray space would build an urn no
+        client can match, and an empty entry a device that can never be
+        read, pinning the overall status to UNSPECIFIED forever."""
         devices = [name.strip() for name in Config.getValue("ups_list", "ups").split(",")]
         if not any(devices):
             raise RuntimeError("ups_list e' vuota: nessun UPS da sorvegliare")
@@ -69,22 +65,17 @@ class UpsService(UpsServicer):
             raise RuntimeError(f"[ups_metrics]: metriche senza valore, rimuoverle o valorizzarle: {sorted(empty)}")
 
     def _reject_metrics_that_produce_no_chart(self, enabled):
-        """
-        Such a metric shows nothing, yet the device is still discarded when it
-        is missing: all of the risk, none of the benefit.
-        """
+        """Such a metric shows nothing, yet the device is still discarded
+        when it is missing: all of the risk, none of the benefit."""
         chartable = {key for key, _, _, _ in self._chart_specs()}
         unknown = set(enabled) - chartable
         if unknown:
             raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
 
     def _reject_unusable_thresholds_of(self, enabled):
-        """
-        Reading the thresholds catches the missing ones, building a chart out
-        of them also catches the bands no reading can ever fall into. Both are
-        levels that are off while everybody believes they are on, so both have
-        to stop the startup rather than surface at the first poll.
-        """
+        """Reading the thresholds catches the missing ones, building a chart
+        out of them also catches the bands no reading can ever fall into:
+        both stop the startup rather than surface at the first poll."""
         for key, urn_suffix, title, unit in self._chart_specs():
             if key in enabled:
                 build_chart_from_config(
@@ -150,11 +141,9 @@ class UpsService(UpsServicer):
         return response
 
     def _overall_status(self, charts, unreadable):
-        """
-        Nothing is known about a UPS that does not answer, so reporting NORMAL
-        because the others are fine would be a false reassurance. A danger
-        already detected elsewhere is never downgraded.
-        """
+        """Nothing is known about a UPS that does not answer, so reporting
+        NORMAL because the others are fine would be a false reassurance. A
+        danger already detected elsewhere is never downgraded."""
         status = self.calculate_status(charts)
         if unreadable and status != UpsStatus.UPS_STATUS_DANGER:
             logger.warning(f"UPS non leggibili {unreadable}: stato riportato come UNSPECIFIED")

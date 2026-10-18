@@ -21,8 +21,6 @@ class FakeWeather:
 
 
 class TestWeatherConverter(unittest.TestCase):
-    """Every chart comes from its own config.ini section, with the levels the
-    ranges there claim."""
 
     def _convert(self, **readings):
         weather = FakeWeather()

@@ -42,9 +42,8 @@ def setUpModule():
     patcher.start().return_value.state.return_value = EmergencyClosure()
     unittest.addModuleCleanup(patcher.stop)
 
-class TestUpsServiceStartupValidation(unittest.TestCase):
-    """La config delle soglie va validata all'avvio, non ad ogni poll."""
 
+class TestUpsServiceStartupValidation(unittest.TestCase):
     def test_init_raises_when_an_enabled_metric_has_a_broken_threshold(self):
         def broken(key, section="automazione"):
             if section == "battery_charge" and key == "scale":
@@ -58,10 +57,6 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
                 UpsService()
 
     def test_init_raises_when_a_band_can_never_be_reached(self):
-        """
-        A band whose bounds are inverted covers nothing: the level it stands
-        for is off, and no reading will ever report it.
-        """
         def unreachable_band(key, section="automazione"):
             if section == "battery_charge" and key == "danger":
                 return "50..35"
@@ -74,8 +69,6 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
                 UpsService()
 
     def test_init_raises_on_a_metric_the_service_cannot_chart(self):
-        # una metrica sconosciuta non produce alcun chart, ma rende comunque
-        # obbligatoria la sua presenza sul device: danno netto, va rifiutata
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "battery_voltage": "battery.voltage"}), \
              patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "battery_voltage"])), \
              patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
@@ -84,8 +77,6 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
         self.assertIn("battery_voltage", str(ctx.exception))
 
     def test_init_raises_on_a_metric_left_empty(self):
-        # get_section scarta le chiavi vuote: senza questo controllo una
-        # metrica svuotata per sbaglio smette di essere letta in silenzio
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
              patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage"])), \
              patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
@@ -108,12 +99,10 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}), \
              patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=missing_current_config), \
              patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
-            UpsService()  # non deve sollevare: output_current non e' abilitata
+            UpsService()
 
 
 class TestUpsListValidation(unittest.TestCase):
-    """ups_list e' scritta a mano: va normalizzata e verificata all'avvio."""
-
     def _build_with(self, ups_list):
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
              patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge"])), \
@@ -121,8 +110,6 @@ class TestUpsListValidation(unittest.TestCase):
             return UpsService()._configured_devices()
 
     def test_strips_the_spaces_around_names(self):
-        # uno spazio dopo la virgola produrrebbe un nome che NUT non conosce e
-        # un urn con lo spazio dentro, che il frontend non farebbe mai combaciare
         self.assertEqual(["apc-3000", "cyberpower"], self._build_with("apc-3000, cyberpower"))
 
     def test_raises_on_an_empty_entry(self):
@@ -282,8 +269,6 @@ class TestUpsService(unittest.TestCase):
         )
 
     def test_get_status_keeps_an_unreadable_device_in_device_states(self):
-        # a differenza di "devices", un device muto non deve sparire: resta
-        # elencato come esplicitamente ignoto
         def side_effect(device):
             if device == "apc-3000":
                 raise ConnectionError("unreachable")
@@ -300,8 +285,6 @@ class TestUpsService(unittest.TestCase):
         )
 
     def test_get_status_device_state_is_per_device_not_the_aggregate(self):
-        # l'aggregato e' DANGER per colpa di apc-3000, ma cyberpower sta bene:
-        # il dettaglio per device non deve essere appiattito
         def side_effect(device):
             if device == "apc-3000":
                 return {**self._ok_reading(), "battery_charge": "10"}
@@ -318,8 +301,6 @@ class TestUpsService(unittest.TestCase):
         )
 
     def test_get_status_reports_unspecified_when_a_device_is_unreachable(self):
-        # un UPS morto non deve poter essere spacciato per NORMAL solo perche'
-        # l'altro sta bene: sul device perso non sappiamo nulla
         def side_effect(device):
             if device == "apc-3000":
                 raise ConnectionError("unreachable")
@@ -334,8 +315,6 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_does_not_mask_a_real_danger_with_unspecified(self):
-        # un device perso non deve declassare un pericolo reale rilevato
-        # sull'altro: DANGER vince su "non so"
         def side_effect(device):
             if device == "apc-3000":
                 raise ConnectionError("unreachable")
@@ -362,8 +341,6 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
     def test_get_status_does_not_emit_partial_charts_for_failing_device(self):
-        # tensione valida, batteria sporca: il device non deve finire nella
-        # risposta a metà (un chart sì e uno no)
         ups().status_for = MagicMock(return_value={**self._ok_reading(), "battery_charge": "N/A"})
 
         response = self.ups_service.GetStatus(None, None)
@@ -390,11 +367,8 @@ class TestUpsService(unittest.TestCase):
 
 
 class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
-    """
-    A device that does not answer is reported as unreadable, which is honest.
-    A misconfigured threshold is a different thing, and reporting it the same
-    way hides a broken configuration behind a hardware problem.
-    """
+    """A misconfigured threshold reported as an unreadable device hides a
+    broken configuration behind a hardware problem."""
 
     def setUp(self):
         self._original_status_for = ups().status_for
