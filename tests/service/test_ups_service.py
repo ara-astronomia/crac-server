@@ -5,7 +5,7 @@ from crac_protobuf.emergency_closure_pb2 import (
     EmergencyClosure,  # type: ignore
     EmergencyClosureStatus,  # type: ignore
 )
-from crac_protobuf.ups_pb2 import UpsStatus
+from crac_protobuf.ups_pb2 import BatteryStatus, UpsStatus
 from crac_server.component.ups import ups
 from crac_server.converter.chart_config import ChartConfigError
 from crac_server.service.ups_service import UpsService
@@ -76,6 +76,21 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
                 UpsService()
         self.assertIn("battery_voltage", str(ctx.exception))
 
+    def test_init_accepts_ups_status_when_the_battery_chart_exists(self):
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "ups_status": "ups.status"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "ups_status"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
+            UpsService()
+
+    def test_init_raises_when_ups_status_has_no_battery_chart_to_ride_on(self):
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"input_voltage": "input.voltage", "ups_status": "ups.status"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["input_voltage", "ups_status"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
+            with self.assertRaises(RuntimeError) as ctx:
+                UpsService()
+        self.assertIn("ups_status", str(ctx.exception))
+        self.assertIn("battery_charge", str(ctx.exception))
+
     def test_init_raises_on_a_metric_left_empty(self):
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
              patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage"])), \
@@ -130,8 +145,8 @@ class TestUpsService(unittest.TestCase):
     def setUp(self):
         self._original_status_for = ups().status_for
         self._patches = [
-            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}),
-            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage"])),
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage", "ups_status": "ups.status"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage", "ups_status"])),
             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
         ]
         for p in self._patches:
@@ -175,6 +190,62 @@ class TestUpsService(unittest.TestCase):
         urns = [chart.chart.urn for chart in response.charts]
         self.assertIn("ups.apc-3000.chart.current", urns)
         self.assertEqual(6, len(response.charts))
+
+    def _battery_chart(self, response, device="apc-3000"):
+        return next(chart for chart in response.charts if chart.chart.urn == f"ups.{device}.chart.battery")
+
+    def test_battery_chart_carries_the_power_status(self):
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "ups_status": "OL"})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(
+            [BatteryStatus.BATTERY_STATUS_ONLINE],
+            list(self._battery_chart(response).battery_statuses),
+        )
+
+    def test_battery_statuses_keep_the_reading_order_of_the_flags(self):
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "ups_status": "OB LB DISCHRG"})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(
+            [
+                BatteryStatus.BATTERY_STATUS_ONBATTERY,
+                BatteryStatus.BATTERY_STATUS_LOWBATTERY,
+                BatteryStatus.BATTERY_STATUS_DISCHARGE,
+            ],
+            list(self._battery_chart(response).battery_statuses),
+        )
+
+    def test_a_flag_without_a_matching_enum_value_is_not_a_status(self):
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "ups_status": "OL CHRG"})
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(
+            [BatteryStatus.BATTERY_STATUS_ONLINE],
+            list(self._battery_chart(response).battery_statuses),
+        )
+
+    def test_flags_that_would_need_a_new_enum_value_are_logged(self):
+        ups().status_for = MagicMock(return_value={**self._ok_reading(), "ups_status": "OL RB"})
+
+        with self.assertLogs("crac_server.service.ups_service", level="WARNING") as logs:
+            response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(
+            [BatteryStatus.BATTERY_STATUS_ONLINE],
+            list(self._battery_chart(response).battery_statuses),
+        )
+        self.assertIn("RB", "\n".join(logs.output))
+
+    def test_battery_chart_has_no_statuses_when_the_metric_is_not_read(self):
+        ups().status_for = MagicMock(return_value=self._ok_reading())
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual([], list(self._battery_chart(response).battery_statuses))
 
     def test_get_status_isolates_connection_error(self):
         def side_effect(device):

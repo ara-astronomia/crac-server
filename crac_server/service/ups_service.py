@@ -10,6 +10,7 @@ from crac_protobuf.ups_pb2 import (
     UpsStatus,
     UpsChart,
     UpsDevice,
+    BatteryStatus,
 )
 from crac_server.component.ups import ups
 from crac_server.config import Config
@@ -19,6 +20,15 @@ from typing import Union
 
 
 logger = logging.getLogger(__name__)
+
+
+BATTERY_STATUS_BY_FLAG = {
+    "OL": BatteryStatus.BATTERY_STATUS_ONLINE,
+    "OB": BatteryStatus.BATTERY_STATUS_ONBATTERY,
+    "LB": BatteryStatus.BATTERY_STATUS_LOWBATTERY,
+    "DISCHRG": BatteryStatus.BATTERY_STATUS_DISCHARGE,
+}
+FLAGS_WITHOUT_A_STATUS_VALUE = frozenset(("RB", "FSD", "ALARM"))
 
 
 class UpsService(UpsServicer):
@@ -67,9 +77,22 @@ class UpsService(UpsServicer):
         """Such a metric shows nothing, yet the device is still discarded
         when it is missing: all of the risk, none of the benefit."""
         chartable = {key for key, _, _, _ in self._chart_specs()}
-        unknown = set(enabled) - chartable
+        consumed = self._consumed_without_a_chart(enabled)
+        unknown = set(enabled) - chartable - consumed
         if unknown:
             raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
+
+    def _consumed_without_a_chart(self, enabled):
+        """ups_status feeds the battery statuses, which ride on the battery
+        chart: without it there is no place for the flags."""
+        if "ups_status" not in enabled:
+            return set()
+        if "battery_charge" not in enabled:
+            raise RuntimeError(
+                "[ups_metrics]: ups_status richiede battery_charge: "
+                "i suoi valori viaggiano sul grafico della batteria"
+            )
+        return {"ups_status"}
 
     def _reject_unusable_thresholds_of(self, enabled):
         """Reading the thresholds catches the missing ones, building a chart
@@ -97,6 +120,7 @@ class UpsService(UpsServicer):
         for key, urn_suffix, title, unit in self._chart_specs():
             if ups.get(key) is None:
                 continue
+            battery_statuses = self._battery_statuses(device, ups.get("ups_status")) if key == "battery_charge" else []
             charts.append(
                 UpsChart(
                     chart=build_chart_from_config(
@@ -105,10 +129,24 @@ class UpsService(UpsServicer):
                         title=title,
                         urn=f"ups.{device}.chart.{urn_suffix}",
                         unit_of_measurement=unit,
-                    )
+                    ),
+                    battery_statuses=battery_statuses,
                 )
             )
         return charts
+
+    def _battery_statuses(self, device: str, raw: Union[str, None]) -> list:
+        if raw is None:
+            return []
+        statuses = []
+        for flag in raw.split():
+            if flag in BATTERY_STATUS_BY_FLAG:
+                statuses.append(BATTERY_STATUS_BY_FLAG[flag])
+            elif flag in FLAGS_WITHOUT_A_STATUS_VALUE:
+                logger.warning(f"UPS {device}: il flag NUT '{flag}' non ha un valore in BatteryStatus")
+            else:
+                logger.debug(f"UPS {device}: flag NUT informativo '{flag}' ignorato")
+        return statuses
 
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         response = UpsResponse(
