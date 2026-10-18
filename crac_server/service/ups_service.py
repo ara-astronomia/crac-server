@@ -14,7 +14,6 @@ from crac_protobuf.ups_pb2 import (
 from crac_server.component.ups import ups
 from crac_server.config import Config
 from crac_server.converter.chart_config import ChartConfigError, build_chart_from_config
-from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.service.emergency_closure import emergency_closure
 from typing import Union
 
@@ -121,7 +120,7 @@ class UpsService(UpsServicer):
             try:
                 reading = ups().status_for(device)
                 charts = self._build_charts(device, reading)
-            except (UnreachableThresholdError, ChartConfigError):
+            except ChartConfigError:
                 raise
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")

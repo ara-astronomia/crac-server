@@ -16,7 +16,6 @@ from crac_protobuf.chart_pb2 import (
     WeatherResponse,  # type: ignore
     WeatherStatus,  # type: ignore
 )
-from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.converter.chart_config import ChartConfigError
 from crac_server.component.weather import weather
 from crac_server.component.weather.weather import Weather
@@ -148,16 +147,16 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.closure.report.assert_called_with(WEATHER, True)
 
     async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
-        self.service.weather_converter.convert.side_effect = self.__unreachable_threshold_then_danger()
+        self.service.weather_converter.convert.side_effect = self.__config_error_then_danger()
 
         with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
             await self.__watch_until_checked(times=2)
 
-        self.assertIn("DANGER band is unreachable", captured.output[0])
+        self.assertIn("'danger' is inverted", captured.output[0])
         self.closure.report.assert_called_with(WEATHER, True)
 
     async def test_a_different_failure_in_the_watch_is_logged_too(self):
-        self.service.weather_converter.convert.side_effect = UnreachableThresholdError("DANGER band unreachable")
+        self.service.weather_converter.convert.side_effect = ChartConfigError("[wind_speed]: 'danger' is inverted")
         self.closure.report.side_effect = KeyError("pin")
 
         with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
@@ -166,7 +165,7 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
             await self.__watch_until_checked(times=self.service.weather_converter.convert.call_count + 2)
 
         messages = [record.getMessage() for record in captured.records]
-        self.assertTrue(any("UnreachableThresholdError" in message for message in messages))
+        self.assertTrue(any("ChartConfigError" in message for message in messages))
         self.assertTrue(any("KeyError" in message for message in messages))
         self.assertIsNotNone(captured.records[0].exc_info)
 
@@ -194,8 +193,8 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         finally:
             task.cancel()
 
-    def __unreachable_threshold_then_danger(self):
-        yield UnreachableThresholdError("weather.chart.wind: the DANGER band is unreachable")
+    def __config_error_then_danger(self):
+        yield ChartConfigError("[wind_speed]: 'danger' is inverted")
         while True:
             yield WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER)
 
@@ -233,16 +232,6 @@ class TestWeatherServiceStartupValidation(unittest.TestCase):
 class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):
     """A misconfigured threshold reported as an unreadable weather hides a
     protection that is not running."""
-
-    async def test_reraises_an_unreachable_threshold_instead_of_reporting_unspecified(self):
-        service = WeatherService()
-        service.weather_converter = MagicMock()
-        service.weather_converter.convert.side_effect = UnreachableThresholdError(
-            "weather.chart.wind: the DANGER band is unreachable"
-        )
-
-        with self.assertRaises(UnreachableThresholdError):
-            await service.GetStatus(None, None)
 
     async def test_reraises_a_broken_chart_section_instead_of_reporting_unspecified(self):
         service = WeatherService()
