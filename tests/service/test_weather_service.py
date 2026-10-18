@@ -17,6 +17,7 @@ from crac_protobuf.chart_pb2 import (
     WeatherStatus,  # type: ignore
 )
 from crac_server.converter.chart_builder import UnreachableThresholdError
+from crac_server.converter.chart_config import ChartConfigError
 from crac_server.component.weather import weather
 from crac_server.component.weather.weather import Weather
 from crac_server.service.weather_service import WeatherService
@@ -218,6 +219,17 @@ class TestWeatherServiceCheckInterval(unittest.TestCase):
             self.assertEqual(30, WeatherService().check_interval)
 
 
+class TestWeatherServiceStartupValidation(unittest.TestCase):
+
+    def test_a_broken_chart_section_fails_at_startup(self):
+        with patch(
+            "crac_server.converter.weather_converter.build_chart_from_config",
+            side_effect=ChartConfigError("[wind_speed]: broken"),
+        ):
+            with self.assertRaises(ChartConfigError):
+                WeatherService()
+
+
 class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncioTestCase):
     """
     A weather reading that fails is reported as UNSPECIFIED, which is honest:
@@ -233,6 +245,14 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
         )
 
         with self.assertRaises(UnreachableThresholdError):
+            await service.GetStatus(None, None)
+
+    async def test_reraises_a_broken_chart_section_instead_of_reporting_unspecified(self):
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.side_effect = ChartConfigError("[wind_speed]: 'danger' is inverted")
+
+        with self.assertRaises(ChartConfigError):
             await service.GetStatus(None, None)
 
     async def test_still_reports_unspecified_when_the_reading_fails(self):

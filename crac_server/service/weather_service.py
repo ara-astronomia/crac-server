@@ -12,6 +12,7 @@ from crac_protobuf.emergency_closure_pb2 import (
 )
 from crac_server.component.weather import weather
 from crac_server.config import Config
+from crac_server.converter.chart_config import ChartConfigError
 from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.service.emergency_closure import emergency_closure
@@ -30,6 +31,7 @@ class WeatherService(WeatherServicer):
         self.check_interval = self._check_interval()
         super().__init__()
         self.weather_converter = WeatherConverter()
+        self.weather_converter.validate_config()
         self._watch_log = StatusLogger(logger, "Weather watch")
         self._read_log = StatusLogger(logger, "Weather", WeatherStatus)
 
@@ -76,7 +78,7 @@ class WeatherService(WeatherServicer):
         weather reports nothing: it neither starts nor settles a closure."""
         try:
             response = await asyncio.to_thread(self.weather_converter.convert, weather())
-        except UnreachableThresholdError:
+        except (UnreachableThresholdError, ChartConfigError):
             raise
         except Exception as e:
             response = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED)

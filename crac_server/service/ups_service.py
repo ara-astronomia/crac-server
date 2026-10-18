@@ -13,7 +13,8 @@ from crac_protobuf.ups_pb2 import (
 )
 from crac_server.component.ups import ups
 from crac_server.config import Config
-from crac_server.converter.chart_builder import build_chart, UnreachableThresholdError
+from crac_server.converter.chart_config import ChartConfigError, build_chart_from_config
+from crac_server.converter.chart_builder import UnreachableThresholdError
 from crac_server.service.emergency_closure import emergency_closure
 from typing import Union
 
@@ -72,7 +73,7 @@ class UpsService(UpsServicer):
         Such a metric shows nothing, yet the device is still discarded when it
         is missing: all of the risk, none of the benefit.
         """
-        chartable = {key for key, _, _, _, _ in self._chart_specs()}
+        chartable = {key for key, _, _, _ in self._chart_specs()}
         unknown = set(enabled) - chartable
         if unknown:
             raise RuntimeError(f"[ups_metrics]: metriche che non producono alcun grafico: {sorted(unknown)}")
@@ -84,76 +85,36 @@ class UpsService(UpsServicer):
         levels that are off while everybody believes they are on, so both have
         to stop the startup rather than surface at the first poll.
         """
-        for key, urn_suffix, title, unit, chart_kwargs_fn in self._chart_specs():
+        for key, urn_suffix, title, unit in self._chart_specs():
             if key in enabled:
-                build_chart(
+                build_chart_from_config(
+                    key,
                     value=0,
                     title=title,
                     urn=f"ups.chart.{urn_suffix}",
                     unit_of_measurement=unit,
-                    **chart_kwargs_fn()
                 )
 
     def _chart_specs(self):
         return (
-            ("battery_charge", "battery", "Batteria", "%", lambda: dict(
-                min=0,
-                max=100,
-                range_normal=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "battery_charge.ok"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "battery_charge.ok"),
-                },),
-                range_warn=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "battery_charge.warning"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "battery_charge.warning"),
-                },),
-                range_danger=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "battery_charge.danger"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "battery_charge.danger"),
-                },),
-            )),
-            ("input_voltage", "voltage", "Batteria", "V", lambda: dict(
-                min=Config.getRequiredFloat("lower_bound", "input_voltage.danger_lower"),
-                max=Config.getRequiredFloat("upper_bound", "input_voltage.danger_upper"),
-                range_normal=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "input_voltage.ok"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "input_voltage.ok"),
-                },),
-                range_danger=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "input_voltage.danger_upper"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "input_voltage.danger_upper"),
-                }, {
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "input_voltage.danger_lower"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "input_voltage.danger_lower"),
-                },),
-            )),
-            ("output_current", "current", "Corrente", "A", lambda: dict(
-                min=Config.getRequiredFloat("lower_bound", "output_current.ok"),
-                max=Config.getRequiredFloat("upper_bound", "output_current.danger"),
-                range_normal=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "output_current.ok"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "output_current.ok"),
-                },),
-                range_danger=({
-                    "upper_bound": Config.getRequiredFloat("upper_bound", "output_current.danger"),
-                    "lower_bound": Config.getRequiredFloat("lower_bound", "output_current.danger"),
-                },),
-            )),
+            ("battery_charge", "battery", "Batteria", "%"),
+            ("input_voltage", "voltage", "Tensione", "V"),
+            ("output_current", "current", "Corrente", "A"),
         )
 
     def _build_charts(self, device: str, ups: dict) -> list:
         charts = []
-        for key, urn_suffix, title, unit, chart_kwargs_fn in self._chart_specs():
+        for key, urn_suffix, title, unit in self._chart_specs():
             if ups.get(key) is None:
                 continue
             charts.append(
                 UpsChart(
-                    chart = build_chart(
+                    chart=build_chart_from_config(
+                        key,
                         value=float(ups[key]),
                         title=title,
                         urn=f"ups.{device}.chart.{urn_suffix}",
                         unit_of_measurement=unit,
-                        **chart_kwargs_fn()
                     )
                 )
             )
@@ -169,7 +130,7 @@ class UpsService(UpsServicer):
             try:
                 reading = ups().status_for(device)
                 charts = self._build_charts(device, reading)
-            except UnreachableThresholdError:
+            except (UnreachableThresholdError, ChartConfigError):
                 raise
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
@@ -209,6 +170,8 @@ class UpsService(UpsServicer):
     def calculate_status(self, charts):
         status = UpsStatus.UPS_STATUS_UNSPECIFIED
         for chart in charts:
+            if not chart.chart.thresholds:
+                continue
             logger.debug("chart is:")
             logger.debug(chart)
             if status < UpsStatus.UPS_STATUS_NORMAL and chart.chart.status == ChartStatus.CHART_STATUS_NORMAL:

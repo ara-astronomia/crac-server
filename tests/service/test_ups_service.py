@@ -7,24 +7,31 @@ from crac_protobuf.emergency_closure_pb2 import (
 )
 from crac_protobuf.ups_pb2 import UpsStatus
 from crac_server.component.ups import ups
-from crac_server.converter.chart_builder import UnreachableThresholdError
+from crac_server.converter.chart_config import ChartConfigError
 from crac_server.service.ups_service import UpsService
 
 
-THRESHOLDS = {
-    "battery_charge.ok": {"upper_bound": 100.0, "lower_bound": 50.0},
-    "battery_charge.warning": {"upper_bound": 50.0, "lower_bound": 35.0},
-    "battery_charge.danger": {"upper_bound": 35.0, "lower_bound": 0.0},
-    "input_voltage.ok": {"upper_bound": 241.5, "lower_bound": 209.0},
-    "input_voltage.danger_upper": {"upper_bound": 250.0, "lower_bound": 241.5},
-    "input_voltage.danger_lower": {"upper_bound": 209.0, "lower_bound": 0.0},
-    "output_current.ok": {"upper_bound": 8.0, "lower_bound": 0.0},
-    "output_current.danger": {"upper_bound": 20.0, "lower_bound": 8.0},
+SECTIONS = {
+    "battery_charge": {"scale": "0..100", "warning": "35..50", "danger": "..35"},
+    "input_voltage": {"scale": "0..250", "warning": "..209", "danger": "241.5.."},
+    "output_current": {"scale": "0..20", "danger": "8.."},
 }
 
 
-def getfloat_side_effect(key, section):
-    return THRESHOLDS[section][key]
+def getkeys_side_effect(enabled):
+    def side_effect(name):
+        if name == "ups_metrics":
+            return enabled
+        return list(SECTIONS[name])
+    return side_effect
+
+
+def getvalue_side_effect(ups_list="apc-3000,cyberpower"):
+    def side_effect(key, section="automazione"):
+        if (key, section) == ("ups_list", "ups"):
+            return ups_list
+        return SECTIONS[section][key]
+    return side_effect
 
 
 
@@ -39,15 +46,15 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
     """La config delle soglie va validata all'avvio, non ad ogni poll."""
 
     def test_init_raises_when_an_enabled_metric_has_a_broken_threshold(self):
-        def broken(key, section):
-            if section.startswith("battery_charge"):
-                raise ValueError(f"{section}.{key} non impostata in config.ini")
-            return getfloat_side_effect(key, section)
+        def broken(key, section="automazione"):
+            if section == "battery_charge" and key == "scale":
+                return ""
+            return getvalue_side_effect()(key, section)
 
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=broken):
-            with self.assertRaises(ValueError):
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=broken):
+            with self.assertRaises(ChartConfigError):
                 UpsService()
 
     def test_init_raises_when_a_band_can_never_be_reached(self):
@@ -55,23 +62,23 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
         A band whose bounds are inverted covers nothing: the level it stands
         for is off, and no reading will ever report it.
         """
-        def unreachable_band(key, section):
-            if section == "battery_charge.danger":
-                return {"upper_bound": 0.0, "lower_bound": 35.0}[key]
-            return getfloat_side_effect(key, section)
+        def unreachable_band(key, section="automazione"):
+            if section == "battery_charge" and key == "danger":
+                return "50..35"
+            return getvalue_side_effect()(key, section)
 
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=unreachable_band):
-            with self.assertRaises(UnreachableThresholdError):
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=unreachable_band):
+            with self.assertRaises(ChartConfigError):
                 UpsService()
 
     def test_init_raises_on_a_metric_the_service_cannot_chart(self):
         # una metrica sconosciuta non produce alcun chart, ma rende comunque
         # obbligatoria la sua presenza sul device: danno netto, va rifiutata
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "battery_voltage": "battery.voltage"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "battery_voltage"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect):
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "battery_voltage"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
             with self.assertRaises(RuntimeError) as ctx:
                 UpsService()
         self.assertIn("battery_voltage", str(ctx.exception))
@@ -80,8 +87,8 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
         # get_section scarta le chiavi vuote: senza questo controllo una
         # metrica svuotata per sbaglio smette di essere letta in silenzio
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect):
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
             with self.assertRaises(RuntimeError) as ctx:
                 UpsService()
         self.assertIn("input_voltage", str(ctx.exception))
@@ -93,14 +100,14 @@ class TestUpsServiceStartupValidation(unittest.TestCase):
         self.assertIn("ups_metrics", str(ctx.exception))
 
     def test_init_ignores_thresholds_of_metrics_not_enabled(self):
-        def missing_current_config(key, section):
-            if section.startswith("output_current"):
-                raise KeyError(section)
-            return getfloat_side_effect(key, section)
+        def missing_current_config(name):
+            if name == "output_current":
+                raise KeyError(name)
+            return getkeys_side_effect(["battery_charge", "input_voltage"])(name)
 
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=missing_current_config):
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=missing_current_config), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()):
             UpsService()  # non deve sollevare: output_current non e' abilitata
 
 
@@ -108,13 +115,9 @@ class TestUpsListValidation(unittest.TestCase):
     """ups_list e' scritta a mano: va normalizzata e verificata all'avvio."""
 
     def _build_with(self, ups_list):
-        def get_value(key, section='automazione'):
-            return ups_list if (key, section) == ("ups_list", "ups") else "apc-3000,cyberpower"
-
         with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
-             patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]), \
-             patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect), \
-             patch("crac_server.service.ups_service.Config.getValue", side_effect=get_value):
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect(ups_list)):
             return UpsService()._configured_devices()
 
     def test_strips_the_spaces_around_names(self):
@@ -139,22 +142,19 @@ class TestUpsService(unittest.TestCase):
 
     def setUp(self):
         self._original_status_for = ups().status_for
-        self._getfloat_patch = patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect)
-        self._getvalue_patch = patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000,cyberpower")
-        self._getsection_patch = patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"})
-        self._getkeys_patch = patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"])
-        self._getfloat_patch.start()
-        self._getvalue_patch.start()
-        self._getsection_patch.start()
-        self._getkeys_patch.start()
+        self._patches = [
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
+        ]
+        for p in self._patches:
+            p.start()
         self.ups_service = UpsService()
 
     def tearDown(self):
         ups().status_for = self._original_status_for
-        self._getfloat_patch.stop()
-        self._getvalue_patch.stop()
-        self._getsection_patch.stop()
-        self._getkeys_patch.stop()
+        for p in self._patches:
+            p.stop()
 
     def _ok_reading(self):
         return {"input_voltage": "220", "battery_charge": "80"}
@@ -258,12 +258,12 @@ class TestUpsService(unittest.TestCase):
     def test_get_status_does_not_read_config_for_excluded_metric(self):
         ups().status_for = MagicMock(return_value=self._ok_reading())
 
-        def missing_current_config(key, section):
-            if section.startswith("output_current"):
+        def missing_current_config(key, section="automazione"):
+            if section == "output_current":
                 raise KeyError(section)
-            return getfloat_side_effect(key, section)
+            return getvalue_side_effect()(key, section)
 
-        with patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=missing_current_config):
+        with patch("crac_server.service.ups_service.Config.getValue", side_effect=missing_current_config):
             response = self.ups_service.GetStatus(None, None)
 
         self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
@@ -399,10 +399,9 @@ class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
     def setUp(self):
         self._original_status_for = ups().status_for
         self._patches = [
-            patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect),
-            patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000"),
             patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}),
-            patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge"]),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect("apc-3000")),
         ]
         for p in self._patches:
             p.start()
@@ -413,16 +412,16 @@ class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
         for p in self._patches:
             p.stop()
 
-    def test_reraises_an_unreachable_threshold_instead_of_blaming_the_device(self):
+    def test_reraises_a_broken_threshold_instead_of_blaming_the_device(self):
         ups().status_for = MagicMock(return_value={"battery_charge": "80"})
 
-        def unreachable_band(key, section):
-            if section == "battery_charge.danger":
-                return {"upper_bound": 0.0, "lower_bound": 35.0}[key]
-            return getfloat_side_effect(key, section)
+        def unreachable_band(key, section="automazione"):
+            if section == "battery_charge" and key == "danger":
+                return "50..35"
+            return getvalue_side_effect("apc-3000")(key, section)
 
-        with patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=unreachable_band):
-            with self.assertRaises(UnreachableThresholdError):
+        with patch("crac_server.service.ups_service.Config.getValue", side_effect=unreachable_band):
+            with self.assertRaises(ChartConfigError):
                 self.ups_service.GetStatus(None, None)
 
     def test_still_reports_the_device_as_unreadable_when_the_reading_fails(self):
@@ -435,20 +434,14 @@ class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
 
 
 class TestUpsChartLevels(unittest.TestCase):
-    """
-    The level a reading ends up with, all the way from the device to the
-    reported status, with the thresholds actually configured for the UPS:
-    battery ok [50, 100] warning [35, 50] danger [0, 35], mains voltage
-    ok [209, 241.5] with a dangerous band on each side.
-    """
+    """The level of a reading, from the device to the reported status."""
 
     def setUp(self):
         self._original_status_for = ups().status_for
         self._patches = [
-            patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=getfloat_side_effect),
-            patch("crac_server.service.ups_service.Config.getValue", return_value="apc-3000"),
             patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage"}),
-            patch("crac_server.service.ups_service.Config.get_section_keys", return_value=["battery_charge", "input_voltage"]),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect("apc-3000")),
         ]
         for p in self._patches:
             p.start()
@@ -478,17 +471,17 @@ class TestUpsChartLevels(unittest.TestCase):
         self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("battery", battery_charge="35"))
         self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("battery", battery_charge="50"))
 
-    def test_voltage_is_dangerous_on_both_sides_of_the_safe_range(self):
+    def test_voltage_is_warning_below_and_danger_above_the_safe_range(self):
         self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, self._chart_status("voltage", input_voltage="220"))
-        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="200"))
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("voltage", input_voltage="200"))
         self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="245"))
 
     def test_a_reading_past_the_scale_keeps_the_level_of_the_outermost_band(self):
         self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="400"))
-        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="0"))
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("voltage", input_voltage="0"))
 
     def test_the_device_takes_the_level_of_its_worst_chart(self):
         self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, self._device_status())
         self.assertEqual(UpsStatus.UPS_STATUS_WARNING, self._device_status(battery_charge="40"))
-        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(input_voltage="200"))
-        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(battery_charge="40", input_voltage="200"))
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(input_voltage="245"))
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(battery_charge="40", input_voltage="245"))
