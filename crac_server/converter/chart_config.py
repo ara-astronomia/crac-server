@@ -1,6 +1,10 @@
+import logging
+
 from crac_protobuf.chart_pb2 import Chart  # type: ignore
 from crac_server.config import Config
 from crac_server.converter.chart_builder import build_chart
+
+logger = logging.getLogger(__name__)
 
 LEVEL_KEYS = ("warning", "danger")
 SCALE_KEY = "scale"
@@ -13,10 +17,16 @@ class ChartConfigError(ValueError):
 def build_chart_from_config(
     section: str, *, value: float, title: str, urn: str, unit_of_measurement: str
 ) -> Chart:
-    keys = Config.get_section_keys(section)
+    try:
+        keys = Config.get_section_keys(section)
+    except KeyError:
+        raise ChartConfigError(f"[{section}]: the section is missing in config.ini")
     _reject_unknown_keys(section, keys)
     scale = _scale(section, keys)
     claimed = {level: _level_ranges(section, level, scale) for level in LEVEL_KEYS if level in keys}
+    visible_warning = _subtract(claimed.get("warning", ()), claimed.get("danger", ()))
+    if claimed.get("warning") and not visible_warning:
+        logger.warning(f"[{section}]: 'warning' is entirely covered by 'danger': no reading can ever show it")
     return build_chart(
         value=value,
         title=title,
@@ -25,7 +35,7 @@ def build_chart_from_config(
         max=scale[1],
         unit_of_measurement=unit_of_measurement,
         range_normal=_normal(scale, claimed),
-        range_warn=_as_bands(_subtract(claimed.get("warning", ()), claimed.get("danger", ()))),
+        range_warn=_as_bands(visible_warning),
         range_danger=_as_bands(claimed.get("danger", ())),
     )
 
@@ -54,8 +64,19 @@ def _level_ranges(section, level, scale):
     text = Config.getValue(level, section)
     if not text:
         raise ChartConfigError(f"[{section}]: '{level}' is empty, remove it or write its ranges")
-    return tuple(_clamped_to_scale(section, level, _parse_range(section, level, part.strip()), scale, part.strip())
-                 for part in text.split(","))
+    ranges = tuple(
+        _clamped_to_scale(section, level, _parse_range(section, level, part.strip()), scale, part.strip())
+        for part in text.split(",")
+    )
+    _warn_overlapping_ranges(section, level, ranges, text)
+    return ranges
+
+
+def _warn_overlapping_ranges(section, level, ranges, text):
+    ordered = sorted(ranges)
+    for previous, following in zip(ordered, ordered[1:]):
+        if following[0] < previous[1]:
+            logger.warning(f"[{section}]: '{level}' ranges overlap in {text!r}: check for a range written twice")
 
 
 def _parse_range(section, key, text):
@@ -63,12 +84,20 @@ def _parse_range(section, key, text):
     if len(parts) != 2:
         raise ChartConfigError(f"[{section}]: '{key}' must be a range like '10..', '..1005' or '10..20', got {text!r}")
     try:
-        return (
-            _endpoint(parts[0]),
-            _endpoint(parts[1]),
-        )
+        endpoints = (_endpoint(parts[0]), _endpoint(parts[1]))
     except ValueError:
         raise ChartConfigError(f"[{section}]: '{key}' has a non numeric endpoint, got {text!r}")
+    _warn_dotted_endpoints(section, key, parts, endpoints, text)
+    return endpoints
+
+
+def _warn_dotted_endpoints(section, key, parts, endpoints, text):
+    for part, endpoint in zip(parts, endpoints):
+        if endpoint is not None and part.strip().startswith("."):
+            logger.warning(
+                f"[{section}]: '{key}' endpoint {part.strip()!r} in {text!r} reads as {endpoint}: "
+                f"an endpoint starting with a dot is usually a '...' typo"
+            )
 
 
 def _endpoint(text):
@@ -88,6 +117,11 @@ def _clamped_to_scale(section, level, range_, scale, text):
     if clamped[0] > clamped[1]:
         raise ChartConfigError(
             f"[{section}]: '{level}' does not intersect the scale {scale[0]}..{scale[1]}, got {text!r}"
+        )
+    if (lower is not None and lower < scale[0]) or (upper is not None and upper > scale[1]):
+        logger.warning(
+            f"[{section}]: '{level}' range {text!r} extends past the scale {scale[0]}..{scale[1]}: "
+            f"the part outside is clamped away"
         )
     return clamped
 

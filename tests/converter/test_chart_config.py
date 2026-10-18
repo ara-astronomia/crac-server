@@ -181,8 +181,42 @@ class TestBrokenConfigurations(unittest.TestCase):
         self.assertIn("warning", str(ctx.exception))
 
     def test_a_missing_section_is_refused(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ChartConfigError) as ctx:
             build({}, "metric", value=0)
+        self.assertIn("missing", str(ctx.exception))
+
+
+class TestConfiguredSmells(unittest.TestCase):
+    """A smell reads different from what it says: it does not stop the
+    startup, but it is logged every time the config is parsed."""
+
+    def test_a_dotted_endpoint_is_logged(self):
+        with self.assertLogs("crac_server.converter.chart_config", level="WARNING") as logs:
+            build({"metric": {"scale": "0..40", "danger": "0...5"}}, "metric", value=0)
+
+        self.assertIn("0...5", "".join(logs.output))
+
+    def test_a_range_clamped_to_the_scale_is_logged(self):
+        with self.assertLogs("crac_server.converter.chart_config", level="WARNING") as logs:
+            build({"metric": {"scale": "0..40", "danger": "20..60"}}, "metric", value=0)
+
+        self.assertIn("20..60", "".join(logs.output))
+
+    def test_a_warning_entirely_covered_by_danger_is_logged(self):
+        with self.assertLogs("crac_server.converter.chart_config", level="WARNING") as logs:
+            build({"metric": {"scale": "0..40", "warning": "10..20", "danger": "0..40"}}, "metric", value=0)
+
+        self.assertIn("covered", "".join(logs.output))
+
+    def test_overlapping_ranges_of_the_same_level_are_logged(self):
+        with self.assertLogs("crac_server.converter.chart_config", level="WARNING") as logs:
+            build({"metric": {"scale": "0..40", "danger": "10..20, 15..25"}}, "metric", value=0)
+
+        self.assertIn("overlap", "".join(logs.output))
+
+    def test_a_clean_section_logs_nothing(self):
+        with self.assertNoLogs("crac_server.converter.chart_config", level="WARNING"):
+            build({"wind_speed": {"scale": "0..40", "warning": "10..", "danger": "36.."}}, "wind_speed", value=20)
 
 
 if __name__ == "__main__":
