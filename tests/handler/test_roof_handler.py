@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 from crac_protobuf.curtains_pb2 import CurtainStatus
 from crac_protobuf.roof_pb2 import RoofAction, RoofRequest, RoofResponse, RoofStatus
 from crac_protobuf.telescope_pb2 import TelescopeStatus
-from crac_protobuf.ups_pb2 import UpsResponse, UpsStatus
 from crac_server.converter.roof_converter import RoofConverter, RoofMediator
 from crac_server.handler.roof_handler import (
     RoofCurtainsHandler,
@@ -55,39 +54,41 @@ class TestRoofWeatherHandler(unittest.TestCase):
 
 
 class TestRoofUpsHandler(unittest.TestCase):
-    """Opening the roof is refused on a dangerous UPS, and on an unknown
-    UPS only when the installation asked for it."""
+    """The roof asks the external conditions whether it may open: the
+    policies of each source live in one place, not in the handler."""
 
-    def _handle(self, ups_status, block_on_unspecified, roof_status=RoofStatus.ROOF_CLOSED, action=RoofAction.OPEN):
+    def _handle(self, roof_status, action, blocked):
         mediator = SimpleNamespace(status=roof_status, action=action, is_disabled=False)
+        self.conditions = MagicMock()
+        self.conditions.operation_blocked.return_value = blocked
         with (
-            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=block_on_unspecified),
-            patch("crac_server.handler.roof_handler.UpsService") as ups_service,
+            patch("crac_server.handler.roof_handler.external_conditions", return_value=self.conditions),
             patch.object(RoofConverter, "convert", return_value=RoofResponse()),
         ):
-            ups_service.return_value.GetStatus.return_value = UpsResponse(status=ups_status)
             RoofUpsHandler().handle(mediator)
         return mediator
 
-    def test_disables_opening_on_a_dangerous_ups(self):
-        mediator = self._handle(UpsStatus.UPS_STATUS_DANGER, False)
+    def test_opening_is_disabled_when_the_conditions_block(self):
+        mediator = self._handle(RoofStatus.ROOF_CLOSED, RoofAction.OPEN, True)
+
         self.assertIs(True, mediator.is_disabled)
 
-    def test_disables_opening_on_an_unknown_ups_when_configured_to_block(self):
-        mediator = self._handle(UpsStatus.UPS_STATUS_UNSPECIFIED, True)
-        self.assertIs(True, mediator.is_disabled)
+    def test_opening_is_allowed_when_the_conditions_are_clear(self):
+        mediator = self._handle(RoofStatus.ROOF_CLOSED, RoofAction.OPEN, False)
 
-    def test_allows_opening_on_an_unknown_ups_when_configured_not_to_block(self):
-        mediator = self._handle(UpsStatus.UPS_STATUS_UNSPECIFIED, False)
         self.assertIs(False, mediator.is_disabled)
 
-    def test_allows_opening_on_a_normal_ups_even_when_unknown_would_block(self):
-        mediator = self._handle(UpsStatus.UPS_STATUS_NORMAL, True)
-        self.assertIs(False, mediator.is_disabled)
+    def test_closing_never_consults_the_external_conditions(self):
+        mediator = self._handle(RoofStatus.ROOF_OPENED, RoofAction.CLOSE, True)
 
-    def test_a_roof_that_is_not_opening_ignores_the_ups(self):
-        mediator = self._handle(UpsStatus.UPS_STATUS_DANGER, True, roof_status=RoofStatus.ROOF_OPENED, action=RoofAction.CLOSE)
         self.assertIs(False, mediator.is_disabled)
+        self.conditions.operation_blocked.assert_not_called()
+
+    def test_a_status_request_that_moves_no_roof_consults_nothing(self):
+        mediator = self._handle(RoofStatus.ROOF_OPENED, RoofAction.CHECK_ROOF, True)
+
+        self.assertIs(False, mediator.is_disabled)
+        self.conditions.operation_blocked.assert_not_called()
 
 
 class TestRoofHandlersOnARoofInError(unittest.TestCase):

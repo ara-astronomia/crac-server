@@ -11,17 +11,12 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
     TelescopeStatus,  # type: ignore
 )
-from crac_protobuf.ups_pb2 import (
-    UpsRequest,  # type: ignore
-    UpsStatus,  # type: ignore
-)
 from crac_server.component.roof import roof
 from crac_server.component.telescope import telescope
 from crac_server.config import Config
 from crac_server.converter.curtains_converter import CurtainsConverter, CurtainsMediator
 from crac_server.handler.handler import AbstractHandler
 from crac_server.service.external_conditions import external_conditions
-from crac_server.service.ups_service import UpsService
 
 
 logger = logging.getLogger(__name__)
@@ -66,17 +61,11 @@ class CurtainsUpsHandler(AbstractCurtainsHandler):
 
         if (
             mediator.status_east is CurtainStatus.CURTAIN_DISABLED and
-            mediator.status_west is CurtainStatus.CURTAIN_DISABLED
+            mediator.status_west is CurtainStatus.CURTAIN_DISABLED and
+            external_conditions().operation_blocked()
         ):
-            ups_response = UpsService().GetStatus(UpsRequest(), None)
-            logger.debug(f"In ups status {ups_response.status}")
-            if ups_response.status == UpsStatus.UPS_STATUS_DANGER or (
-                Config.getRequiredBoolean("block_on_unspecified", "ups_emergency") and 
-                ups_response.status == UpsStatus.UPS_STATUS_UNSPECIFIED
-                ):
-                logger.info(f"In status danger or unspecified {ups_response.status}")
-                mediator.is_disabled = True
-                self._next_handler = None
+            mediator.is_disabled = True
+            self._next_handler = None
 
         return super().handle(mediator)
 

@@ -6,7 +6,6 @@ from crac_protobuf.curtains_pb2 import CurtainsAction, CurtainsResponse, Curtain
 from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus
 from crac_server.converter.curtains_converter import CurtainsConverter
 from crac_protobuf.roof_pb2 import RoofStatus
-from crac_protobuf.ups_pb2 import UpsResponse, UpsStatus
 from crac_server.handler.curtains_handler import (
     CurtainsDisableHandler,
     CurtainsMoveHandler,
@@ -56,51 +55,40 @@ class TestCurtainsWeatherHandler(unittest.TestCase):
 
 
 class TestCurtainsUpsHandler(unittest.TestCase):
-    """Enabling the curtains is refused on a dangerous UPS, and on an
-    unknown UPS only when the installation asked for it."""
+    """The curtains ask the external conditions whether they may be enabled:
+    the policies of each source live in one place, not in the handler."""
 
-    def _handle(self, ups_status, block_on_unspecified, status_east=CurtainStatus.CURTAIN_DISABLED, status_west=CurtainStatus.CURTAIN_DISABLED):
+    def _handle(self, status_east, status_west, blocked):
         mediator = SimpleNamespace(
             status_east=status_east,
             status_west=status_west,
             action=CurtainsAction.ENABLE,
             is_disabled=False,
         )
+        self.conditions = MagicMock()
+        self.conditions.operation_blocked.return_value = blocked
         with (
-            patch("crac_server.handler.curtains_handler.Config.getRequiredBoolean", return_value=block_on_unspecified),
-            patch("crac_server.handler.curtains_handler.UpsService") as ups_service,
+            patch("crac_server.handler.curtains_handler.external_conditions", return_value=self.conditions),
             patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
         ):
-            ups_service.return_value.GetStatus.return_value = UpsResponse(status=ups_status)
             CurtainsUpsHandler().handle(mediator)
-        return mediator, ups_service
+        return mediator
 
-    def test_disables_the_curtains_on_a_dangerous_ups(self):
-        mediator, _ = self._handle(UpsStatus.UPS_STATUS_DANGER, False)
+    def test_enabling_is_disabled_when_the_conditions_block(self):
+        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, True)
+
         self.assertIs(True, mediator.is_disabled)
 
-    def test_disables_the_curtains_on_an_unknown_ups_when_configured_to_block(self):
-        mediator, _ = self._handle(UpsStatus.UPS_STATUS_UNSPECIFIED, True)
-        self.assertIs(True, mediator.is_disabled)
+    def test_enabling_is_allowed_when_the_conditions_are_clear(self):
+        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, False)
 
-    def test_allows_the_curtains_on_an_unknown_ups_when_configured_not_to_block(self):
-        mediator, _ = self._handle(UpsStatus.UPS_STATUS_UNSPECIFIED, False)
         self.assertIs(False, mediator.is_disabled)
 
-    def test_allows_the_curtains_on_a_normal_ups_even_when_unknown_would_block(self):
-        mediator, _ = self._handle(UpsStatus.UPS_STATUS_NORMAL, True)
+    def test_a_curtain_already_enabled_consults_nothing(self):
+        mediator = self._handle(CurtainStatus.CURTAIN_OPENED, CurtainStatus.CURTAIN_DISABLED, True)
+
         self.assertIs(False, mediator.is_disabled)
-
-    def test_curtains_that_are_not_down_are_left_to_the_next_handler(self):
-        for east, west in (
-            (CurtainStatus.CURTAIN_OPENED, CurtainStatus.CURTAIN_DISABLED),
-            (CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_OPENED),
-        ):
-            with self.subTest(statuses=(CurtainStatus.Name(east), CurtainStatus.Name(west))):
-                mediator, ups_service = self._handle(UpsStatus.UPS_STATUS_DANGER, True, status_east=east, status_west=west)
-
-                self.assertIs(False, mediator.is_disabled)
-                ups_service.assert_not_called()
+        self.conditions.operation_blocked.assert_not_called()
 
 
 class TestCurtainsDisableHandler(unittest.TestCase):

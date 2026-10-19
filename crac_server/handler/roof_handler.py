@@ -9,10 +9,6 @@ from crac_protobuf.roof_pb2 import (
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
 )
-from crac_protobuf.ups_pb2 import (
-    UpsRequest,  # type: ignore
-    UpsStatus,  # type: ignore
-)
 from crac_server.component.curtains.factory_curtain import (
     curtain_east, 
     curtain_west,
@@ -23,9 +19,7 @@ from crac_server.converter.roof_converter import (
     RoofMediator,
 )
 from crac_server.handler.handler import AbstractHandler
-from crac_server.config import Config
 from crac_server.service.external_conditions import external_conditions
-from crac_server.service.ups_service import UpsService
 
 
 logger = logging.getLogger(__name__)
@@ -59,16 +53,9 @@ class RoofWeatherHandler(AbstractButtonHandler):
 
 class RoofUpsHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
-        if self._would_open(mediator):
-            ups_response = UpsService().GetStatus(UpsRequest(), None)
-            logger.debug(f"In ups status {ups_response.status}")
-            if ups_response.status == UpsStatus.UPS_STATUS_DANGER or (
-                Config.getRequiredBoolean("block_on_unspecified", "ups_emergency") and 
-                ups_response.status == UpsStatus.UPS_STATUS_UNSPECIFIED
-            ):
-                logger.info(f"In status danger or unspecified {ups_response.status}")
-                mediator.is_disabled = True
-                self._next_handler = None
+        if self._would_open(mediator) and external_conditions().operation_blocked():
+            mediator.is_disabled = True
+            self._next_handler = None
         return super().handle(mediator)
 
 class RoofTelescopeHandler(AbstractButtonHandler):

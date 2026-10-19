@@ -6,17 +6,20 @@ from typing import NamedTuple
 from crac_protobuf.chart_pb2 import WeatherStatus  # type: ignore
 from crac_protobuf.emergency_closure_pb2 import EmergencyClosureTrigger  # type: ignore
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
+from crac_protobuf.ups_pb2 import UpsRequest, UpsStatus  # type: ignore
 
 from crac_server.component.roof import roof
 from crac_server.component.weather import weather
 from crac_server.config import Config
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.service.emergency_closure import emergency_closure
+from crac_server.service.ups_service import UpsService
 
 
 logger = logging.getLogger(__name__)
 
 WEATHER_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_WEATHER_UNAVAILABLE
+UPS_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS_UNAVAILABLE
 
 
 class UnavailableSource(NamedTuple):
@@ -26,6 +29,7 @@ class UnavailableSource(NamedTuple):
 
 UNAVAILABLE_SOURCES = {
     WEATHER_UNAVAILABLE: UnavailableSource(section="weather", wait_key="close_on_unspecified_after"),
+    UPS_UNAVAILABLE: UnavailableSource(section="ups_emergency", wait_key="close_on_unspecified_after"),
 }
 
 
@@ -38,6 +42,9 @@ class ExternalConditions:
         self._missing_since = {}
 
     def operation_blocked(self) -> bool:
+        return self._weather_blocks() or self._ups_blocks()
+
+    def _weather_blocks(self) -> bool:
         status = WeatherConverter().convert(weather()).status
         blocked = status == WeatherStatus.WEATHER_STATUS_DANGER or (
             status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED and
@@ -45,6 +52,16 @@ class ExternalConditions:
         )
         if blocked:
             logger.info("The weather blocks the operation: %s", WeatherStatus.Name(status))
+        return blocked
+
+    def _ups_blocks(self) -> bool:
+        status = UpsService().GetStatus(UpsRequest(), None).status
+        blocked = status == UpsStatus.UPS_STATUS_DANGER or (
+            status == UpsStatus.UPS_STATUS_UNSPECIFIED and
+            Config.getRequiredBoolean("block_on_unspecified", "ups_emergency")
+        )
+        if blocked:
+            logger.info("The UPS blocks the operation: %s", UpsStatus.Name(status))
         return blocked
 
     def note_availability(self, trigger: EmergencyClosureTrigger, available: bool) -> None:
