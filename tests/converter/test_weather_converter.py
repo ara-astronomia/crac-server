@@ -17,7 +17,9 @@ class FakeWeather:
     barometer_trend = (0, "mbar")
     updated_at = None
     time_expired = 660
-    is_unavailable = False
+
+    def is_expired(self):
+        return False
 
 
 class TestWeatherConverter(unittest.TestCase):
@@ -48,6 +50,18 @@ class TestWeatherConverter(unittest.TestCase):
         response = self._convert()
 
         self.assertEqual(WeatherStatus.WEATHER_STATUS_NORMAL, response.status)
+
+    def test_expired_data_reports_unspecified_even_when_safe(self):
+        weather = FakeWeather()
+        weather.is_expired = lambda: True
+        safe_chart = build_chart(
+            value=5, title="t", urn="safe", min=0, max=40, unit_of_measurement="x",
+            range_normal=({"lower_bound": 0, "upper_bound": 40},),
+        )
+
+        status = WeatherConverter().calculate_status(weather, [safe_chart])
+
+        self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, status)
 
     def test_a_high_wind_is_a_danger_above_and_a_warning_below(self):
         response = self._convert(wind_speed=20)
