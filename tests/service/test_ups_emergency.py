@@ -74,6 +74,9 @@ class TestUpsEmergency(unittest.TestCase):
     def _is_critical(self, reading, charts_by_key, device="apc-3000"):
         return ups_emergency().device_is_critical(device, reading, charts_by_key)
 
+    def _can_be_judged(self, reading, charts_by_key, device="apc-3000"):
+        return ups_emergency().can_be_judged(device, reading, charts_by_key)
+
     def test_a_battery_at_the_critical_percentage_is_critical_at_once(self):
         self.assertTrue(self._is_critical({"battery_charge": "60", "ups_status": "OL"}, {"battery_charge": online_chart()}))
     def test_a_battery_below_the_critical_percentage_is_critical_at_once(self):
@@ -118,7 +121,7 @@ class TestUpsEmergency(unittest.TestCase):
         reading = {"battery_charge": "100", "ups_status": "OB"}
         with patch("crac_server.service.ups_emergency.Config.getValue", side_effect=emergency_config("battery_charge,ups_status,output_current")), \
              patch("crac_server.service.ups_emergency.monotonic", side_effect=[0, 0, 300, 300]):
-            self.assertFalse(self._is_critical(reading, {"battery_charge": on_battery_chart()}))
+            self.assertFalse(self._is_critical(reading, {"battery_charge": on_battery_chart(), "output_current": current_chart(ChartStatus.CHART_STATUS_NORMAL)}))
             self.assertTrue(self._is_critical(reading, {"battery_charge": online_chart(), "output_current": current_chart(ChartStatus.CHART_STATUS_DANGER)}))
 
     def test_a_normal_current_never_becomes_critical(self):
@@ -153,6 +156,24 @@ class TestUpsEmergency(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 self._is_critical(reading, {"battery_charge": online_chart()})
         self.assertIn("output_current", str(ctx.exception))
+
+    def test_a_complete_reading_can_be_judged(self):
+        reading = {"battery_charge": "100", "ups_status": "OL"}
+        charts = {"battery_charge": online_chart()}
+        self.assertTrue(self._can_be_judged(reading, charts))
+
+    def test_a_reading_without_an_enabled_check_cannot_be_judged(self):
+        charts = {"battery_charge": online_chart()}
+        self.assertFalse(self._can_be_judged({"ups_status": "OL"}, charts))
+
+    def test_an_enabled_ups_status_without_the_battery_chart_cannot_be_judged(self):
+        reading = {"battery_charge": "100", "ups_status": "OL"}
+        self.assertFalse(self._can_be_judged(reading, {}))
+
+    def test_an_enabled_output_current_without_a_chart_cannot_be_judged(self):
+        reading = {"battery_charge": "100", "ups_status": "OL"}
+        with patch("crac_server.service.ups_emergency.Config.getValue", side_effect=emergency_config("battery_charge,ups_status,output_current")):
+            self.assertFalse(self._can_be_judged(reading, {"battery_charge": online_chart()}))
 
     def test_a_check_that_is_not_enabled_is_never_evaluated(self):
         reading = {"ups_status": "OL"}
