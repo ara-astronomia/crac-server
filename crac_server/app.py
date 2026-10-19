@@ -77,8 +77,9 @@ async def serve():
     add_CoverMirrorServicer_to_server(
         CoverMirrorService(), server
     )
+    ups_service = UpsService()
     add_UpsServicer_to_server(
-        UpsService(), server
+        ups_service, server
     )
     add_GeographicServiceServicer_to_server(
         GeographicServicer(), server
@@ -91,8 +92,10 @@ async def serve():
     logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
     await server.start()
     weather_watch = asyncio.create_task(weather_service.watch())
+    ups_watch = asyncio.create_task(ups_service.watch())
     await server.wait_for_termination()
     weather_watch.cancel()
+    ups_watch.cancel()
 
 
 def main():

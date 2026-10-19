@@ -5,6 +5,7 @@ from crac_server.handler.roof_handler import (
     RoofCurtainsHandler, 
     RoofHandler, 
     RoofTelescopeHandler,
+    RoofUpsHandler,
     RoofWeatherHandler,
 )
 
@@ -18,10 +19,12 @@ class RoofService(RoofServicer):
         roof_mediator = RoofMediator(request)
 
         roof_weather_handler = RoofWeatherHandler()
+        roof_ups_handler = RoofUpsHandler()
         roof_telescope_handler = RoofTelescopeHandler()
         roof_curtins_handler = RoofCurtainsHandler()
         roof_handler = RoofHandler()
-        roof_weather_handler.set_next(roof_telescope_handler) \
+        roof_weather_handler.set_next(roof_ups_handler) \
+            .set_next(roof_telescope_handler) \
             .set_next(roof_curtins_handler) \
             .set_next(roof_handler)
 

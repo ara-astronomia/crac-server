@@ -1,7 +1,12 @@
+import asyncio
 import logging
+import math
 from datetime import datetime
 from crac_protobuf.chart_pb2 import (
     ChartStatus,
+)
+from crac_protobuf.emergency_closure_pb2 import (
+    EmergencyClosureTrigger,  # type: ignore
 )
 from crac_protobuf.ups_pb2_grpc import UpsServicer
 from crac_protobuf.ups_pb2 import (
@@ -16,6 +21,8 @@ from crac_server.component.ups import ups
 from crac_server.config import Config
 from crac_server.converter.chart_config import ChartConfigError, build_chart_from_config
 from crac_server.service.emergency_closure import emergency_closure
+from crac_server.service.ups_emergency import critical_thresholds, enabled_checks, ups_emergency
+from crac_server.status_log import ErrorCause, StatusLogger
 from typing import Union
 
 
@@ -29,6 +36,8 @@ BATTERY_STATUS_BY_FLAG = {
     "DISCHRG": BatteryStatus.BATTERY_STATUS_DISCHARGE,
 }
 FLAGS_WITHOUT_A_STATUS_VALUE = frozenset(("RB", "FSD", "ALARM"))
+MIN_CHECK_INTERVAL = 30
+UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
 
 
 class UpsService(UpsServicer):
@@ -36,6 +45,9 @@ class UpsService(UpsServicer):
     def __init__(self) -> None:
         super().__init__()
         self._validate_metrics()
+        self._validate_emergency()
+        self.check_interval = self._check_interval()
+        self._watch_log = StatusLogger(logger, "UPS watch")
 
     def _validate_metrics(self):
         """Validate the configuration at startup: a broken one found while
@@ -115,23 +127,47 @@ class UpsService(UpsServicer):
             ("output_current", "current", "Corrente", "A"),
         )
 
-    def _build_charts(self, device: str, ups: dict) -> list:
-        charts = []
+    def _validate_emergency(self):
+        """The emergency configuration is validated here so that a broken
+        one stops the startup, and read again on every check."""
+        checks = enabled_checks()
+        metrics = Config.get_section("ups_metrics")
+        unread = sorted(checks - set(metrics))
+        if unread:
+            raise RuntimeError(
+                f"[ups_emergency]: checks that the server does not read: {unread}. "
+                f"Add them to [ups_metrics] or remove them from enabled_checks."
+            )
+        critical_thresholds()
+        Config.getRequiredBoolean("block_on_unspecified", "ups_emergency")
+
+    @staticmethod
+    def _check_interval() -> float:
+        """A shorter interval would only spin the loop: the UPS drivers
+        refresh their readings far less often. NaN and infinity would
+        silently stop the checks."""
+        interval = Config.getRequiredFloat("check_interval", "ups")
+        if not MIN_CHECK_INTERVAL <= interval < math.inf:
+            raise ValueError(
+                f"ups.check_interval must be a number of seconds, at least {MIN_CHECK_INTERVAL}: {interval}"
+            )
+        return interval
+
+    def _charts_by_key(self, device: str, ups: dict) -> dict:
+        charts = {}
         for key, urn_suffix, title, unit in self._chart_specs():
             if ups.get(key) is None:
                 continue
             battery_statuses = self._battery_statuses(device, ups.get("ups_status")) if key == "battery_charge" else []
-            charts.append(
-                UpsChart(
-                    chart=build_chart_from_config(
-                        key,
-                        value=float(ups[key]),
-                        title=title,
-                        urn=f"ups.{device}.chart.{urn_suffix}",
-                        unit_of_measurement=unit,
-                    ),
-                    battery_statuses=battery_statuses,
-                )
+            charts[key] = UpsChart(
+                chart=build_chart_from_config(
+                    key,
+                    value=float(ups[key]),
+                    title=title,
+                    urn=f"ups.{device}.chart.{urn_suffix}",
+                    unit_of_measurement=unit,
+                ),
+                battery_statuses=battery_statuses,
             )
         return charts
 
@@ -149,15 +185,74 @@ class UpsService(UpsServicer):
         return statuses
 
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
+        """A display read, run by gRPC in a thread without an event loop:
+        the emergency reaction lives in watch(), on the loop."""
+        return self._respond({device: self._read_or_error(device) for device in self._configured_devices()})[0]
+
+    async def check(self) -> UpsResponse:
+        """Read every UPS and report to the emergency closure: a single
+        device in a critical condition is enough. A device that could not
+        be read can neither start nor settle a closure."""
+        readings = {}
+        for device in self._configured_devices():
+            readings[device] = await asyncio.to_thread(self._read_or_error, device)
+        response, readable = self._respond(readings)
+        critical = False
+        for device, (reading, charts_by_key) in readable.items():
+            if ups_emergency().device_is_critical(device, reading, charts_by_key):
+                critical = True
+        unreadable = [device for device in readings if device not in readable]
+        for device in unreadable:
+            ups_emergency().device_lost(device)
+        self._report(critical, unreadable)
+        return response
+
+    async def watch(self):
+        """Check every UPS every check_interval seconds, so that the closure
+        does not wait for a client to ask. A failed check is logged, once
+        per kind of failure, and the next one runs anyway."""
+        logger.info("UPS watch: checking every %s seconds", self.check_interval)
+        while True:
+            try:
+                await self.check()
+                self._watch_log.record("running")
+            except Exception as e:
+                self._watch_log.record(
+                    f"check failed: {type(e).__name__}", ErrorCause.UNEXPECTED_FAILURE, detail=str(e), exc_info=e,
+                )
+            await asyncio.sleep(self.check_interval)
+
+    @staticmethod
+    def _read_or_error(device: str):
+        """The reading or the error it ended with, so that the response
+        builder can treat both without knowing where they came from."""
+        try:
+            return ups().status_for(device)
+        except Exception as e:
+            return e
+
+    def _report(self, critical: bool, unreadable) -> None:
+        if unreadable:
+            self._watch_log.record(f"cannot check {unreadable}", ErrorCause.DEVICE_UNREACHABLE)
+            if not critical:
+                return
+        emergency_closure().report(UPS, critical)
+
+    def _respond(self, readings: dict) -> tuple:
+        """Build the response, isolating a device that could not be read.
+        Returns the response and, for the safety checks, the devices that
+        could be read with their reading and their charts."""
         response = UpsResponse(
             updated_at=self.timestamp_or_none(datetime.now()),
             interval=ups().time_expired
         )
+        readable = {}
         unreadable = []
-        for device in self._configured_devices():
+        for device, reading in readings.items():
             try:
-                reading = ups().status_for(device)
-                charts = self._build_charts(device, reading)
+                if isinstance(reading, Exception):
+                    raise reading
+                charts_by_key = self._charts_by_key(device, reading)
             except ChartConfigError:
                 raise
             except Exception as e:
@@ -167,6 +262,8 @@ class UpsService(UpsServicer):
                     UpsDevice(name=device, status=UpsStatus.UPS_STATUS_UNSPECIFIED)
                 )
                 continue
+            charts = list(charts_by_key.values())
+            readable[device] = (reading, charts_by_key)
             response.devices.append(device)
             response.charts.extend(charts)
             response.device_states.append(
@@ -174,8 +271,7 @@ class UpsService(UpsServicer):
             )
         response.status = self._overall_status(response.charts, unreadable)
         response.emergency_closure.CopyFrom(emergency_closure().state())
-        logger.debug(f"ups response is {response}")
-        return response
+        return response, readable
 
     def _overall_status(self, charts, unreadable):
         """Nothing is known about a UPS that does not answer, so reporting
