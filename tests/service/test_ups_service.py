@@ -1,9 +1,11 @@
+import asyncio
 import unittest
 from unittest.mock import MagicMock, patch
 from crac_protobuf.chart_pb2 import ChartStatus
 from crac_protobuf.emergency_closure_pb2 import (
     EmergencyClosure,  # type: ignore
     EmergencyClosureStatus,  # type: ignore
+    EmergencyClosureTrigger,  # type: ignore
 )
 from crac_protobuf.ups_pb2 import BatteryStatus, UpsStatus
 from crac_server.component.ups import ups
@@ -11,10 +13,19 @@ from crac_server.converter.chart_config import ChartConfigError
 from crac_server.service.ups_service import UpsService
 
 
+UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
+
+
 SECTIONS = {
     "battery_charge": {"scale": "0..100", "warning": "35..50", "danger": "..35"},
-    "input_voltage": {"scale": "0..250", "warning": "..209", "danger": "241.5.."},
+    "input_voltage": {"scale": "0..250", "warning": "..209, 241.5.."},
     "output_current": {"scale": "0..20", "danger": "8.."},
+    "ups_emergency": {
+        "critical_time": "300",
+        "critical_battery_percentage": "60",
+        "block_on_unspecified": "true",
+    },
+    "ups": {"check_interval": "30"},
 }
 
 
@@ -26,10 +37,12 @@ def getkeys_side_effect(enabled):
     return side_effect
 
 
-def getvalue_side_effect(ups_list="apc-3000,cyberpower"):
+def getvalue_side_effect(ups_list="apc-3000,cyberpower", enabled_checks="battery_charge"):
     def side_effect(key, section="automazione"):
         if (key, section) == ("ups_list", "ups"):
             return ups_list
+        if (key, section) == ("enabled_checks", "ups_emergency"):
+            return enabled_checks
         return SECTIONS[section][key]
     return side_effect
 
@@ -283,15 +296,18 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(0, len(response.charts))
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
-    def test_get_status_skips_battery_chart_when_metric_unavailable(self):
+    def test_get_status_counts_a_device_without_an_enabled_reading_as_unknown(self):
         ups().status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None})
 
         response = self.ups_service.GetStatus(None, None)
 
-        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
-        urns = [chart.chart.urn for chart in response.charts]
-        self.assertTrue(all("chart.battery" not in urn for urn in urns))
-        self.assertEqual(2, len(response.charts))
+        self.assertEqual([], list(response.devices))
+        self.assertEqual(0, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+        self.assertEqual(
+            [UpsStatus.UPS_STATUS_UNSPECIFIED, UpsStatus.UPS_STATUS_UNSPECIFIED],
+            [device.status for device in response.device_states],
+        )
 
     def test_get_status_skips_voltage_chart_when_metric_unavailable(self):
         ups().status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80"})
@@ -428,13 +444,14 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(0, len(response.charts))
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
-    def test_get_status_device_present_with_no_charts_when_all_metrics_unavailable(self):
+    def test_get_status_counts_a_device_without_charts_as_unknown(self):
         ups().status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "output_current": None})
 
         response = self.ups_service.GetStatus(None, None)
 
-        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+        self.assertEqual([], list(response.devices))
         self.assertEqual(0, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
 
 class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
@@ -516,17 +533,316 @@ class TestUpsChartLevels(unittest.TestCase):
         self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("battery", battery_charge="35"))
         self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("battery", battery_charge="50"))
 
-    def test_voltage_is_warning_below_and_danger_above_the_safe_range(self):
+    def test_voltage_is_a_warning_on_both_sides_of_the_safe_range(self):
         self.assertEqual(ChartStatus.CHART_STATUS_NORMAL, self._chart_status("voltage", input_voltage="220"))
         self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("voltage", input_voltage="200"))
-        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="245"))
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("voltage", input_voltage="245"))
 
     def test_a_reading_past_the_scale_keeps_the_level_of_the_outermost_band(self):
-        self.assertEqual(ChartStatus.CHART_STATUS_DANGER, self._chart_status("voltage", input_voltage="400"))
+        self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("voltage", input_voltage="400"))
         self.assertEqual(ChartStatus.CHART_STATUS_WARNING, self._chart_status("voltage", input_voltage="0"))
 
     def test_the_device_takes_the_level_of_its_worst_chart(self):
         self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, self._device_status())
         self.assertEqual(UpsStatus.UPS_STATUS_WARNING, self._device_status(battery_charge="40"))
-        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(input_voltage="245"))
-        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, self._device_status(battery_charge="40", input_voltage="245"))
+        self.assertEqual(UpsStatus.UPS_STATUS_WARNING, self._device_status(input_voltage="245"))
+        self.assertEqual(UpsStatus.UPS_STATUS_WARNING, self._device_status(battery_charge="40", input_voltage="245"))
+
+
+class TestUpsEmergencyStartupValidation(unittest.TestCase):
+    """The emergency configuration must stop the startup: a safety check
+    that cannot run is worse than a server that refuses to start."""
+
+    METRICS = {"battery_charge": "battery.charge", "ups_status": "ups.status"}
+
+    def _build(self, getvalue):
+        with patch("crac_server.service.ups_service.Config.get_section", return_value=self.METRICS), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "ups_status"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue):
+            return UpsService()
+
+    def test_a_check_that_the_server_does_not_read_cannot_be_enabled(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._build(getvalue_side_effect(enabled_checks="battery_charge,ups_status,output_current"))
+        self.assertIn("output_current", str(ctx.exception))
+
+    def test_an_unknown_check_name_fails_at_startup(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._build(getvalue_side_effect(enabled_checks="battery_charge,input_voltage"))
+        self.assertIn("input_voltage", str(ctx.exception))
+
+    def test_an_empty_whitelist_fails_at_startup(self):
+        with self.assertRaises(RuntimeError) as ctx:
+            self._build(getvalue_side_effect(enabled_checks=""))
+        self.assertIn("enabled_checks", str(ctx.exception))
+
+    def test_a_missing_block_on_unspecified_fails_at_startup(self):
+        def without_block_on_unspecified(key, section="automazione"):
+            if (key, section) == ("block_on_unspecified", "ups_emergency"):
+                return ""
+            return getvalue_side_effect()(key, section)
+
+        with self.assertRaises(ValueError) as ctx:
+            self._build(without_block_on_unspecified)
+        self.assertIn("block_on_unspecified", str(ctx.exception))
+
+    def test_a_missing_critical_time_fails_at_startup(self):
+        def without_critical_time(key, section="automazione"):
+            if (key, section) == ("critical_time", "ups_emergency"):
+                return ""
+            return getvalue_side_effect()(key, section)
+
+        with self.assertRaises(ValueError) as ctx:
+            self._build(without_critical_time)
+        self.assertIn("critical_time", str(ctx.exception))
+
+
+class TestUpsCheckInterval(unittest.TestCase):
+
+    def _build(self, check_interval):
+        def getvalue(key, section="automazione"):
+            if (key, section) == ("check_interval", "ups"):
+                return check_interval
+            return getvalue_side_effect()(key, section)
+
+        with patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge"}), \
+             patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge"])), \
+             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue):
+            return UpsService()
+
+    def test_a_missing_check_interval_fails_at_startup(self):
+        with patch("crac_server.service.ups_service.Config.getRequiredFloat", side_effect=KeyError("check_interval")):
+            with self.assertRaises(KeyError):
+                self._build("30")
+
+    def test_an_interval_below_30_seconds_fails_at_startup(self):
+        with self.assertRaises(ValueError) as ctx:
+            self._build("29")
+        self.assertIn("check_interval", str(ctx.exception))
+
+    def test_30_seconds_is_accepted(self):
+        self.assertEqual(30, self._build("30").check_interval)
+
+
+class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
+    """The emergency reaction runs in the watch, on the event loop: any
+    single device in a critical condition is enough to report."""
+
+    def setUp(self):
+        self._original_status_for = ups().status_for
+        self._patches = [
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "input_voltage": "input.voltage", "ups_status": "ups.status"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "input_voltage", "ups_status"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
+            patch("crac_server.service.ups_service.emergency_closure"),
+            patch("crac_server.service.ups_service.ups_emergency"),
+        ]
+        mocks = [p.start() for p in self._patches]
+        self.addCleanup(self._restore)
+        self.closure = mocks[3].return_value
+        self.closure.state.return_value = EmergencyClosure()
+        self.ups_emergency = mocks[4].return_value
+        self.ups_service = UpsService()
+        self.ups_emergency.device_is_critical.return_value = False
+        self.ups_emergency.can_be_judged.return_value = True
+
+    def _restore(self):
+        ups().status_for = self._original_status_for
+        for p in self._patches:
+            p.stop()
+
+    async def _check(self):
+        with patch("crac_server.service.ups_service.emergency_closure") as closure:
+            closure.return_value.state.return_value = EmergencyClosure(
+                status=EmergencyClosureStatus.EMERGENCY_CLOSURE_STATUS_IN_PROGRESS,
+            )
+            response = await self.ups_service.check()
+        return response, closure.return_value
+
+    def _reading(self, device):
+        return {"battery_charge": "80", "input_voltage": "220", "ups_status": "OL"}
+
+    async def test_a_critical_device_is_reported_to_the_closure(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = True
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+
+    async def test_no_critical_device_with_all_readable_settles_the_closure(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, False)
+
+    async def test_one_device_in_threshold_is_enough(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.side_effect = lambda device, *args: device == "apc-3000"
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+
+    async def test_an_unreadable_device_reports_nothing(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return self._reading(device)
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+
+        response, closure = await self._check()
+
+        closure.report.assert_not_called()
+        self.ups_emergency.device_lost.assert_called_once_with("apc-3000")
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+
+    async def test_an_unreadable_device_does_not_hide_a_real_danger(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return self._reading(device)
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+        self.ups_emergency.device_is_critical.side_effect = lambda device, *args: device == "cyberpower"
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+
+    async def test_two_critical_checks_report_once_each(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = True
+
+        _, first = await self._check()
+        _, second = await self._check()
+
+        first.report.assert_called_once_with(UPS, True)
+        second.report.assert_called_once_with(UPS, True)
+
+    async def test_a_device_that_cannot_be_judged_counts_like_an_unreadable_one(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.can_be_judged.side_effect = lambda device, *args: device != "apc-3000"
+
+        response, closure = await self._check()
+
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+        self.ups_emergency.device_lost.assert_called_once_with("apc-3000")
+        closure.report.assert_not_called()
+
+    async def test_a_device_that_cannot_be_judged_does_not_hide_the_others(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.can_be_judged.side_effect = lambda device, *args: device != "apc-3000"
+        self.ups_emergency.device_is_critical.side_effect = lambda device, *args: device == "cyberpower"
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+
+    async def test_a_blind_reading_does_not_hide_a_real_danger_of_the_other_device(self):
+        self._patches[4].stop()
+        self._patches.pop(4)
+        readings = {
+            "apc-3000": {"ups_status": "OL", "input_voltage": "220"},
+            "cyberpower": {"battery_charge": "10", "ups_status": "OL", "input_voltage": "220"},
+        }
+        ups().status_for = MagicMock(side_effect=lambda device: readings[device])
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+
+    async def test_every_response_carries_the_closure_state(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+
+        response, closure = await self._check()
+
+        self.assertEqual(closure.state.return_value, response.emergency_closure)
+
+
+class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
+    """The safety decision must not depend on a client polling GetStatus:
+    the service checks the UPS by itself, on the event loop."""
+
+    SERVICE_LOGGER = "crac_server.service.ups_service"
+
+    def setUp(self):
+        self._original_status_for = ups().status_for
+        patches = [
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "ups_status": "ups.status"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "ups_status"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
+            patch("crac_server.service.ups_service.emergency_closure"),
+            patch("crac_server.service.ups_service.ups_emergency"),
+        ]
+        mocks = [p.start() for p in patches]
+        for p in patches:
+            self.addCleanup(p.stop)
+        self.addCleanup(self._restore_status_for)
+        self.closure = mocks[3].return_value
+        self.closure.state.return_value = EmergencyClosure()
+        self.ups_emergency = mocks[4].return_value
+        self.service = UpsService()
+        self.service.check_interval = 0.01
+        self.ups_emergency.device_is_critical.return_value = True
+        ups().status_for = MagicMock(side_effect=lambda device: {"battery_charge": "80", "ups_status": "OL"})
+
+    def _restore_status_for(self):
+        ups().status_for = self._original_status_for
+
+    async def test_a_critical_ups_is_reported_without_any_client(self):
+        await self.__watch_until_checked(times=1)
+
+        self.closure.report.assert_called_with(UPS, True)
+
+    async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
+        statuses = iter([RuntimeError("battery_charge not reported"), True, True])
+        self.ups_emergency.device_is_critical.side_effect = lambda *args: next(statuses)
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_until_checked(times=2)
+
+        self.assertTrue(any("RuntimeError" in record.getMessage() for record in captured.records))
+        self.closure.report.assert_called_with(UPS, True)
+
+    async def test_an_unreadable_device_is_logged_and_reports_nothing(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return {"battery_charge": "80", "ups_status": "OL"}
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+        self.ups_emergency.device_is_critical.return_value = False
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_until_checked(times=1)
+
+        self.assertTrue(any("apc-3000" in record.getMessage() for record in captured.records))
+        self.closure.report.assert_not_called()
+
+    async def test_the_watch_says_when_it_starts_and_how_often_it_checks(self):
+        with self.assertLogs(self.SERVICE_LOGGER, level="INFO") as captured:
+            await self.__watch_until_checked(times=1)
+
+        self.assertIn(str(self.service.check_interval), captured.records[0].getMessage())
+
+    async def test_the_watch_waits_check_interval_between_two_checks(self):
+        with patch("crac_server.service.ups_service.asyncio.sleep", side_effect=asyncio.CancelledError) as sleep:
+            with self.assertRaises(asyncio.CancelledError):
+                await self.service.watch()
+
+        sleep.assert_awaited_once_with(self.service.check_interval)
+
+    async def __watch_until_checked(self, times):
+        """Run the watch until the given number of checks is over, which is
+        when the next one starts reading."""
+        task = asyncio.create_task(self.service.watch())
+        try:
+            async with asyncio.timeout(2):
+                while ups().status_for.call_count < times * len(self.service._configured_devices()):
+                    await asyncio.sleep(0.001)
+        finally:
+            task.cancel()
