@@ -7,6 +7,7 @@ class ErrorCause:
     SENSORS_INCONSISTENT = "sensors_inconsistent"
     BLOCKED_BY_SAFETY = "blocked_by_safety"
     STATE_NOT_RECOGNIZED = "state_not_recognized"
+    SAFETY_STEP_EXCEEDED = "safety_step_exceeded"
     UNEXPECTED_FAILURE = "unexpected_failure"
 
 
