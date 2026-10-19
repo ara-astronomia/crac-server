@@ -191,8 +191,8 @@ class UpsService(UpsServicer):
 
     async def check(self) -> UpsResponse:
         """Read every UPS and report to the emergency closure: a single
-        device in a critical condition is enough. A device that could not
-        be read can neither start nor settle a closure."""
+        device in a critical condition is enough, and one that could not
+        be read or cannot be judged neither starts nor settles a closure."""
         readings = {}
         for device in self._configured_devices():
             readings[device] = await asyncio.to_thread(self._read_or_error, device)
@@ -239,9 +239,9 @@ class UpsService(UpsServicer):
         emergency_closure().report(UPS, critical)
 
     def _respond(self, readings: dict) -> tuple:
-        """Build the response, isolating a device that could not be read.
-        Returns the response and, for the safety checks, the devices that
-        could be read with their reading and their charts."""
+        """Build the response, isolating a device that could not be read
+        or cannot be judged: neither can say it is fine. Returns the
+        response and the devices that could be read, with reading and charts."""
         response = UpsResponse(
             updated_at=self.timestamp_or_none(datetime.now()),
             interval=ups().time_expired
@@ -257,6 +257,13 @@ class UpsService(UpsServicer):
                 raise
             except Exception as e:
                 logger.error(f"Impossibile leggere l'UPS {device}: {e}")
+                unreadable.append(device)
+                response.device_states.append(
+                    UpsDevice(name=device, status=UpsStatus.UPS_STATUS_UNSPECIFIED)
+                )
+                continue
+            if not ups_emergency().can_be_judged(device, reading, charts_by_key):
+                logger.error(f"The UPS {device} does not report an enabled check: it cannot be judged")
                 unreadable.append(device)
                 response.device_states.append(
                     UpsDevice(name=device, status=UpsStatus.UPS_STATUS_UNSPECIFIED)

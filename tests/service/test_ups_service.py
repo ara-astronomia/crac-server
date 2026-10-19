@@ -296,15 +296,18 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(0, len(response.charts))
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
-    def test_get_status_skips_battery_chart_when_metric_unavailable(self):
+    def test_get_status_counts_a_device_without_an_enabled_reading_as_unknown(self):
         ups().status_for = MagicMock(return_value={"input_voltage": "220", "battery_charge": None})
 
         response = self.ups_service.GetStatus(None, None)
 
-        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
-        urns = [chart.chart.urn for chart in response.charts]
-        self.assertTrue(all("chart.battery" not in urn for urn in urns))
-        self.assertEqual(2, len(response.charts))
+        self.assertEqual([], list(response.devices))
+        self.assertEqual(0, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+        self.assertEqual(
+            [UpsStatus.UPS_STATUS_UNSPECIFIED, UpsStatus.UPS_STATUS_UNSPECIFIED],
+            [device.status for device in response.device_states],
+        )
 
     def test_get_status_skips_voltage_chart_when_metric_unavailable(self):
         ups().status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": "80"})
@@ -441,13 +444,14 @@ class TestUpsService(unittest.TestCase):
         self.assertEqual(0, len(response.charts))
         self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
-    def test_get_status_device_present_with_no_charts_when_all_metrics_unavailable(self):
+    def test_get_status_counts_a_device_without_charts_as_unknown(self):
         ups().status_for = MagicMock(return_value={"input_voltage": None, "battery_charge": None, "output_current": None})
 
         response = self.ups_service.GetStatus(None, None)
 
-        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+        self.assertEqual([], list(response.devices))
         self.assertEqual(0, len(response.charts))
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
 
 
 class TestUpsServiceKeepsConfigurationErrorsVisible(unittest.TestCase):
@@ -640,6 +644,7 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
         self.ups_emergency = mocks[4].return_value
         self.ups_service = UpsService()
         self.ups_emergency.device_is_critical.return_value = False
+        self.ups_emergency.can_be_judged.return_value = True
 
     def _restore(self):
         ups().status_for = self._original_status_for
@@ -717,12 +722,38 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
         first.report.assert_called_once_with(UPS, True)
         second.report.assert_called_once_with(UPS, True)
 
-    async def test_a_blind_enabled_check_fails_the_whole_check(self):
+    async def test_a_device_that_cannot_be_judged_counts_like_an_unreadable_one(self):
         ups().status_for = MagicMock(side_effect=self._reading)
-        self.ups_emergency.device_is_critical.side_effect = RuntimeError("battery_charge not reported")
+        self.ups_emergency.can_be_judged.side_effect = lambda device, *args: device != "apc-3000"
 
-        with self.assertRaises(RuntimeError):
-            await self.ups_service.check()
+        response, closure = await self._check()
+
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, response.status)
+        self.ups_emergency.device_lost.assert_called_once_with("apc-3000")
+        closure.report.assert_not_called()
+
+    async def test_a_device_that_cannot_be_judged_does_not_hide_the_others(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.can_be_judged.side_effect = lambda device, *args: device != "apc-3000"
+        self.ups_emergency.device_is_critical.side_effect = lambda device, *args: device == "cyberpower"
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+
+    async def test_a_blind_reading_does_not_hide_a_real_danger_of_the_other_device(self):
+        self._patches[4].stop()
+        self._patches.pop(4)
+        readings = {
+            "apc-3000": {"ups_status": "OL", "input_voltage": "220"},
+            "cyberpower": {"battery_charge": "10", "ups_status": "OL", "input_voltage": "220"},
+        }
+        ups().status_for = MagicMock(side_effect=lambda device: readings[device])
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, True)
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
 
     async def test_every_response_carries_the_closure_state(self):
         ups().status_for = MagicMock(side_effect=self._reading)
