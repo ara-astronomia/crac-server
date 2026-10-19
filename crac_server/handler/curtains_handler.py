@@ -11,20 +11,16 @@ from crac_protobuf.telescope_pb2 import (
     TelescopeSpeed,  # type: ignore
     TelescopeStatus,  # type: ignore
 )
-from crac_protobuf.chart_pb2 import (
-    WeatherStatus,  # type: ignore
-)
 from crac_protobuf.ups_pb2 import (
     UpsRequest,  # type: ignore
     UpsStatus,  # type: ignore
 )
 from crac_server.component.roof import roof
 from crac_server.component.telescope import telescope
-from crac_server.component.weather import weather
 from crac_server.config import Config
 from crac_server.converter.curtains_converter import CurtainsConverter, CurtainsMediator
-from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
+from crac_server.service.external_conditions import external_conditions
 from crac_server.service.ups_service import UpsService
 
 
@@ -56,21 +52,11 @@ class CurtainsWeatherHandler(AbstractCurtainsHandler):
 
         if (
             mediator.status_east is CurtainStatus.CURTAIN_DISABLED and
-            mediator.status_west is CurtainStatus.CURTAIN_DISABLED
+            mediator.status_west is CurtainStatus.CURTAIN_DISABLED and
+            external_conditions().operation_blocked()
         ):
-            logger.debug(f"In turn on or check action {mediator.action}")
-            weather_converter = WeatherConverter()
-            weather_response = weather_converter.convert(weather())
-            logger.debug(f"Weather status: {weather_response.status}")
-            logger.debug(f"Weather charts: {weather_response.charts}")
-            logger.debug(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
-                Config.getRequiredBoolean("block_on_unspecified", "weather") and 
-                weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
-                ):
-                logger.info(f"In status danger or unspecified {weather_response.status}")
-                mediator.is_disabled = True
-                self._next_handler = None
+            mediator.is_disabled = True
+            self._next_handler = None
 
         return super().handle(mediator)
 

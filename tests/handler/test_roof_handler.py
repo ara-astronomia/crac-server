@@ -1,16 +1,12 @@
 import unittest
-from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from crac_protobuf.chart_pb2 import WeatherResponse, WeatherStatus
 from crac_protobuf.curtains_pb2 import CurtainStatus
 from crac_protobuf.roof_pb2 import RoofAction, RoofRequest, RoofResponse, RoofStatus
 from crac_protobuf.telescope_pb2 import TelescopeStatus
 from crac_protobuf.ups_pb2 import UpsResponse, UpsStatus
-from crac_server.component.weather.weather import Weather
 from crac_server.converter.roof_converter import RoofConverter, RoofMediator
-from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.roof_handler import (
     RoofCurtainsHandler,
     RoofHandler,
@@ -21,76 +17,41 @@ from crac_server.handler.roof_handler import (
 
 
 class TestRoofWeatherHandler(unittest.TestCase):
-    """
-    Opening the roof is refused on dangerous weather, and on unknown weather
-    only when the installation asked for it.
-    """
+    """The roof asks the external conditions whether it may open: the
+    policies of each source live in one place, not in the handler."""
 
-    def _handle(self, weather_status, block_on_unspecified):
-        mediator = SimpleNamespace(status=RoofStatus.ROOF_CLOSED, action=RoofAction.OPEN, is_disabled=False)
-        weather_response = WeatherResponse(status=weather_status)
+    def _handle(self, roof_status, action, blocked):
+        mediator = SimpleNamespace(status=roof_status, action=action, is_disabled=False)
+        self.conditions = MagicMock()
+        self.conditions.operation_blocked.return_value = blocked
         with (
-            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=block_on_unspecified),
-            patch.object(WeatherConverter, "convert", return_value=weather_response),
+            patch("crac_server.handler.roof_handler.external_conditions", return_value=self.conditions),
             patch.object(RoofConverter, "convert", return_value=RoofResponse()),
         ):
             RoofWeatherHandler().handle(mediator)
         return mediator
 
-    def test_disables_opening_on_dangerous_weather(self):
-        mediator = self._handle(WeatherStatus.WEATHER_STATUS_DANGER, False)
+    def test_opening_is_disabled_when_the_conditions_block(self):
+        mediator = self._handle(RoofStatus.ROOF_CLOSED, RoofAction.OPEN, True)
+
         self.assertIs(True, mediator.is_disabled)
 
-    def test_disables_opening_on_unknown_weather_when_configured_to_block(self):
-        mediator = self._handle(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, True)
-        self.assertIs(True, mediator.is_disabled)
+    def test_opening_is_allowed_when_the_conditions_are_clear(self):
+        mediator = self._handle(RoofStatus.ROOF_CLOSED, RoofAction.OPEN, False)
 
-    def test_allows_opening_on_unknown_weather_when_configured_not_to_block(self):
-        mediator = self._handle(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, False)
         self.assertIs(False, mediator.is_disabled)
 
-    def test_the_weather_is_read_from_the_cache_without_touching_the_network(self):
-        source = self.cached_weather()
-        mediator = SimpleNamespace(status=RoofStatus.ROOF_CLOSED, action=RoofAction.OPEN, is_disabled=False)
-        with (
-            patch("crac_server.handler.roof_handler.weather", return_value=source),
-            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=True),
-            patch.object(RoofConverter, "convert", return_value=RoofResponse()),
-            patch("urllib.request.urlopen") as urlopen,
-        ):
-            RoofWeatherHandler().handle(mediator)
+    def test_closing_never_consults_the_external_conditions(self):
+        mediator = self._handle(RoofStatus.ROOF_OPENED, RoofAction.CLOSE, True)
 
-        urlopen.assert_not_called()
         self.assertIs(False, mediator.is_disabled)
+        self.conditions.operation_blocked.assert_not_called()
 
-    def test_opening_stays_blocked_when_the_cached_data_expired(self):
-        source = self.cached_weather()
-        source.updated_at = "2000-01-01 00:00:00"
-        mediator = SimpleNamespace(status=RoofStatus.ROOF_CLOSED, action=RoofAction.OPEN, is_disabled=False)
-        with (
-            patch("crac_server.handler.roof_handler.weather", return_value=source),
-            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=True),
-            patch.object(RoofConverter, "convert", return_value=RoofResponse()),
-            patch("urllib.request.urlopen") as urlopen,
-        ):
-            RoofWeatherHandler().handle(mediator)
+    def test_a_status_request_that_moves_no_roof_consults_nothing(self):
+        mediator = self._handle(RoofStatus.ROOF_OPENED, RoofAction.CHECK_ROOF, True)
 
-        urlopen.assert_not_called()
-        self.assertIs(True, mediator.is_disabled)
-
-    def cached_weather(self):
-        source = Weather("http://primary.test", "http://fallback.test", "%Y-%m-%d %H:%M:%S", 660, 330, url_timeout=1)
-        source.json = {
-            "outTemp": {"value": "15,0", "unit_of_measurement": "°C"},
-            "humidity": {"value": "60,0", "unit_of_measurement": "%"},
-            "barometer": {"value": "1013,0", "unit_of_measurement": "mbar"},
-            "barometerTrend": {"value": "0,0", "unit_of_measurement": "mbar"},
-            "windSpeed": {"value": "0,0", "unit_of_measurement": "km/h"},
-            "windGust": {"value": "0,0", "unit_of_measurement": "km/h"},
-            "rainRate": {"value": "0,0", "unit_of_measurement": "mm/h"},
-        }
-        source.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return source
+        self.assertIs(False, mediator.is_disabled)
+        self.conditions.operation_blocked.assert_not_called()
 
 
 class TestRoofUpsHandler(unittest.TestCase):
@@ -145,11 +106,12 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
         with patch("crac_server.converter.roof_converter.roof", return_value=roof_in_error):
             return RoofMediator(RoofRequest(action=action))
 
-    def _weather_handler(self, action, weather_status, motor_on=False):
+    def _weather_handler(self, action, blocked=True, motor_on=False):
         mediator = self._mediator(action, motor_on)
+        conditions = MagicMock()
+        conditions.operation_blocked.return_value = blocked
         with (
-            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=False),
-            patch.object(WeatherConverter, "convert", return_value=WeatherResponse(status=weather_status)),
+            patch("crac_server.handler.roof_handler.external_conditions", return_value=conditions),
             patch.object(RoofConverter, "convert", return_value=RoofResponse()),
         ):
             RoofWeatherHandler().handle(mediator)
@@ -176,12 +138,12 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
             RoofCurtainsHandler().handle(mediator)
         return mediator
 
-    def test_opening_is_refused_on_dangerous_weather(self):
-        mediator = self._weather_handler(RoofAction.OPEN, WeatherStatus.WEATHER_STATUS_DANGER)
+    def test_opening_is_refused_when_the_conditions_block(self):
+        mediator = self._weather_handler(RoofAction.OPEN, blocked=True)
         self.assertIs(True, mediator.is_disabled)
 
-    def test_closing_is_allowed_on_dangerous_weather(self):
-        mediator = self._weather_handler(RoofAction.CLOSE, WeatherStatus.WEATHER_STATUS_DANGER)
+    def test_closing_is_allowed_even_when_the_conditions_block(self):
+        mediator = self._weather_handler(RoofAction.CLOSE, blocked=True)
         self.assertIs(False, mediator.is_disabled)
 
     def test_closing_is_refused_with_the_telescope_not_secure(self):
@@ -205,7 +167,7 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
         self.assertIs(False, mediator.is_disabled)
 
     def test_a_status_request_with_the_motor_closing_checks_the_weather(self):
-        mediator = self._weather_handler(RoofAction.CHECK_ROOF, WeatherStatus.WEATHER_STATUS_DANGER, motor_on=False)
+        mediator = self._weather_handler(RoofAction.CHECK_ROOF, blocked=True, motor_on=False)
         self.assertIs(True, mediator.is_disabled)
 
     def test_a_status_request_with_the_motor_closing_ignores_the_telescope(self):
@@ -221,7 +183,7 @@ class TestRoofHandlersOnARoofInError(unittest.TestCase):
         self.assertIs(True, mediator.is_disabled)
 
     def test_a_status_request_with_the_motor_opening_ignores_the_weather(self):
-        mediator = self._weather_handler(RoofAction.CHECK_ROOF, WeatherStatus.WEATHER_STATUS_DANGER, motor_on=True)
+        mediator = self._weather_handler(RoofAction.CHECK_ROOF, blocked=True, motor_on=True)
         self.assertIs(False, mediator.is_disabled)
 
     def test_with_both_limit_switches_active_no_command_moves_the_roof(self):

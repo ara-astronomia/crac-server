@@ -2,11 +2,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from crac_protobuf.chart_pb2 import WeatherResponse, WeatherStatus
 from crac_protobuf.curtains_pb2 import CurtainsAction, CurtainsResponse, CurtainStatus
 from crac_protobuf.telescope_pb2 import TelescopeSpeed, TelescopeStatus
 from crac_server.converter.curtains_converter import CurtainsConverter
-from crac_server.converter.weather_converter import WeatherConverter
 from crac_protobuf.roof_pb2 import RoofStatus
 from crac_protobuf.ups_pb2 import UpsResponse, UpsStatus
 from crac_server.handler.curtains_handler import (
@@ -21,38 +19,40 @@ from crac_server.service.curtains_service import CurtainsService
 
 
 class TestCurtainsWeatherHandler(unittest.TestCase):
-    """
-    Enabling the curtains is refused on dangerous weather, and on unknown
-    weather only when the installation asked for it.
-    """
+    """The curtains ask the external conditions whether they may be enabled:
+    the policies of each source live in one place, not in the handler."""
 
-    def _handle(self, weather_status, block_on_unspecified):
+    def _handle(self, status_east, status_west, blocked):
         mediator = SimpleNamespace(
-            status_east=CurtainStatus.CURTAIN_DISABLED,
-            status_west=CurtainStatus.CURTAIN_DISABLED,
+            status_east=status_east,
+            status_west=status_west,
             action=CurtainsAction.ENABLE,
             is_disabled=False,
         )
-        weather_response = WeatherResponse(status=weather_status)
+        self.conditions = MagicMock()
+        self.conditions.operation_blocked.return_value = blocked
         with (
-            patch("crac_server.handler.curtains_handler.Config.getRequiredBoolean", return_value=block_on_unspecified),
-            patch.object(WeatherConverter, "convert", return_value=weather_response),
+            patch("crac_server.handler.curtains_handler.external_conditions", return_value=self.conditions),
             patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
         ):
             CurtainsWeatherHandler().handle(mediator)
         return mediator
 
-    def test_disables_the_curtains_on_dangerous_weather(self):
-        mediator = self._handle(WeatherStatus.WEATHER_STATUS_DANGER, False)
+    def test_enabling_is_disabled_when_the_conditions_block(self):
+        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, True)
+
         self.assertIs(True, mediator.is_disabled)
 
-    def test_disables_the_curtains_on_unknown_weather_when_configured_to_block(self):
-        mediator = self._handle(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, True)
-        self.assertIs(True, mediator.is_disabled)
+    def test_enabling_is_allowed_when_the_conditions_are_clear(self):
+        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, False)
 
-    def test_allows_the_curtains_on_unknown_weather_when_configured_not_to_block(self):
-        mediator = self._handle(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, False)
         self.assertIs(False, mediator.is_disabled)
+
+    def test_a_curtain_already_enabled_consults_nothing(self):
+        mediator = self._handle(CurtainStatus.CURTAIN_OPENED, CurtainStatus.CURTAIN_DISABLED, True)
+
+        self.assertIs(False, mediator.is_disabled)
+        self.conditions.operation_blocked.assert_not_called()
 
 
 class TestCurtainsUpsHandler(unittest.TestCase):

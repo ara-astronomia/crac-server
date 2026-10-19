@@ -9,9 +9,6 @@ from crac_protobuf.roof_pb2 import (
 from crac_protobuf.telescope_pb2 import (
     TelescopeStatus,  # type: ignore
 )
-from crac_protobuf.chart_pb2 import (
-    WeatherStatus,  # type: ignore
-)
 from crac_protobuf.ups_pb2 import (
     UpsRequest,  # type: ignore
     UpsStatus,  # type: ignore
@@ -21,14 +18,13 @@ from crac_server.component.curtains.factory_curtain import (
     curtain_west,
 )
 from crac_server.component.telescope import telescope
-from crac_server.component.weather import weather
 from crac_server.converter.roof_converter import (
     RoofConverter, 
     RoofMediator,
 )
-from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.handler import AbstractHandler
 from crac_server.config import Config
+from crac_server.service.external_conditions import external_conditions
 from crac_server.service.ups_service import UpsService
 
 
@@ -56,17 +52,9 @@ class AbstractButtonHandler(AbstractHandler):
 
 class RoofWeatherHandler(AbstractButtonHandler):
     def handle(self, mediator: RoofMediator) -> RoofResponse:
-        if self._would_open(mediator):
-            weather_converter = WeatherConverter()
-            weather_response = weather_converter.convert(weather())
-            logger.debug(f"In weather status {weather_response.status}")
-            if weather_response.status == WeatherStatus.WEATHER_STATUS_DANGER or (
-                Config.getRequiredBoolean("block_on_unspecified", "weather") and 
-                weather_response.status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED
-            ):
-                logger.info(f"In status danger or unspecified {weather_response.status}")
-                mediator.is_disabled = True
-                self._next_handler = None
+        if self._would_open(mediator) and external_conditions().operation_blocked():
+            mediator.is_disabled = True
+            self._next_handler = None
         return super().handle(mediator)
 
 class RoofUpsHandler(AbstractButtonHandler):
