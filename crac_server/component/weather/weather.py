@@ -2,8 +2,8 @@ from datetime import datetime
 import html
 from threading import Lock
 import logging
+import time
 from typing import Union
-from urllib.error import HTTPError, URLError
 import urllib.request
 import json
 
@@ -97,35 +97,47 @@ class Weather:
     
     def is_retriable(self) -> bool:
         return not self.last_attempt_at or (datetime.now() - self.last_attempt_at).total_seconds() >= self._retry_interval
-    
-    @property
-    def is_unavailable(self) -> bool:
-        return self.updated_at != None and (datetime.now() - self.updated_at).total_seconds() >= self._time_expired * 3
 
     def _retrieve_data(self):
-        with urllib.request.urlopen(self.url, timeout=self._url_timeout) as url:
-            json_result = json.loads(url.read().decode())
-        
-        return json_result["current"], json_result["time"]
+        return self._retrieve_json(self.url)
 
     def _retrieve_fallback_data(self):
         try:
-            with urllib.request.urlopen(self.fallback_url, timeout=self._url_timeout) as url:
-                json_result = json.loads(url.read().decode())
-            
-            return json_result["current"], json_result["time"]
-        except (HTTPError, URLError, TimeoutError) as error:
+            return self._retrieve_json(self.fallback_url)
+        except Exception:
             logger.debug("Fallback weather URL failed", exc_info=True)
             self.last_attempt_at = datetime.now()
-            raise error
+            raise
 
+    def _retrieve_json(self, url: str):
+        deadline = time.monotonic() + self._url_timeout
+        with urllib.request.urlopen(url, timeout=self._url_timeout) as response:
+            payload = self._read_with_deadline(response, deadline)
+        
+        json_result = json.loads(payload.decode())
+        return json_result["current"], json_result["time"]
+
+    def _read_with_deadline(self, response, deadline):
+        """Reads one byte at a time: a trickling source cannot hold the
+        reading past the deadline, and an empty read, or a response
+        closed by its last byte, ends the loop."""
+        payload = b""
+        while response.fp is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"the weather source did not answer within {self._url_timeout} seconds")
+            response.fp.raw._sock.settimeout(remaining)
+            chunk = response.read(1)
+            if not chunk:
+                break
+            payload += chunk
+        return payload
 
     def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
-        self._refresh_if_stale()
         sensor = self.json[name]
         return self.__convert_to_float(sensor["value"]), html.unescape(sensor["unit_of_measurement"]).strip()
 
-    def _refresh_if_stale(self):
+    def refresh(self):
         """
         Reads the remote source again when the data is stale, once even if
         several callers ask together: the second one finds it already fresh.
@@ -140,7 +152,7 @@ class Weather:
                 return
             try:
                 self.json, self.updated_at = self._retrieve_data()
-            except (HTTPError, URLError, TimeoutError):
+            except Exception:
                 logger.debug("Primary weather URL failed; trying fallback", exc_info=True)
                 self.json, self.updated_at = self._retrieve_fallback_data()
             if (datetime.now() - self.updated_at).total_seconds() >= self._time_expired * 3:
@@ -155,5 +167,4 @@ class Weather:
         except ValueError:
             logger.warning("Weather value not convertible to float: %r, falling back to 0.0", value)
             return 0.0
-        
         

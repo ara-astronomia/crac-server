@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -7,6 +8,7 @@ from crac_protobuf.curtains_pb2 import CurtainStatus
 from crac_protobuf.roof_pb2 import RoofAction, RoofRequest, RoofResponse, RoofStatus
 from crac_protobuf.telescope_pb2 import TelescopeStatus
 from crac_protobuf.ups_pb2 import UpsResponse, UpsStatus
+from crac_server.component.weather.weather import Weather
 from crac_server.converter.roof_converter import RoofConverter, RoofMediator
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.handler.roof_handler import (
@@ -46,6 +48,49 @@ class TestRoofWeatherHandler(unittest.TestCase):
     def test_allows_opening_on_unknown_weather_when_configured_not_to_block(self):
         mediator = self._handle(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, False)
         self.assertIs(False, mediator.is_disabled)
+
+    def test_the_weather_is_read_from_the_cache_without_touching_the_network(self):
+        source = self.cached_weather()
+        mediator = SimpleNamespace(status=RoofStatus.ROOF_CLOSED, action=RoofAction.OPEN, is_disabled=False)
+        with (
+            patch("crac_server.handler.roof_handler.weather", return_value=source),
+            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=True),
+            patch.object(RoofConverter, "convert", return_value=RoofResponse()),
+            patch("urllib.request.urlopen") as urlopen,
+        ):
+            RoofWeatherHandler().handle(mediator)
+
+        urlopen.assert_not_called()
+        self.assertIs(False, mediator.is_disabled)
+
+    def test_opening_stays_blocked_when_the_cached_data_expired(self):
+        source = self.cached_weather()
+        source.updated_at = "2000-01-01 00:00:00"
+        mediator = SimpleNamespace(status=RoofStatus.ROOF_CLOSED, action=RoofAction.OPEN, is_disabled=False)
+        with (
+            patch("crac_server.handler.roof_handler.weather", return_value=source),
+            patch("crac_server.handler.roof_handler.Config.getRequiredBoolean", return_value=True),
+            patch.object(RoofConverter, "convert", return_value=RoofResponse()),
+            patch("urllib.request.urlopen") as urlopen,
+        ):
+            RoofWeatherHandler().handle(mediator)
+
+        urlopen.assert_not_called()
+        self.assertIs(True, mediator.is_disabled)
+
+    def cached_weather(self):
+        source = Weather("http://primary.test", "http://fallback.test", "%Y-%m-%d %H:%M:%S", 660, 330, url_timeout=1)
+        source.json = {
+            "outTemp": {"value": "15,0", "unit_of_measurement": "°C"},
+            "humidity": {"value": "60,0", "unit_of_measurement": "%"},
+            "barometer": {"value": "1013,0", "unit_of_measurement": "mbar"},
+            "barometerTrend": {"value": "0,0", "unit_of_measurement": "mbar"},
+            "windSpeed": {"value": "0,0", "unit_of_measurement": "km/h"},
+            "windGust": {"value": "0,0", "unit_of_measurement": "km/h"},
+            "rainRate": {"value": "0,0", "unit_of_measurement": "mm/h"},
+        }
+        source.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return source
 
 
 class TestRoofUpsHandler(unittest.TestCase):
