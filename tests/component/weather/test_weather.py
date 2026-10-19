@@ -162,6 +162,37 @@ class TestWeather(unittest.TestCase):
         response.fp.raw._sock.settimeout.assert_has_calls([call(6), call(2)])
 
     @patch("urllib.request.urlopen")
+    def test_a_source_that_closes_with_the_last_byte_still_reads_whole(self, urlopen):
+        current, time = self.retrieve()
+        body = json.dumps({"current": current, "time": time}).encode("utf8")
+
+        class ClosingResponse:
+            """http.client closes the response as soon as the last byte
+            of a Content-Length body is read: fp is None from then on."""
+
+            def __init__(self, body):
+                self._body = body
+                self.fp = MagicMock()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, amount):
+                if not self._body:
+                    return b""
+                chunk, self._body = self._body[:amount], self._body[amount:]
+                if not self._body:
+                    self.fp = None
+                return chunk
+
+        urlopen.return_value = ClosingResponse(body)
+        self.weather.refresh()
+        self.assertEqual(self.__to_expected(current["outTemp"]), self.weather.temperature)
+
+    @patch("urllib.request.urlopen")
     def test_the_reading_has_a_deadline(self, urlopen):
         urlopen.return_value = self.mocked_urlopen()
         self.weather.refresh()
