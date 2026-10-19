@@ -14,6 +14,7 @@ from crac_server.service.ups_service import UpsService
 
 
 UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
+UPS_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS_UNAVAILABLE
 
 
 SECTIONS = {
@@ -636,12 +637,14 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
             patch("crac_server.service.ups_service.emergency_closure"),
             patch("crac_server.service.ups_service.ups_emergency"),
+            patch("crac_server.service.external_conditions.external_conditions"),
         ]
         mocks = [p.start() for p in self._patches]
         self.addCleanup(self._restore)
         self.closure = mocks[3].return_value
         self.closure.state.return_value = EmergencyClosure()
         self.ups_emergency = mocks[4].return_value
+        self.conditions = mocks[5].return_value
         self.ups_service = UpsService()
         self.ups_emergency.device_is_critical.return_value = False
         self.ups_emergency.can_be_judged.return_value = True
@@ -762,6 +765,25 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(closure.state.return_value, response.emergency_closure)
 
+    async def test_a_check_with_all_devices_readable_tells_the_conditions_the_ups_is_available(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+
+        await self.ups_service.check()
+
+        self.conditions.note_availability.assert_called_once_with(UPS_UNAVAILABLE, True)
+
+    async def test_an_unreadable_device_tells_the_conditions_the_ups_is_not_available(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return self._reading(device)
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+
+        await self.ups_service.check()
+
+        self.conditions.note_availability.assert_called_once_with(UPS_UNAVAILABLE, False)
+
 
 class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
     """The safety decision must not depend on a client polling GetStatus:
@@ -777,6 +799,7 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
             patch("crac_server.service.ups_service.emergency_closure"),
             patch("crac_server.service.ups_service.ups_emergency"),
+            patch("crac_server.service.external_conditions.external_conditions"),
         ]
         mocks = [p.start() for p in patches]
         for p in patches:

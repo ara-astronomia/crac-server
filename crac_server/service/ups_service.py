@@ -38,6 +38,7 @@ BATTERY_STATUS_BY_FLAG = {
 FLAGS_WITHOUT_A_STATUS_VALUE = frozenset(("RB", "FSD", "ALARM"))
 MIN_CHECK_INTERVAL = 30
 UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
+UPS_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS_UNAVAILABLE
 
 
 class UpsService(UpsServicer):
@@ -193,6 +194,7 @@ class UpsService(UpsServicer):
         """Read every UPS and report to the emergency closure: a single
         device in a critical condition is enough, and one that could not
         be read or cannot be judged neither starts nor settles a closure."""
+        from crac_server.service.external_conditions import external_conditions
         readings = {}
         for device in self._configured_devices():
             readings[device] = await asyncio.to_thread(self._read_or_error, device)
@@ -204,6 +206,7 @@ class UpsService(UpsServicer):
         unreadable = [device for device in readings if device not in readable]
         for device in unreadable:
             ups_emergency().device_lost(device)
+        external_conditions().note_availability(UPS_UNAVAILABLE, response.status != UpsStatus.UPS_STATUS_UNSPECIFIED)
         self._report(critical, unreadable)
         return response
 

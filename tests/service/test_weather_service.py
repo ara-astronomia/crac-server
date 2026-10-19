@@ -23,6 +23,7 @@ from crac_server.component.weather.weather import Weather
 from crac_server.service.weather_service import WeatherService
 
 WEATHER = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_WEATHER
+WEATHER_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_WEATHER_UNAVAILABLE
 
 
 class TestWeatherService(unittest.IsolatedAsyncioTestCase):
@@ -121,6 +122,37 @@ class TestWeatherServiceReportsToTheEmergencyClosure(unittest.IsolatedAsyncioTes
                 response = await self.service.GetStatus(None, None)
 
                 self.assertEqual(self.closure.state.return_value, response.emergency_closure)
+
+
+class TestWeatherServiceNotifiesTheExternalConditions(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self):
+        patcher = patch("crac_server.service.weather_service.external_conditions")
+        self.conditions = patcher.start().return_value
+        self.addCleanup(patcher.stop)
+        self.service = WeatherService()
+        self.service.weather_converter = MagicMock()
+
+    async def test_a_known_weather_is_available(self):
+        for status in (
+            WeatherStatus.WEATHER_STATUS_NORMAL,
+            WeatherStatus.WEATHER_STATUS_WARNING,
+            WeatherStatus.WEATHER_STATUS_DANGER,
+        ):
+            with self.subTest(status=WeatherStatus.Name(status)):
+                self.service.weather_converter.convert.return_value = WeatherResponse(status=status)
+
+                await self.service.GetStatus(None, None)
+
+                self.conditions.note_availability.assert_called_once_with(WEATHER_UNAVAILABLE, True)
+                self.conditions.note_availability.reset_mock()
+
+    async def test_an_unknown_weather_is_not_available(self):
+        self.service.weather_converter.convert.side_effect = ConnectionError("weather station unreachable")
+
+        await self.service.GetStatus(None, None)
+
+        self.conditions.note_availability.assert_called_once_with(WEATHER_UNAVAILABLE, False)
 
 
 class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
