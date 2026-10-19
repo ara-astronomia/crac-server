@@ -118,19 +118,20 @@ class Weather:
         return json_result["current"], json_result["time"]
 
     def _read_with_deadline(self, response, deadline):
-        """Reads one byte at a time, so that each socket read returns as soon
-        as some data arrives: a source that trickles bytes cannot hold the
-        reading open past the deadline."""
+        """Reads one byte at a time: a trickling source cannot hold the
+        reading past the deadline, and an empty read, or a response
+        closed by its last byte, ends the loop."""
         payload = b""
-        while True:
+        while response.fp is not None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError(f"the weather source did not answer within {self._url_timeout} seconds")
             response.fp.raw._sock.settimeout(remaining)
             chunk = response.read(1)
             if not chunk:
-                return payload
+                break
             payload += chunk
+        return payload
 
     def _get_sensor(self, name: str) -> tuple[Union[float, str], str]:
         sensor = self.json[name]
