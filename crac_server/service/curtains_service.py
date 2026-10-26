@@ -1,7 +1,7 @@
 import logging
 from crac_protobuf.curtains_pb2_grpc import CurtainServicer
 from crac_server.converter.curtains_converter import CurtainsMediator
-from crac_server.handler.curtains_handler import CurtainsDisableHandler, CurtainsEnableHandler, CurtainsMoveHandler, CurtainsRoofHandler, CurtainsTelescopeHandler, CurtainsUpsHandler, CurtainsWeatherHandler
+from crac_server.handler.curtains_handler import CurtainsDisableHandler, CurtainsEnableHandler, CurtainsMoveHandler, CurtainsRoofHandler, CurtainsTelescopeHandler
 
 
 logger = logging.getLogger(__name__)
@@ -13,15 +13,11 @@ class CurtainsService(CurtainServicer):
         curtains_mediator = CurtainsMediator(request)
 
         roof_curtains_handler = CurtainsRoofHandler()
-        weather_curtains_handler = CurtainsWeatherHandler()
-        ups_curtains_handler = CurtainsUpsHandler()
         telescope_curtains_handler = CurtainsTelescopeHandler()
         disable_curtains_handler = CurtainsDisableHandler()
         enable_curtains_handler = CurtainsEnableHandler()
         move_curtains_handler = CurtainsMoveHandler()
         disable_curtains_handler.set_next(roof_curtains_handler) \
-            .set_next(weather_curtains_handler) \
-            .set_next(ups_curtains_handler) \
             .set_next(telescope_curtains_handler) \
             .set_next(enable_curtains_handler) \
             .set_next(move_curtains_handler)

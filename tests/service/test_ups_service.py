@@ -744,6 +744,21 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
 
         closure.report.assert_called_once_with(UPS, True)
 
+    async def test_a_device_missing_only_a_diagnostic_metric_stays_readable(self):
+        self._patches[4].stop()
+        self._patches.pop(4)
+        readings = {
+            "apc-3000": {"battery_charge": "80", "ups_status": "OL"},
+            "cyberpower": {"battery_charge": "80", "input_voltage": "220", "ups_status": "OL"},
+        }
+        ups().status_for = MagicMock(side_effect=lambda device: readings[device])
+
+        response, closure = await self._check()
+
+        closure.report.assert_called_once_with(UPS, False)
+        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
+        self.assertEqual(["apc-3000", "cyberpower"], list(response.devices))
+
     async def test_a_blind_reading_does_not_hide_a_real_danger_of_the_other_device(self):
         self._patches[4].stop()
         self._patches.pop(4)
