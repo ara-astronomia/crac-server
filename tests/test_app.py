@@ -1,3 +1,4 @@
+import importlib
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch, sentinel
@@ -72,3 +73,23 @@ class TestServe(unittest.IsolatedAsyncioTestCase):
 
     async def __running_for_a_moment(self):
         await asyncio.sleep(0.01)
+
+
+class TestTheAppToleratesAStaleIersCatalog(unittest.TestCase):
+    """The emergency closure parks the telescope, and the park converts
+    alt/az to RA: an old catalog must not stop it, and the catalog keeps
+    refreshing whenever the network allows it."""
+
+    def test_parking_never_fails_because_the_earth_rotation_data_is_old(self):
+        import crac_server.app
+        from astropy.utils.iers import conf
+
+        conf.auto_max_age = 30.0
+        conf.auto_download = True
+        self.addCleanup(setattr, conf, "auto_max_age", None)
+        self.addCleanup(setattr, conf, "auto_download", False)
+
+        importlib.reload(crac_server.app)
+
+        self.assertIsNone(conf.auto_max_age)
+        self.assertTrue(conf.auto_download)
