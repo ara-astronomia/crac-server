@@ -912,3 +912,34 @@ class TestTheCachedStatus(unittest.IsolatedAsyncioTestCase):
             await ups_service().check()
 
         self.assertEqual(UpsStatus.UPS_STATUS_DANGER, ups_service().cached_status())
+
+
+class TestTheClosureConditionIsADangerToo(TestUpsServiceCheck):
+    """Whatever makes the closure start is a danger for the operator and
+    for the gate: the charts alone would call it healthy."""
+
+    async def test_a_critical_check_marks_the_whole_response_as_danger(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = True
+
+        response, _ = await self._check()
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+
+    async def test_the_display_read_keeps_the_danger_of_the_last_check(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = True
+        await self.ups_service.check()
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+
+    async def test_the_display_read_drops_the_danger_when_the_check_says_healthy(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = False
+        await self.ups_service.check()
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)

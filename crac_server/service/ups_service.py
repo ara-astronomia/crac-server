@@ -51,6 +51,7 @@ class UpsService(UpsServicer):
         self.check_interval = self._check_interval()
         self._watch_log = StatusLogger(logger, "UPS watch")
         self._last_check = None
+        self._last_critical = False
 
     def _validate_metrics(self):
         """Validate the configuration at startup: a broken one found while
@@ -190,7 +191,10 @@ class UpsService(UpsServicer):
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         """A display read, run by gRPC in a thread without an event loop:
         the emergency reaction lives in watch(), on the loop."""
-        return self._respond({device: self._read_or_error(device) for device in self._configured_devices()})[0]
+        response = self._respond({device: self._read_or_error(device) for device in self._configured_devices()})[0]
+        if self._last_critical:
+            response.status = UpsStatus.UPS_STATUS_DANGER
+        return response
 
     async def check(self) -> UpsResponse:
         """Read every UPS and report to the emergency closure: a single
@@ -210,6 +214,9 @@ class UpsService(UpsServicer):
             ups_emergency().device_lost(device)
         external_conditions().note_availability(UPS_UNAVAILABLE, response.status != UpsStatus.UPS_STATUS_UNSPECIFIED)
         self._report(critical, unreadable)
+        if critical:
+            response.status = UpsStatus.UPS_STATUS_DANGER
+        self._last_critical = critical
         self._last_check = response
         return response
 
