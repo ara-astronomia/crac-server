@@ -8,6 +8,11 @@ load_dotenv()
 logging.config.fileConfig(LOG_CONF_PATH, disable_existing_loggers=False)
 logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
+# The emergency closure parks the telescope, and the park converts
+# alt/az to RA: a catalog without fresh measures must not stop it.
+from astropy.utils.iers import conf as iers_conf
+iers_conf.auto_max_age = None
+
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
