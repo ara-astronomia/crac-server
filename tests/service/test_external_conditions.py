@@ -136,10 +136,22 @@ class TestTheMissingWeatherClosesTheOpenObservatory(unittest.TestCase):
 
         self.assertEqual(2, self.closure.report.call_count)
 
-    def test_a_reading_that_comes_back_restarts_the_wait(self):
+    def test_a_single_good_reading_does_not_restart_the_wait(self):
         self._note(False)
         self.clock += WAIT - 100
         self._note(False)
+        self._note(True)
+        self.clock += 100
+        self._note(False)
+
+        self.closure.report.assert_called_once_with(WEATHER_UNAVAILABLE, True)
+
+    def test_three_good_readings_in_a_row_restart_the_wait(self):
+        self._note(False)
+        self.clock += WAIT - 100
+        self._note(False)
+        self._note(True)
+        self._note(True)
         self._note(True)
         self.clock += 100
         self._note(False)
@@ -148,17 +160,20 @@ class TestTheMissingWeatherClosesTheOpenObservatory(unittest.TestCase):
 
     def test_the_restarted_wait_runs_for_the_full_time_again(self):
         self._note(False)
-        self.clock += WAIT - 100
         self._note(True)
-        self.clock += WAIT + 100
+        self._note(True)
+        self._note(True)
+        self.clock += WAIT - 1
         self._note(False)
 
         self.closure.report.assert_called_once_with(WEATHER_UNAVAILABLE, False)
 
-    def test_a_reading_that_comes_back_settles_the_closure_it_had_started(self):
+    def test_three_good_readings_in_a_row_settle_the_closure_it_had_started(self):
         self._note(False)
         self.clock += WAIT
         self._note(False)
+        self._note(True)
+        self._note(True)
         self._note(True)
 
         self.closure.report.assert_has_calls([
@@ -218,10 +233,12 @@ class TestTheMissingUpsClosesTheOpenObservatory(unittest.TestCase):
         self.closure.report.assert_called_once_with(UPS_UNAVAILABLE, True)
         self.wait_config.assert_called_with("close_on_unspecified_after", "ups_emergency")
 
-    def test_a_reading_that_comes_back_settles_the_closure_it_had_started(self):
+    def test_three_good_readings_in_a_row_settle_the_closure_it_had_started(self):
         self._note(False)
         self.clock += UPS_WAIT
         self._note(False)
+        self._note(True)
+        self._note(True)
         self._note(True)
 
         self.closure.report.assert_has_calls([
