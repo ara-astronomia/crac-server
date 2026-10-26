@@ -74,10 +74,15 @@ class Curtain:
         else:
             status = CurtainStatus.CURTAIN_STOPPED
 
-        if status is CurtainStatus.CURTAIN_ERROR:
+        if status is CurtainStatus.CURTAIN_DANGER:
+            self._status_log.record(
+                status, ErrorCause.SAFETY_STEP_EXCEEDED,
+                detail=f"steps={steps} safety_step={self._safety_step}",
+            )
+        elif status is CurtainStatus.CURTAIN_ERROR:
             self._status_log.record(
                 status, ErrorCause.STATE_NOT_RECOGNIZED,
-                detail=f"closed={closed} open={opened} motor={motor}",
+                detail=f"steps={steps} closed={closed} open={opened} motor={motor}",
             )
         else:
             self._status_log.record(status)
@@ -98,7 +103,6 @@ class Curtain:
             if self.get_status() > CurtainStatus.CURTAIN_OPENED or self._motor.value:
                 return
 
-            logger.debug("Curtain %s: from step %s to %s", self._orientation, self.steps(), step)
             direction = self._direction_to(step)
             if direction:
                 self._target = step
@@ -122,7 +126,7 @@ class Curtain:
     def enable(self):
         """Also cancels a disable() still on its way down."""
         with self._lock:
-            logger.debug("Curtain %s: enable", self._orientation)
+            logger.info("[%s] motor enabled", self._orientation)
             self._to_disable = False
             self._motor.enable_device.on()
 
@@ -134,6 +138,8 @@ class Curtain:
         self._drive(-1)
 
     def _disable_motor(self):
+        if self._motor.enable_device.value:
+            logger.info("[%s] motor disabled", self._orientation)
         self._motor.enable_device.off()
         self._to_disable = False
 
@@ -179,8 +185,10 @@ class Curtain:
 
     def _start(self, direction: int):
         if direction == 1:
+            logger.info("[%s] moving up towards step %s, from step %s", self._orientation, self._target, self.steps())
             self._motor.forward()
         elif direction == -1:
+            logger.info("[%s] moving down towards step %s, from step %s", self._orientation, self._target, self.steps())
             self._motor.backward()
 
     def _stop(self):
@@ -189,6 +197,7 @@ class Curtain:
             self._resting.cancel()
             self._resting = None
         if self._motor.value:
+            logger.info("[%s] stopped at step %s, target %s", self._orientation, self.steps(), self._target)
             self._last_direction = self._motor.value
             self._stopped_at = time.monotonic()
         self._motor.stop()
@@ -206,7 +215,6 @@ class Curtain:
                 not self._motor.enable_device.value
             ):
                 self._stop()
-                logger.debug("Curtain %s: stopped at step %s, target %s", self._orientation, self.steps(), self._target)
                 self._target = None
 
     def _on_switch(self, switch: DigitalInputDevice):
