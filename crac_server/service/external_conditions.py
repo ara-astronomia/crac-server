@@ -28,6 +28,8 @@ class UnavailableSource(NamedTuple):
     wait_key: str
 
 
+GOOD_READINGS_BEFORE_CLEAR = 3
+
 UNAVAILABLE_SOURCES = {
     WEATHER_UNAVAILABLE: UnavailableSource(section="weather", wait_key="close_on_unspecified_after"),
     UPS_UNAVAILABLE: UnavailableSource(section="ups_emergency", wait_key="close_on_unspecified_after"),
@@ -41,6 +43,7 @@ class ExternalConditions:
 
     def __init__(self) -> None:
         self._missing_since = {}
+        self._good_readings = {}
         self._gate_log = StatusLogger(logger, "External conditions")
 
     def operation_blocked(self) -> bool:
@@ -80,13 +83,19 @@ class ExternalConditions:
         return blocked
 
     def note_availability(self, trigger: EmergencyClosureTrigger, available: bool) -> None:
-        """Each source tells here on every check whether its data is fresh: a
-        source unknown longer than its configured wait, with the roof not
-        closed, starts the emergency closure."""
+        """Each source tells here on every check whether its data is fresh:
+        unknown past its wait it starts the closure, and it gets the green
+        light back only after three good readings in a row."""
         if available:
+            good = self._good_readings.get(trigger, 0) + 1
+            if good < GOOD_READINGS_BEFORE_CLEAR:
+                self._good_readings[trigger] = good
+                return
+            self._good_readings.pop(trigger, None)
             self._missing_since.pop(trigger, None)
             emergency_closure().report(trigger, False)
             return
+        self._good_readings.pop(trigger, None)
         if roof().get_status() == RoofStatus.ROOF_CLOSED:
             self._missing_since.pop(trigger, None)
             return
