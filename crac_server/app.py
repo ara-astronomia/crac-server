@@ -8,6 +8,15 @@ load_dotenv()
 logging.config.fileConfig(LOG_CONF_PATH, disable_existing_loggers=False)
 logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
+# The emergency closure parks the telescope, and the park converts
+# alt/az to RA: a catalog without fresh measures must not stop it.
+# IERS_AUTO_DOWNLOAD=false is for deployments that know they have no
+# network, so the doomed download attempts never slow the park down.
+from astropy.utils.iers import conf as iers_conf
+iers_conf.auto_max_age = None
+if os.environ.get("IERS_AUTO_DOWNLOAD", "").lower() in ("false", "0", "no"):
+    iers_conf.auto_download = False
+
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
 from crac_protobuf.roof_pb2_grpc import add_RoofServicer_to_server
@@ -77,8 +86,9 @@ async def serve():
     add_CoverMirrorServicer_to_server(
         CoverMirrorService(), server
     )
+    ups_service = UpsService()
     add_UpsServicer_to_server(
-        UpsService(), server
+        ups_service, server
     )
     add_GeographicServiceServicer_to_server(
         GeographicServicer(), server
@@ -91,8 +101,10 @@ async def serve():
     logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
     await server.start()
     weather_watch = asyncio.create_task(weather_service.watch())
+    ups_watch = asyncio.create_task(ups_service.watch())
     await server.wait_for_termination()
     weather_watch.cancel()
+    ups_watch.cancel()
 
 
 def main():

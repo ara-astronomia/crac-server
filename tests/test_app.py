@@ -1,3 +1,5 @@
+import importlib
+import os
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch, sentinel
@@ -55,5 +57,52 @@ class TestServe(unittest.IsolatedAsyncioTestCase):
         add_weather.assert_called_once_with(weather_service.return_value, server)
         weather_service.return_value.watch.assert_awaited_once_with()
 
+    async def test_the_ups_is_watched_by_the_same_service_that_answers_the_clients(self):
+        server = MagicMock(start=AsyncMock(), wait_for_termination=AsyncMock())
+        with patch("crac_server.app.build_components"), \
+                patch("crac_server.app.grpc.aio.server", return_value=server), \
+                patch("crac_server.app.WeatherService") as weather_service, \
+                patch("crac_server.app.UpsService") as ups_service, \
+                patch("crac_server.app.add_UpsServicer_to_server") as add_ups:
+            weather_service.return_value.watch = AsyncMock()
+            ups_service.return_value.watch = AsyncMock()
+            server.wait_for_termination.side_effect = self.__running_for_a_moment
+            await serve()
+
+        add_ups.assert_called_once_with(ups_service.return_value, server)
+        ups_service.return_value.watch.assert_awaited_once_with()
+
     async def __running_for_a_moment(self):
         await asyncio.sleep(0.01)
+
+
+class TestTheAppToleratesAStaleIersCatalog(unittest.TestCase):
+    """The emergency closure parks the telescope, and the park converts
+    alt/az to RA: an old catalog must not stop it, and the catalog keeps
+    refreshing whenever the network allows it."""
+
+    def test_an_isolated_deployment_can_forbid_the_iers_downloads(self):
+        import crac_server.app
+        from astropy.utils.iers import conf
+
+        conf.auto_download = True
+        self.addCleanup(setattr, conf, "auto_download", False)
+
+        with patch.dict(os.environ, {"IERS_AUTO_DOWNLOAD": "false"}):
+            importlib.reload(crac_server.app)
+
+        self.assertFalse(conf.auto_download)
+
+    def test_parking_never_fails_because_the_earth_rotation_data_is_old(self):
+        import crac_server.app
+        from astropy.utils.iers import conf
+
+        conf.auto_max_age = 30.0
+        conf.auto_download = True
+        self.addCleanup(setattr, conf, "auto_max_age", None)
+        self.addCleanup(setattr, conf, "auto_download", False)
+
+        importlib.reload(crac_server.app)
+
+        self.assertIsNone(conf.auto_max_age)
+        self.assertTrue(conf.auto_download)
