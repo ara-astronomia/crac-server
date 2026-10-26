@@ -62,7 +62,7 @@ class TestServe(unittest.IsolatedAsyncioTestCase):
         with patch("crac_server.app.build_components"), \
                 patch("crac_server.app.grpc.aio.server", return_value=server), \
                 patch("crac_server.app.WeatherService") as weather_service, \
-                patch("crac_server.app.UpsService") as ups_service, \
+                patch("crac_server.app.ups_service") as ups_service, \
                 patch("crac_server.app.add_UpsServicer_to_server") as add_ups:
             weather_service.return_value.watch = AsyncMock()
             ups_service.return_value.watch = AsyncMock()

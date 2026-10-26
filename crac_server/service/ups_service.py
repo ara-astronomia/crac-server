@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from functools import lru_cache
 import math
 from datetime import datetime
 from crac_protobuf.chart_pb2 import (
@@ -38,6 +39,7 @@ BATTERY_STATUS_BY_FLAG = {
 FLAGS_WITHOUT_A_STATUS_VALUE = frozenset(("RB", "FSD", "ALARM"))
 MIN_CHECK_INTERVAL = 30
 UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
+UPS_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS_UNAVAILABLE
 
 
 class UpsService(UpsServicer):
@@ -48,6 +50,8 @@ class UpsService(UpsServicer):
         self._validate_emergency()
         self.check_interval = self._check_interval()
         self._watch_log = StatusLogger(logger, "UPS watch")
+        self._last_check = None
+        self._last_critical = False
 
     def _validate_metrics(self):
         """Validate the configuration at startup: a broken one found while
@@ -187,12 +191,16 @@ class UpsService(UpsServicer):
     def GetStatus(self, request: UpsRequest, context) -> UpsResponse:
         """A display read, run by gRPC in a thread without an event loop:
         the emergency reaction lives in watch(), on the loop."""
-        return self._respond({device: self._read_or_error(device) for device in self._configured_devices()})[0]
+        response = self._respond({device: self._read_or_error(device) for device in self._configured_devices()})[0]
+        if self._last_critical:
+            response.status = UpsStatus.UPS_STATUS_DANGER
+        return response
 
     async def check(self) -> UpsResponse:
         """Read every UPS and report to the emergency closure: a single
         device in a critical condition is enough, and one that could not
         be read or cannot be judged neither starts nor settles a closure."""
+        from crac_server.service.external_conditions import external_conditions
         readings = {}
         for device in self._configured_devices():
             readings[device] = await asyncio.to_thread(self._read_or_error, device)
@@ -204,7 +212,12 @@ class UpsService(UpsServicer):
         unreadable = [device for device in readings if device not in readable]
         for device in unreadable:
             ups_emergency().device_lost(device)
+        external_conditions().note_availability(UPS_UNAVAILABLE, response.status != UpsStatus.UPS_STATUS_UNSPECIFIED)
         self._report(critical, unreadable)
+        if critical:
+            response.status = UpsStatus.UPS_STATUS_DANGER
+        self._last_critical = critical
+        self._last_check = response
         return response
 
     async def watch(self):
@@ -215,11 +228,12 @@ class UpsService(UpsServicer):
         while True:
             try:
                 await self.check()
-                self._watch_log.record("running")
             except Exception as e:
                 self._watch_log.record(
                     f"check failed: {type(e).__name__}", ErrorCause.UNEXPECTED_FAILURE, detail=str(e), exc_info=e,
                 )
+                from crac_server.service.external_conditions import external_conditions
+                external_conditions().note_availability(UPS_UNAVAILABLE, False)
             await asyncio.sleep(self.check_interval)
 
     @staticmethod
@@ -232,10 +246,15 @@ class UpsService(UpsServicer):
             return e
 
     def _report(self, critical: bool, unreadable) -> None:
+        """What the watch says about the whole check: the failure of the
+        devices that cannot be read, or the run with nothing to report.
+        One record per transition, so a lasting fault stays one line."""
         if unreadable:
             self._watch_log.record(f"cannot check {unreadable}", ErrorCause.DEVICE_UNREACHABLE)
             if not critical:
                 return
+        else:
+            self._watch_log.record("running")
         emergency_closure().report(UPS, critical)
 
     def _respond(self, readings: dict) -> tuple:
@@ -312,3 +331,16 @@ class UpsService(UpsServicer):
             logger.debug(f"now ups status is: {status}")
         
         return status
+
+    def cached_status(self) -> UpsStatus:
+        """The overall status of the last check: what a command can ask
+        without waiting for the UPS to answer. Unknown until a check has
+        run, and the safe answer comes first."""
+        if self._last_check is None:
+            return UpsStatus.UPS_STATUS_UNSPECIFIED
+        return self._last_check.status
+
+
+@lru_cache(maxsize=1)
+def ups_service() -> UpsService:
+    return UpsService()

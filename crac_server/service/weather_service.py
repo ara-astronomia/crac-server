@@ -15,6 +15,7 @@ from crac_server.config import Config
 from crac_server.converter.chart_config import ChartConfigError
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.service.emergency_closure import emergency_closure
+from crac_server.service.external_conditions import external_conditions
 from crac_server.status_log import ErrorCause, StatusLogger
 
 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 MIN_CHECK_INTERVAL = 30
 WEATHER = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_WEATHER
+WEATHER_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_WEATHER_UNAVAILABLE
 
 
 class WeatherService(WeatherServicer):
@@ -63,6 +65,7 @@ class WeatherService(WeatherServicer):
                 self._watch_log.record(
                     f"check failed: {type(e).__name__}", ErrorCause.UNEXPECTED_FAILURE, detail=str(e), exc_info=e,
                 )
+                external_conditions().note_availability(WEATHER_UNAVAILABLE, False)
             await asyncio.sleep(self.check_interval)
 
     async def _refresh(self):
@@ -83,9 +86,9 @@ class WeatherService(WeatherServicer):
         )
 
     async def check(self) -> WeatherResponse:
-        """Convert the cached weather and report it to the emergency closure:
-        the network reading belongs to the watch loop. An unknown weather
-        reports nothing: it neither starts nor settles a closure."""
+        """Convert the cached weather and report it to the emergency
+        closure: the network reading belongs to the watch loop. A known
+        status tells the danger, an unknown one feeds the wait."""
         try:
             response = await asyncio.to_thread(self.weather_converter.convert, weather())
         except ChartConfigError:
@@ -101,6 +104,9 @@ class WeatherService(WeatherServicer):
         logger.debug("weather response")
         logger.debug(response)
 
+        external_conditions().note_availability(
+            WEATHER_UNAVAILABLE, response.status != WeatherStatus.WEATHER_STATUS_UNSPECIFIED
+        )
         if response.status != WeatherStatus.WEATHER_STATUS_UNSPECIFIED:
             emergency_closure().report(WEATHER, response.status == WeatherStatus.WEATHER_STATUS_DANGER)
         response.emergency_closure.CopyFrom(emergency_closure().state())

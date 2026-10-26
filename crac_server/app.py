@@ -34,7 +34,7 @@ from crac_server.service.button_service import ButtonService
 from crac_server.service.cover_mirror_service import CoverMirrorService
 from crac_server.service.geographic_service import GeographicServicer
 from crac_server.service.image_config_service import ImageConfigServicer
-from crac_server.service.ups_service import UpsService
+from crac_server.service.ups_service import ups_service
 from crac_server.service.emergency_closure import emergency_closure
 from crac_server.component.button_control import switches
 from crac_server.component.cover_mirror import cover_mirror
@@ -86,9 +86,9 @@ async def serve():
     add_CoverMirrorServicer_to_server(
         CoverMirrorService(), server
     )
-    ups_service = UpsService()
+    ups_instance = ups_service()
     add_UpsServicer_to_server(
-        ups_service, server
+        ups_instance, server
     )
     add_GeographicServiceServicer_to_server(
         GeographicServicer(), server
@@ -101,7 +101,7 @@ async def serve():
     logger.info(f'Server loaded on port {Config.getValue("port", "server")}')
     await server.start()
     weather_watch = asyncio.create_task(weather_service.watch())
-    ups_watch = asyncio.create_task(ups_service.watch())
+    ups_watch = asyncio.create_task(ups_instance.watch())
     await server.wait_for_termination()
     weather_watch.cancel()
     ups_watch.cancel()

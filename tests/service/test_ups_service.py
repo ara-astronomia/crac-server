@@ -10,10 +10,11 @@ from crac_protobuf.emergency_closure_pb2 import (
 from crac_protobuf.ups_pb2 import BatteryStatus, UpsStatus
 from crac_server.component.ups import ups
 from crac_server.converter.chart_config import ChartConfigError
-from crac_server.service.ups_service import UpsService
+from crac_server.service.ups_service import UpsService, ups_service
 
 
 UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
+UPS_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS_UNAVAILABLE
 
 
 SECTIONS = {
@@ -636,12 +637,14 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
             patch("crac_server.service.ups_service.emergency_closure"),
             patch("crac_server.service.ups_service.ups_emergency"),
+            patch("crac_server.service.external_conditions.external_conditions"),
         ]
         mocks = [p.start() for p in self._patches]
         self.addCleanup(self._restore)
         self.closure = mocks[3].return_value
         self.closure.state.return_value = EmergencyClosure()
         self.ups_emergency = mocks[4].return_value
+        self.conditions = mocks[5].return_value
         self.ups_service = UpsService()
         self.ups_emergency.device_is_critical.return_value = False
         self.ups_emergency.can_be_judged.return_value = True
@@ -777,6 +780,25 @@ class TestUpsServiceCheck(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(closure.state.return_value, response.emergency_closure)
 
+    async def test_a_check_with_all_devices_readable_tells_the_conditions_the_ups_is_available(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+
+        await self.ups_service.check()
+
+        self.conditions.note_availability.assert_called_once_with(UPS_UNAVAILABLE, True)
+
+    async def test_an_unreadable_device_tells_the_conditions_the_ups_is_not_available(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return self._reading(device)
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+
+        await self.ups_service.check()
+
+        self.conditions.note_availability.assert_called_once_with(UPS_UNAVAILABLE, False)
+
 
 class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
     """The safety decision must not depend on a client polling GetStatus:
@@ -792,6 +814,7 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
             patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
             patch("crac_server.service.ups_service.emergency_closure"),
             patch("crac_server.service.ups_service.ups_emergency"),
+            patch("crac_server.service.external_conditions.external_conditions"),
         ]
         mocks = [p.start() for p in patches]
         for p in patches:
@@ -800,6 +823,7 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.closure = mocks[3].return_value
         self.closure.state.return_value = EmergencyClosure()
         self.ups_emergency = mocks[4].return_value
+        self.conditions = mocks[5].return_value
         self.service = UpsService()
         self.service.check_interval = 0.01
         self.ups_emergency.device_is_critical.return_value = True
@@ -822,6 +846,30 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any("RuntimeError" in record.getMessage() for record in captured.records))
         self.closure.report.assert_called_with(UPS, True)
+
+    async def test_a_check_that_cannot_run_counts_as_data_that_does_not_arrive(self):
+        self.ups_emergency.device_is_critical.side_effect = RuntimeError("broken configuration")
+
+        await self.__watch_until_checked(times=2)
+
+        self.conditions.note_availability.assert_called_with(UPS_UNAVAILABLE, False)
+
+    async def test_a_mute_device_logs_the_failure_once_and_no_recovery_per_cycle(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return {"battery_charge": "80", "ups_status": "OL"}
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+        self.ups_emergency.device_is_critical.return_value = False
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="INFO") as captured:
+            await self.__watch_until_checked(times=3)
+
+        failures = [r for r in captured.records if "cannot check" in r.getMessage()]
+        recoveries = [r for r in captured.records if "recovered" in r.getMessage()]
+        self.assertEqual(1, len(failures))
+        self.assertEqual(0, len(recoveries))
 
     async def test_an_unreadable_device_is_logged_and_reports_nothing(self):
         def side_effect(device):
@@ -857,7 +905,81 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         task = asyncio.create_task(self.service.watch())
         try:
             async with asyncio.timeout(2):
-                while ups().status_for.call_count < times * len(self.service._configured_devices()):
+                while ups().status_for.call_count < (times + 1) * len(self.service._configured_devices()):
                     await asyncio.sleep(0.001)
         finally:
             task.cancel()
+
+
+class TestTheCachedStatus(unittest.IsolatedAsyncioTestCase):
+    """What a command can ask without waiting for the UPS to answer:
+    the status of the last check, unknown until one has run."""
+
+    def setUp(self):
+        ups_service.cache_clear()
+        self.addCleanup(ups_service.cache_clear)
+        self._original_status_for = ups().status_for
+        self._patches = [
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "ups_status": "ups.status"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "ups_status"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
+            patch("crac_server.service.ups_service.emergency_closure"),
+            patch("crac_server.service.ups_service.ups_emergency"),
+            patch("crac_server.service.external_conditions.external_conditions"),
+        ]
+        mocks = [p.start() for p in self._patches]
+        self.addCleanup(self._restore)
+        self.closure = mocks[3].return_value
+        self.closure.state.return_value = EmergencyClosure()
+        self.emergency = mocks[4].return_value
+        self.emergency.device_is_critical.return_value = False
+        self.emergency.can_be_judged.return_value = True
+        ups_service()
+
+    def _restore(self):
+        ups().status_for = self._original_status_for
+        for p in self._patches:
+            p.stop()
+
+    async def test_before_the_first_check_the_status_is_unknown(self):
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, ups_service().cached_status())
+
+    async def test_the_cached_status_is_the_one_of_the_last_check(self):
+        ups().status_for = MagicMock(side_effect=lambda device: {"battery_charge": "10", "ups_status": "OL"})
+
+        with patch("crac_server.service.ups_service.emergency_closure") as closure:
+            closure.return_value.state.return_value = EmergencyClosure()
+            await ups_service().check()
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, ups_service().cached_status())
+
+
+class TestTheClosureConditionIsADangerToo(TestUpsServiceCheck):
+    """Whatever makes the closure start is a danger for the operator and
+    for the gate: the charts alone would call it healthy."""
+
+    async def test_a_critical_check_marks_the_whole_response_as_danger(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = True
+
+        response, _ = await self._check()
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+
+    async def test_the_display_read_keeps_the_danger_of_the_last_check(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = True
+        await self.ups_service.check()
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, response.status)
+
+    async def test_the_display_read_drops_the_danger_when_the_check_says_healthy(self):
+        ups().status_for = MagicMock(side_effect=self._reading)
+        self.ups_emergency.device_is_critical.return_value = False
+        await self.ups_service.check()
+
+        response = self.ups_service.GetStatus(None, None)
+
+        self.assertEqual(UpsStatus.UPS_STATUS_NORMAL, response.status)
