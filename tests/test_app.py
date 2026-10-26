@@ -1,4 +1,5 @@
 import importlib
+import os
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch, sentinel
@@ -79,6 +80,18 @@ class TestTheAppToleratesAStaleIersCatalog(unittest.TestCase):
     """The emergency closure parks the telescope, and the park converts
     alt/az to RA: an old catalog must not stop it, and the catalog keeps
     refreshing whenever the network allows it."""
+
+    def test_an_isolated_deployment_can_forbid_the_iers_downloads(self):
+        import crac_server.app
+        from astropy.utils.iers import conf
+
+        conf.auto_download = True
+        self.addCleanup(setattr, conf, "auto_download", False)
+
+        with patch.dict(os.environ, {"IERS_AUTO_DOWNLOAD": "false"}):
+            importlib.reload(crac_server.app)
+
+        self.assertFalse(conf.auto_download)
 
     def test_parking_never_fails_because_the_earth_rotation_data_is_old(self):
         import crac_server.app
