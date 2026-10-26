@@ -2,7 +2,6 @@ import logging
 from crac_protobuf.curtains_pb2 import (
     CurtainsAction,  # type: ignore
     CurtainsResponse,  # type: ignore
-    CurtainStatus,  # type: ignore
 )
 from crac_protobuf.roof_pb2 import (
     RoofStatus,  # type: ignore
@@ -41,34 +40,6 @@ class CurtainsRoofHandler(AbstractCurtainsHandler):
         
         return super().handle(mediator)
 
-class CurtainsWeatherHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
-        logger.debug("In weather handler")
-
-        if (
-            mediator.status_east is CurtainStatus.CURTAIN_DISABLED and
-            mediator.status_west is CurtainStatus.CURTAIN_DISABLED and
-            external_conditions().operation_blocked()
-        ):
-            mediator.is_disabled = True
-            self._next_handler = None
-
-        return super().handle(mediator)
-
-class CurtainsUpsHandler(AbstractCurtainsHandler):
-    def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
-        logger.debug("In ups handler")
-
-        if (
-            mediator.status_east is CurtainStatus.CURTAIN_DISABLED and
-            mediator.status_west is CurtainStatus.CURTAIN_DISABLED and
-            external_conditions().operation_blocked()
-        ):
-            mediator.is_disabled = True
-            self._next_handler = None
-
-        return super().handle(mediator)
-
 class CurtainsTelescopeHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:    
         if not telescope().polling:
@@ -105,13 +76,27 @@ class CurtainsEnableHandler(AbstractCurtainsHandler):
 
 class CurtainsMoveHandler(AbstractCurtainsHandler):
     def handle(self, mediator: CurtainsMediator) -> CurtainsResponse:
+        steps = self._calculate_curtains_steps(mediator.curtain_east.full_travel)
+        if self._would_open(mediator, steps) and external_conditions().operation_blocked():
+            logger.info("A move would open a curtain, and the external conditions block it")
+            mediator.is_disabled = True
+            self._next_handler = None
+            return super().handle(mediator)
         if not mediator.is_disabled and telescope().speed in (TelescopeSpeed.SPEED_TRACKING, TelescopeSpeed.SPEED_NOT_TRACKING):
-            steps = self._calculate_curtains_steps(mediator.curtain_east.full_travel)
             for curtain, side in ((mediator.curtain_east, "east"), (mediator.curtain_west, "west")):
                 if steps.get(side) is not None:
                     curtain.move(steps[side])
 
         return super().handle(mediator)
+
+    @staticmethod
+    def _would_open(mediator: CurtainsMediator, steps: dict) -> bool:
+        """Only the opening part of a move is unsafe: closing with the
+        weather bad is always welcome."""
+        return (
+            steps.get("east") is not None and steps["east"] > mediator.steps_east
+            or steps.get("west") is not None and steps["west"] > mediator.steps_west
+        )
     
     def _calculate_curtains_steps(self, full_travel: int):
         """Both curtains down with the telescope parked or below their area,

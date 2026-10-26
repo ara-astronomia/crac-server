@@ -11,84 +11,68 @@ from crac_server.handler.curtains_handler import (
     CurtainsMoveHandler,
     CurtainsRoofHandler,
     CurtainsTelescopeHandler,
-    CurtainsUpsHandler,
-    CurtainsWeatherHandler,
 )
 from crac_server.service.curtains_service import CurtainsService
 
 
-class TestCurtainsWeatherHandler(unittest.TestCase):
-    """The curtains ask the external conditions whether they may be enabled:
-    the policies of each source live in one place, not in the handler."""
+class TestTheMoveAsksTheGate(unittest.TestCase):
+    """The gate answers where the movement is decided: a move that opens
+    waits for the world outside, one that closes always goes."""
 
-    def _handle(self, status_east, status_west, blocked):
+    def _move(self, steps, steps_east, steps_west, blocked):
+        east, west = MagicMock(full_travel=200), MagicMock(full_travel=200)
         mediator = SimpleNamespace(
-            status_east=status_east,
-            status_west=status_west,
-            action=CurtainsAction.ENABLE,
             is_disabled=False,
+            steps_east=steps_east,
+            steps_west=steps_west,
+            curtain_east=east,
+            curtain_west=west,
         )
         self.conditions = MagicMock()
         self.conditions.operation_blocked.return_value = blocked
+        scope = MagicMock(speed=TelescopeSpeed.SPEED_NOT_TRACKING)
         with (
             patch("crac_server.handler.curtains_handler.external_conditions", return_value=self.conditions),
+            patch("crac_server.handler.curtains_handler.telescope", return_value=scope),
+            patch.object(CurtainsMoveHandler, "_calculate_curtains_steps", return_value=steps),
             patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
         ):
-            CurtainsWeatherHandler().handle(mediator)
-        return mediator
+            CurtainsMoveHandler().handle(mediator)
+        return mediator, east, west
 
-    def test_enabling_is_disabled_when_the_conditions_block(self):
-        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, True)
+    def test_a_move_that_opens_is_disabled_when_the_conditions_block(self):
+        mediator, east, west = self._move({"east": 100, "west": 100}, 10, 10, True)
 
         self.assertIs(True, mediator.is_disabled)
+        east.move.assert_not_called()
+        west.move.assert_not_called()
 
-    def test_enabling_is_allowed_when_the_conditions_are_clear(self):
-        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, False)
+    def test_a_move_that_opens_is_allowed_when_the_conditions_are_clear(self):
+        mediator, east, west = self._move({"east": 100, "west": 100}, 10, 10, False)
 
         self.assertIs(False, mediator.is_disabled)
+        east.move.assert_called_once_with(100)
+        west.move.assert_called_once_with(100)
 
-    def test_a_curtain_already_enabled_consults_nothing(self):
-        mediator = self._handle(CurtainStatus.CURTAIN_OPENED, CurtainStatus.CURTAIN_DISABLED, True)
+    def test_a_move_that_closes_goes_even_with_the_conditions_blocked(self):
+        mediator, east, west = self._move({"east": 0, "west": 0}, 50, 50, True)
+
+        self.assertIs(False, mediator.is_disabled)
+        east.move.assert_called_once_with(0)
+        west.move.assert_called_once_with(0)
+
+    def test_a_move_that_leaves_the_curtains_consults_nothing(self):
+        mediator, _, _ = self._move({"east": None, "west": None}, 10, 10, True)
 
         self.assertIs(False, mediator.is_disabled)
         self.conditions.operation_blocked.assert_not_called()
 
-
-class TestCurtainsUpsHandler(unittest.TestCase):
-    """The curtains ask the external conditions whether they may be enabled:
-    the policies of each source live in one place, not in the handler."""
-
-    def _handle(self, status_east, status_west, blocked):
-        mediator = SimpleNamespace(
-            status_east=status_east,
-            status_west=status_west,
-            action=CurtainsAction.ENABLE,
-            is_disabled=False,
-        )
-        self.conditions = MagicMock()
-        self.conditions.operation_blocked.return_value = blocked
-        with (
-            patch("crac_server.handler.curtains_handler.external_conditions", return_value=self.conditions),
-            patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
-        ):
-            CurtainsUpsHandler().handle(mediator)
-        return mediator
-
-    def test_enabling_is_disabled_when_the_conditions_block(self):
-        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, True)
+    def test_a_move_that_opens_one_side_only_waits_for_the_conditions(self):
+        mediator, east, west = self._move({"east": 100, "west": 10}, 10, 10, True)
 
         self.assertIs(True, mediator.is_disabled)
-
-    def test_enabling_is_allowed_when_the_conditions_are_clear(self):
-        mediator = self._handle(CurtainStatus.CURTAIN_DISABLED, CurtainStatus.CURTAIN_DISABLED, False)
-
-        self.assertIs(False, mediator.is_disabled)
-
-    def test_a_curtain_already_enabled_consults_nothing(self):
-        mediator = self._handle(CurtainStatus.CURTAIN_OPENED, CurtainStatus.CURTAIN_DISABLED, True)
-
-        self.assertIs(False, mediator.is_disabled)
-        self.conditions.operation_blocked.assert_not_called()
+        east.move.assert_not_called()
+        west.move.assert_not_called()
 
 
 class TestCurtainsDisableHandler(unittest.TestCase):
@@ -190,13 +174,16 @@ class TestCurtainsMoveHandler(unittest.TestCase):
 
     def test_full_opening_uses_the_travel_the_curtains_read_at_startup(self):
         east, west = MagicMock(full_travel=180), MagicMock(full_travel=180)
-        mediator = SimpleNamespace(is_disabled=False, curtain_east=east, curtain_west=west)
+        mediator = SimpleNamespace(is_disabled=False, steps_east=0, steps_west=0, curtain_east=east, curtain_west=west)
         scope = MagicMock(speed=TelescopeSpeed.SPEED_TRACKING, status=TelescopeStatus.EAST)
         scope.aa_coords.alt = 80
         scope.is_below_curtains_area.return_value = False
         scope.is_above_curtains_area.return_value = True
+        conditions = MagicMock()
+        conditions.operation_blocked.return_value = False
         with (
             patch("crac_server.handler.curtains_handler.telescope", return_value=scope),
+            patch("crac_server.handler.curtains_handler.external_conditions", return_value=conditions),
             patch.object(CurtainsConverter, "convert", return_value=CurtainsResponse()),
         ):
             CurtainsMoveHandler().handle(mediator)
