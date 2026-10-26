@@ -10,7 +10,7 @@ from crac_protobuf.emergency_closure_pb2 import (
 from crac_protobuf.ups_pb2 import BatteryStatus, UpsStatus
 from crac_server.component.ups import ups
 from crac_server.converter.chart_config import ChartConfigError
-from crac_server.service.ups_service import UpsService
+from crac_server.service.ups_service import UpsService, ups_service
 
 
 UPS = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_UPS
@@ -869,3 +869,46 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
                     await asyncio.sleep(0.001)
         finally:
             task.cancel()
+
+
+class TestTheCachedStatus(unittest.IsolatedAsyncioTestCase):
+    """What a command can ask without waiting for the UPS to answer:
+    the status of the last check, unknown until one has run."""
+
+    def setUp(self):
+        ups_service.cache_clear()
+        self.addCleanup(ups_service.cache_clear)
+        self._original_status_for = ups().status_for
+        self._patches = [
+            patch("crac_server.service.ups_service.Config.get_section", return_value={"battery_charge": "battery.charge", "ups_status": "ups.status"}),
+            patch("crac_server.service.ups_service.Config.get_section_keys", side_effect=getkeys_side_effect(["battery_charge", "ups_status"])),
+            patch("crac_server.service.ups_service.Config.getValue", side_effect=getvalue_side_effect()),
+            patch("crac_server.service.ups_service.emergency_closure"),
+            patch("crac_server.service.ups_service.ups_emergency"),
+            patch("crac_server.service.external_conditions.external_conditions"),
+        ]
+        mocks = [p.start() for p in self._patches]
+        self.addCleanup(self._restore)
+        self.closure = mocks[3].return_value
+        self.closure.state.return_value = EmergencyClosure()
+        self.emergency = mocks[4].return_value
+        self.emergency.device_is_critical.return_value = False
+        self.emergency.can_be_judged.return_value = True
+        ups_service()
+
+    def _restore(self):
+        ups().status_for = self._original_status_for
+        for p in self._patches:
+            p.stop()
+
+    async def test_before_the_first_check_the_status_is_unknown(self):
+        self.assertEqual(UpsStatus.UPS_STATUS_UNSPECIFIED, ups_service().cached_status())
+
+    async def test_the_cached_status_is_the_one_of_the_last_check(self):
+        ups().status_for = MagicMock(side_effect=lambda device: {"battery_charge": "10", "ups_status": "OL"})
+
+        with patch("crac_server.service.ups_service.emergency_closure") as closure:
+            closure.return_value.state.return_value = EmergencyClosure()
+            await ups_service().check()
+
+        self.assertEqual(UpsStatus.UPS_STATUS_DANGER, ups_service().cached_status())
