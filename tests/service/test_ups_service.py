@@ -905,7 +905,7 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         task = asyncio.create_task(self.service.watch())
         try:
             async with asyncio.timeout(2):
-                while ups().status_for.call_count < times * len(self.service._configured_devices()):
+                while ups().status_for.call_count < (times + 1) * len(self.service._configured_devices()):
                     await asyncio.sleep(0.001)
         finally:
             task.cancel()
