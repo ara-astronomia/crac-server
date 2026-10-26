@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.client import IncompleteRead
 import json
 from threading import Thread
@@ -277,3 +278,135 @@ class TestWeather(unittest.TestCase):
     def test_url(self):
         self.assertEqual(self.weather.url, self.url)
         self.assertEqual(self.weather.fallback_url, self.fallback_url)
+
+
+class TestTheReadAgainstARealResponse(unittest.TestCase):
+    """The read loop walks private internals of http.client: against a
+    real response, with the endings that have broken it before."""
+
+    def setUp(self) -> None:
+        self.format = "%Y-%m-%d %H:%M:%S"
+        self.body = json.dumps({
+            "current": {"outTemp": {"value": "21,5", "unit_of_measurement": "C"}},
+            "time": datetime.now().strftime(self.format),
+        }).encode("utf8")
+
+    def _weather_served_by(self, serve, url_timeout=10):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                serve(self)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = f"http://127.0.0.1:{server.server_address[1]}/current.json"
+        return Weather(url, url, self.format, 600, 1200, url_timeout=url_timeout)
+
+    def test_a_content_length_body_reads_whole(self):
+        def serve(request):
+            request.send_response(200)
+            request.send_header("Content-Length", str(len(self.body)))
+            request.end_headers()
+            request.wfile.write(self.body)
+
+        weather = self._weather_served_by(serve)
+
+        weather.refresh()
+
+        self.assertEqual("21,5", weather.json["outTemp"]["value"])
+        self.assertFalse(weather.is_expired())
+
+    def test_a_chunked_body_reads_whole(self):
+        def serve(request):
+            request.send_response(200)
+            request.send_header("Transfer-Encoding", "chunked")
+            request.end_headers()
+            for start in range(0, len(self.body), 7):
+                chunk = self.body[start:start + 7]
+                request.wfile.write(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
+            request.wfile.write(b"0\r\n\r\n")
+
+        weather = self._weather_served_by(serve)
+
+        weather.refresh()
+
+        self.assertEqual("21,5", weather.json["outTemp"]["value"])
+
+    def test_a_body_cut_in_half_ends_as_a_failed_read(self):
+        def serve(request):
+            request.send_response(200)
+            request.send_header("Content-Length", str(len(self.body) * 2))
+            request.end_headers()
+            request.wfile.write(self.body[:len(self.body) // 2])
+
+        weather = self._weather_served_by(serve)
+
+        with self.assertRaises(json.JSONDecodeError):
+            weather.refresh()
+
+    def test_a_trickling_source_hits_the_total_deadline(self):
+        def serve(request):
+            request.send_response(200)
+            request.send_header("Content-Length", str(len(self.body)))
+            request.end_headers()
+            for byte in self.body:
+                sleep(0.4)
+                request.wfile.write(bytes([byte]))
+                request.wfile.flush()
+
+        weather = self._weather_served_by(serve, url_timeout=1)
+
+        with self.assertRaises(TimeoutError):
+            weather.refresh()
+
+
+class TestTheReadingRhythm(unittest.TestCase):
+    """What the source asks of the reader: no hammering while the data
+    is still served or the retry has not waited its interval."""
+
+    def _payload(self, time):
+        return json.dumps({
+            "current": {"outTemp": {"value": "21,5", "unit_of_measurement": "C"}},
+            "time": time,
+        }).encode("utf8")
+
+    def _mocked_response(self, payload):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.side_effect = [payload, b""]
+        return response
+
+    @patch("urllib.request.urlopen")
+    def test_a_stale_but_successful_read_waits_for_the_retry_before_reading_again(self, urlopen):
+        stale = (datetime.now() - timedelta(seconds=600 * 3 + 10)).strftime("%Y-%m-%d %H:%M:%S")
+        urlopen.return_value = self._mocked_response(self._payload(stale))
+        weather = Weather("http://ara.test", "http://fallback.ara.test", "%Y-%m-%d %H:%M:%S", 600, 1200, url_timeout=10)
+
+        weather.refresh()
+
+        self.assertIsNotNone(weather.last_attempt_at)
+        self.assertTrue(weather.is_expired())
+        reads = urlopen.call_count
+        weather.refresh()
+        self.assertEqual(reads, urlopen.call_count)
+
+    @patch("urllib.request.urlopen")
+    def test_a_failed_read_is_not_tried_again_until_the_retry_interval_passes(self, urlopen):
+        urlopen.side_effect = URLError("down")
+        weather = Weather("http://ara.test", "http://fallback.ara.test", "%Y-%m-%d %H:%M:%S", 600, 1200, url_timeout=10)
+
+        with self.assertRaises(URLError):
+            weather.refresh()
+
+        self.assertEqual(2, urlopen.call_count)
+        weather.refresh()
+        self.assertEqual(2, urlopen.call_count)
+        weather.last_attempt_at = datetime.now() - timedelta(seconds=1201)
+        with self.assertRaises(URLError):
+            weather.refresh()
+        self.assertEqual(4, urlopen.call_count)

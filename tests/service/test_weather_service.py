@@ -106,6 +106,18 @@ class TestWeatherServiceReportsToTheEmergencyClosure(unittest.IsolatedAsyncioTes
 
                 self.closure.report.assert_called_once_with(WEATHER, False)
 
+    async def test_the_danger_stays_critical_while_the_weather_stays_unknown(self):
+        statuses = iter([
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED),
+        ])
+        self.service.weather_converter.convert.side_effect = lambda *args: next(statuses)
+
+        await self.service.GetStatus(None, None)
+        await self.service.GetStatus(None, None)
+
+        self.closure.report.assert_called_once_with(WEATHER, True)
+
     async def test_an_unknown_weather_reports_nothing(self):
         self.service.weather_converter.convert.side_effect = ConnectionError("weather station unreachable")
 
