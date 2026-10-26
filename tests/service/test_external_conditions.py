@@ -231,3 +231,29 @@ class TestTheMissingUpsClosesTheOpenObservatory(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheGateNeverRaises(unittest.TestCase):
+    """A gate that crashes takes the button away with an error: one that
+    cannot judge says unknown, and blocks when configured to."""
+
+    def _blocked(self, weather_error=None, ups_error=None):
+        conditions = ExternalConditions()
+        with (
+            patch.object(WeatherConverter, "convert") as convert,
+            patch(f"{MODULE}.Config.getRequiredBoolean", return_value=True),
+            patch(f"{MODULE}.UpsService") as ups_service,
+        ):
+            convert.return_value = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL)
+            if weather_error is not None:
+                convert.side_effect = weather_error
+            ups_service.return_value.GetStatus.return_value = UpsResponse(status=UpsStatus.UPS_STATUS_NORMAL)
+            if ups_error is not None:
+                ups_service.return_value.GetStatus.side_effect = ups_error
+            return conditions.operation_blocked()
+
+    def test_a_weather_that_cannot_be_read_blocks_instead_of_raising(self):
+        self.assertIs(True, self._blocked(weather_error=KeyError("windSpeed")))
+
+    def test_an_ups_that_cannot_be_read_blocks_instead_of_raising(self):
+        self.assertIs(True, self._blocked(ups_error=RuntimeError("broken configuration")))

@@ -14,6 +14,7 @@ from crac_server.config import Config
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.service.emergency_closure import emergency_closure
 from crac_server.service.ups_service import UpsService
+from crac_server.status_log import ErrorCause, StatusLogger
 
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,19 @@ class ExternalConditions:
 
     def __init__(self) -> None:
         self._missing_since = {}
+        self._gate_log = StatusLogger(logger, "External conditions")
 
     def operation_blocked(self) -> bool:
         return self._weather_blocks() or self._ups_blocks()
 
     def _weather_blocks(self) -> bool:
-        status = WeatherConverter().convert(weather()).status
+        """A weather that cannot be read cannot say the operation is
+        safe: it counts as unknown, never as an error on the button."""
+        try:
+            status = WeatherConverter().convert(weather()).status
+        except Exception as e:
+            self._gate_log.record("cannot read the weather", ErrorCause.DEVICE_UNREACHABLE, detail=str(e), exc_info=e)
+            status = WeatherStatus.WEATHER_STATUS_UNSPECIFIED
         blocked = status == WeatherStatus.WEATHER_STATUS_DANGER or (
             status == WeatherStatus.WEATHER_STATUS_UNSPECIFIED and
             Config.getRequiredBoolean("block_on_unspecified", "weather")
@@ -55,7 +63,13 @@ class ExternalConditions:
         return blocked
 
     def _ups_blocks(self) -> bool:
-        status = UpsService().GetStatus(UpsRequest(), None).status
+        """A UPS that cannot be read cannot say the operation is safe:
+        it counts as unknown, never as an error on the button."""
+        try:
+            status = UpsService().GetStatus(UpsRequest(), None).status
+        except Exception as e:
+            self._gate_log.record("cannot read the UPS", ErrorCause.DEVICE_UNREACHABLE, detail=str(e), exc_info=e)
+            status = UpsStatus.UPS_STATUS_UNSPECIFIED
         blocked = status == UpsStatus.UPS_STATUS_DANGER or (
             status == UpsStatus.UPS_STATUS_UNSPECIFIED and
             Config.getRequiredBoolean("block_on_unspecified", "ups_emergency")
