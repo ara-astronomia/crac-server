@@ -228,11 +228,12 @@ class UpsService(UpsServicer):
         while True:
             try:
                 await self.check()
-                self._watch_log.record("running")
             except Exception as e:
                 self._watch_log.record(
                     f"check failed: {type(e).__name__}", ErrorCause.UNEXPECTED_FAILURE, detail=str(e), exc_info=e,
                 )
+                from crac_server.service.external_conditions import external_conditions
+                external_conditions().note_availability(UPS_UNAVAILABLE, False)
             await asyncio.sleep(self.check_interval)
 
     @staticmethod
@@ -245,10 +246,15 @@ class UpsService(UpsServicer):
             return e
 
     def _report(self, critical: bool, unreadable) -> None:
+        """What the watch says about the whole check: the failure of the
+        devices that cannot be read, or the run with nothing to report.
+        One record per transition, so a lasting fault stays one line."""
         if unreadable:
             self._watch_log.record(f"cannot check {unreadable}", ErrorCause.DEVICE_UNREACHABLE)
             if not critical:
                 return
+        else:
+            self._watch_log.record("running")
         emergency_closure().report(UPS, critical)
 
     def _respond(self, readings: dict) -> tuple:

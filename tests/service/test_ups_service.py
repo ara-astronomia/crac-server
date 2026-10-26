@@ -808,6 +808,7 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.closure = mocks[3].return_value
         self.closure.state.return_value = EmergencyClosure()
         self.ups_emergency = mocks[4].return_value
+        self.conditions = mocks[5].return_value
         self.service = UpsService()
         self.service.check_interval = 0.01
         self.ups_emergency.device_is_critical.return_value = True
@@ -830,6 +831,30 @@ class TestUpsServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(any("RuntimeError" in record.getMessage() for record in captured.records))
         self.closure.report.assert_called_with(UPS, True)
+
+    async def test_a_check_that_cannot_run_counts_as_data_that_does_not_arrive(self):
+        self.ups_emergency.device_is_critical.side_effect = RuntimeError("broken configuration")
+
+        await self.__watch_until_checked(times=2)
+
+        self.conditions.note_availability.assert_called_with(UPS_UNAVAILABLE, False)
+
+    async def test_a_mute_device_logs_the_failure_once_and_no_recovery_per_cycle(self):
+        def side_effect(device):
+            if device == "apc-3000":
+                raise ConnectionError("unreachable")
+            return {"battery_charge": "80", "ups_status": "OL"}
+
+        ups().status_for = MagicMock(side_effect=side_effect)
+        self.ups_emergency.device_is_critical.return_value = False
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="INFO") as captured:
+            await self.__watch_until_checked(times=3)
+
+        failures = [r for r in captured.records if "cannot check" in r.getMessage()]
+        recoveries = [r for r in captured.records if "recovered" in r.getMessage()]
+        self.assertEqual(1, len(failures))
+        self.assertEqual(0, len(recoveries))
 
     async def test_an_unreadable_device_is_logged_and_reports_nothing(self):
         def side_effect(device):
