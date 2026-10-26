@@ -65,6 +65,7 @@ class WeatherService(WeatherServicer):
                 self._watch_log.record(
                     f"check failed: {type(e).__name__}", ErrorCause.UNEXPECTED_FAILURE, detail=str(e), exc_info=e,
                 )
+                external_conditions().note_availability(WEATHER_UNAVAILABLE, False)
             await asyncio.sleep(self.check_interval)
 
     async def _refresh(self):

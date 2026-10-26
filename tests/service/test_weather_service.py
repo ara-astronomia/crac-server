@@ -201,6 +201,17 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.assertIn("URLError", captured.records[0].getMessage())
         self.assertIsNotNone(captured.records[0].exc_info)
 
+    async def test_a_check_that_cannot_run_counts_as_data_that_does_not_arrive(self):
+        conditions_patcher = patch("crac_server.service.weather_service.external_conditions")
+        conditions = conditions_patcher.start().return_value
+        self.addCleanup(conditions_patcher.stop)
+
+        self.service.weather_converter.convert.side_effect = ChartConfigError("[wind_speed]: 'danger' is inverted")
+
+        await self.__watch_until_checked(times=2)
+
+        conditions.note_availability.assert_called_with(WEATHER_UNAVAILABLE, False)
+
     async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
         self.service.weather_converter.convert.side_effect = self.__config_error_then_danger()
 
