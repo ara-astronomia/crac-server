@@ -7,18 +7,15 @@ class Ups(ABC):
         self.time_expired = time_expired
 
     def status_for(self, device: str) -> dict[str, str]:
-        metrics = Config.get_section("ups_metrics")
+        """What the device reports of the metrics we read: what does not
+        arrive is simply missing, and what is missing is judged by the
+        safety checks of the emergency layer, not discarded here."""
         raw = self._read(device)
+        metrics = Config.get_section("ups_metrics")
         result = {}
         for our_name, source_name in metrics.items():
-            if raw.get(source_name) is None:
-                raise RuntimeError(
-                    f"UPS {device}: metrica '{our_name}' ({source_name}) non disponibile. "
-                    f"Se questo UPS non la espone, toglierla da [ups_metrics] in config.ini: "
-                    f"finche' resta elencata il device viene scartato per intero, "
-                    f"comprese le metriche leggibili."
-                )
-            result[our_name] = raw[source_name]
+            if raw.get(source_name) is not None:
+                result[our_name] = raw[source_name]
         return result
 
     @abstractmethod

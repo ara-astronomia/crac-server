@@ -34,9 +34,12 @@ class TestUps(unittest.TestCase):
         self.assertEqual("OL", result["ups_status"])
         self.assertEqual("3", result["output_current"])
 
-    def test_status_for_raises_when_configured_metric_missing(self):
-        with self.assertRaises(Exception):
-            self._status_for({"input.voltage": "220", "battery.charge": None, "ups.status": "OL", "output.current": "3"})
+    def test_status_for_keeps_the_reading_when_a_metric_is_missing(self):
+        result = self._status_for({"input.voltage": "220", "battery.charge": None, "ups.status": "OL", "output.current": "3"})
+
+        self.assertNotIn("battery_charge", result)
+        self.assertEqual("220", result["input_voltage"])
+        self.assertEqual("OL", result["ups_status"])
 
     def test_status_for_omits_metric_not_configured_even_if_missing(self):
         result = self._status_for(
@@ -63,9 +66,11 @@ class TestUps(unittest.TestCase):
 
         self.assertNotIn("output_current", result)
 
-    def test_status_for_raises_when_ups_status_configured_but_missing(self):
-        with self.assertRaises(Exception):
-            self._status_for({"input.voltage": "220", "battery.charge": "80", "ups.status": None, "output.current": "3"})
+    def test_status_for_keeps_the_reading_when_ups_status_is_missing(self):
+        result = self._status_for({"input.voltage": "220", "battery.charge": "80", "ups.status": None, "output.current": "3"})
+
+        self.assertNotIn("ups_status", result)
+        self.assertEqual("80", result["battery_charge"])
 
     def test_status_for_omits_ups_status_when_not_configured(self):
         result = self._status_for(
