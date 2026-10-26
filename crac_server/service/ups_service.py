@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from functools import lru_cache
 import math
 from datetime import datetime
 from crac_protobuf.chart_pb2 import (
@@ -49,6 +50,7 @@ class UpsService(UpsServicer):
         self._validate_emergency()
         self.check_interval = self._check_interval()
         self._watch_log = StatusLogger(logger, "UPS watch")
+        self._last_check = None
 
     def _validate_metrics(self):
         """Validate the configuration at startup: a broken one found while
@@ -208,6 +210,7 @@ class UpsService(UpsServicer):
             ups_emergency().device_lost(device)
         external_conditions().note_availability(UPS_UNAVAILABLE, response.status != UpsStatus.UPS_STATUS_UNSPECIFIED)
         self._report(critical, unreadable)
+        self._last_check = response
         return response
 
     async def watch(self):
@@ -315,3 +318,16 @@ class UpsService(UpsServicer):
             logger.debug(f"now ups status is: {status}")
         
         return status
+
+    def cached_status(self) -> UpsStatus:
+        """The overall status of the last check: what a command can ask
+        without waiting for the UPS to answer. Unknown until a check has
+        run, and the safe answer comes first."""
+        if self._last_check is None:
+            return UpsStatus.UPS_STATUS_UNSPECIFIED
+        return self._last_check.status
+
+
+@lru_cache(maxsize=1)
+def ups_service() -> UpsService:
+    return UpsService()

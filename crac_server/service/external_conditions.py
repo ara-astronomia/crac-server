@@ -6,14 +6,14 @@ from typing import NamedTuple
 from crac_protobuf.chart_pb2 import WeatherStatus  # type: ignore
 from crac_protobuf.emergency_closure_pb2 import EmergencyClosureTrigger  # type: ignore
 from crac_protobuf.roof_pb2 import RoofStatus  # type: ignore
-from crac_protobuf.ups_pb2 import UpsRequest, UpsStatus  # type: ignore
+from crac_protobuf.ups_pb2 import UpsStatus  # type: ignore
 
 from crac_server.component.roof import roof
 from crac_server.component.weather import weather
 from crac_server.config import Config
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.service.emergency_closure import emergency_closure
-from crac_server.service.ups_service import UpsService
+from crac_server.service.ups_service import ups_service
 from crac_server.status_log import ErrorCause, StatusLogger
 
 
@@ -63,10 +63,11 @@ class ExternalConditions:
         return blocked
 
     def _ups_blocks(self) -> bool:
-        """A UPS that cannot be read cannot say the operation is safe:
-        it counts as unknown, never as an error on the button."""
+        """The status of the last check of the watch: a command never
+        waits for the UPS to answer. A check that never ran counts as
+        unknown, and unknown blocks when configured to."""
         try:
-            status = UpsService().GetStatus(UpsRequest(), None).status
+            status = ups_service().cached_status()
         except Exception as e:
             self._gate_log.record("cannot read the UPS", ErrorCause.DEVICE_UNREACHABLE, detail=str(e), exc_info=e)
             status = UpsStatus.UPS_STATUS_UNSPECIFIED

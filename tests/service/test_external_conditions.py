@@ -4,9 +4,10 @@ from unittest.mock import MagicMock, call, patch
 from crac_protobuf.chart_pb2 import WeatherResponse, WeatherStatus
 from crac_protobuf.emergency_closure_pb2 import EmergencyClosureTrigger
 from crac_protobuf.roof_pb2 import RoofStatus
-from crac_protobuf.ups_pb2 import UpsResponse, UpsStatus
+from crac_protobuf.ups_pb2 import UpsStatus
 from crac_server.converter.weather_converter import WeatherConverter
 from crac_server.service.external_conditions import ExternalConditions
+from crac_server.service.ups_service import UpsService, ups_service
 
 
 WEATHER_UNAVAILABLE = EmergencyClosureTrigger.EMERGENCY_CLOSURE_TRIGGER_WEATHER_UNAVAILABLE
@@ -26,9 +27,9 @@ class TestOperationBlocked(unittest.TestCase):
         with (
             patch(f"{MODULE}.Config.getRequiredBoolean", return_value=block_on_unspecified) as block_config,
             patch.object(WeatherConverter, "convert", return_value=WeatherResponse(status=weather_status)),
-            patch(f"{MODULE}.UpsService") as ups_service,
+            patch(f"{MODULE}.ups_service") as ups_service,
         ):
-            ups_service.return_value.GetStatus.return_value = UpsResponse(status=UpsStatus.UPS_STATUS_NORMAL)
+            ups_service.return_value.cached_status.return_value = UpsStatus.UPS_STATUS_NORMAL
             blocked = conditions.operation_blocked()
 
         return blocked, block_config
@@ -61,9 +62,9 @@ class TestOperationBlockedByTheUps(unittest.TestCase):
         with (
             patch.object(WeatherConverter, "convert", return_value=WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL)),
             patch(f"{MODULE}.Config.getRequiredBoolean", return_value=block_on_unspecified) as block_config,
-            patch(f"{MODULE}.UpsService") as ups_service,
+            patch(f"{MODULE}.ups_service") as ups_service,
         ):
-            ups_service.return_value.GetStatus.return_value = UpsResponse(status=ups_status)
+            ups_service.return_value.cached_status.return_value = ups_status
             blocked = conditions.operation_blocked()
 
         return blocked, block_config
@@ -242,14 +243,14 @@ class TestTheGateNeverRaises(unittest.TestCase):
         with (
             patch.object(WeatherConverter, "convert") as convert,
             patch(f"{MODULE}.Config.getRequiredBoolean", return_value=True),
-            patch(f"{MODULE}.UpsService") as ups_service,
+            patch(f"{MODULE}.ups_service") as ups_service,
         ):
             convert.return_value = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL)
             if weather_error is not None:
                 convert.side_effect = weather_error
-            ups_service.return_value.GetStatus.return_value = UpsResponse(status=UpsStatus.UPS_STATUS_NORMAL)
+            ups_service.return_value.cached_status.return_value = UpsStatus.UPS_STATUS_NORMAL
             if ups_error is not None:
-                ups_service.return_value.GetStatus.side_effect = ups_error
+                ups_service.return_value.cached_status.side_effect = ups_error
             return conditions.operation_blocked()
 
     def test_a_weather_that_cannot_be_read_blocks_instead_of_raising(self):
@@ -257,3 +258,21 @@ class TestTheGateNeverRaises(unittest.TestCase):
 
     def test_an_ups_that_cannot_be_read_blocks_instead_of_raising(self):
         self.assertIs(True, self._blocked(ups_error=RuntimeError("broken configuration")))
+
+
+class TestTheGateNeverReadsTheUpsLive(unittest.TestCase):
+    """The commands must not wait for the UPS to answer: the gate asks
+    the last check of the watch, never the network."""
+
+    def test_the_gate_does_not_call_the_live_read(self):
+        ups_service.cache_clear()
+        self.addCleanup(ups_service.cache_clear)
+        conditions = ExternalConditions()
+        with (
+            patch.object(WeatherConverter, "convert", return_value=WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL)),
+            patch(f"{MODULE}.Config.getRequiredBoolean", return_value=True),
+            patch.object(UpsService, "GetStatus", side_effect=AssertionError("the gate read the UPS live")),
+        ):
+            blocked = conditions.operation_blocked()
+
+        self.assertIs(True, blocked)
