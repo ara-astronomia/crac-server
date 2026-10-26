@@ -10,8 +10,12 @@ logging.getLogger().setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 # The emergency closure parks the telescope, and the park converts
 # alt/az to RA: a catalog without fresh measures must not stop it.
+# IERS_AUTO_DOWNLOAD=false is for deployments that know they have no
+# network, so the doomed download attempts never slow the park down.
 from astropy.utils.iers import conf as iers_conf
 iers_conf.auto_max_age = None
+if os.environ.get("IERS_AUTO_DOWNLOAD", "").lower() in ("false", "0", "no"):
+    iers_conf.auto_download = False
 
 from crac_protobuf.chart_pb2_grpc import add_WeatherServicer_to_server
 from crac_protobuf.telescope_pb2_grpc import add_TelescopeServicer_to_server
