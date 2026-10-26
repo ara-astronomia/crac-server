@@ -51,10 +51,11 @@ class WeatherService(WeatherServicer):
 
     async def watch(self):
         """Check the weather every check_interval seconds, so that the closure
-        does not wait for a client to ask. A failed check is logged, once
-        per kind of failure, and the next one runs anyway."""
+        does not wait for a client to ask. This loop is the only reader of the
+        weather sources; a failed check is logged and the next one runs anyway."""
         logger.info("Weather watch: checking every %s seconds", self.check_interval)
         while True:
+            await self._refresh()
             try:
                 await self.check()
                 self._watch_log.record("running")
@@ -64,6 +65,16 @@ class WeatherService(WeatherServicer):
                 )
             await asyncio.sleep(self.check_interval)
 
+    async def _refresh(self):
+        """The watch loop is the only reader of the weather sources. A failed
+        refresh reaches the log only once the cached data has gone stale:
+        until then the readings still serve fresh values."""
+        try:
+            await asyncio.to_thread(weather().refresh)
+        except Exception as e:
+            if weather().is_expired():
+                self._record_read_failure(f"{type(e).__name__}: {e}", exc_info=e)
+
     def _record_read_failure(self, detail: str, exc_info=None):
         """A failed refresh and the stale readings after it are one failure,
         recovered only when fresh data arrives."""
@@ -72,8 +83,9 @@ class WeatherService(WeatherServicer):
         )
 
     async def check(self) -> WeatherResponse:
-        """Read the weather and report it to the emergency closure. An unknown
-        weather reports nothing: it neither starts nor settles a closure."""
+        """Convert the cached weather and report it to the emergency closure:
+        the network reading belongs to the watch loop. An unknown weather
+        reports nothing: it neither starts nor settles a closure."""
         try:
             response = await asyncio.to_thread(self.weather_converter.convert, weather())
         except ChartConfigError:

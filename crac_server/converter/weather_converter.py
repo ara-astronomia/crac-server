@@ -58,7 +58,7 @@ class WeatherConverter:
 
     def calculate_status(self, weather, charts):
         status = WeatherStatus.WEATHER_STATUS_UNSPECIFIED
-        if not weather.is_unavailable:
+        if not weather.is_expired():
             for chart in charts:
                 if not chart.thresholds:
                     continue

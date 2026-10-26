@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 import os
+from threading import Event
 from time import sleep
 import unittest
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -105,6 +106,18 @@ class TestWeatherServiceReportsToTheEmergencyClosure(unittest.IsolatedAsyncioTes
 
                 self.closure.report.assert_called_once_with(WEATHER, False)
 
+    async def test_the_danger_stays_critical_while_the_weather_stays_unknown(self):
+        statuses = iter([
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER),
+            WeatherResponse(status=WeatherStatus.WEATHER_STATUS_UNSPECIFIED),
+        ])
+        self.service.weather_converter.convert.side_effect = lambda *args: next(statuses)
+
+        await self.service.GetStatus(None, None)
+        await self.service.GetStatus(None, None)
+
+        self.closure.report.assert_called_once_with(WEATHER, True)
+
     async def test_an_unknown_weather_reports_nothing(self):
         self.service.weather_converter.convert.side_effect = ConnectionError("weather station unreachable")
 
@@ -136,6 +149,11 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(closure_patcher.stop)
         self.closure.state.return_value = EmergencyClosure()
 
+        weather_patcher = patch("crac_server.service.weather_service.weather")
+        self.weather_source = weather_patcher.start().return_value
+        self.addCleanup(weather_patcher.stop)
+        self.weather_source.is_expired.return_value = False
+
         self.service = WeatherService()
         self.service.check_interval = 0.01
         self.service.weather_converter = MagicMock()
@@ -145,6 +163,23 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         await self.__watch_until_checked(times=1)
 
         self.closure.report.assert_called_with(WEATHER, True)
+
+    async def test_the_watch_is_what_refreshes_the_data(self):
+        await self.__watch_until_checked(times=1)
+
+        self.weather_source.refresh.assert_called()
+
+    async def test_a_failed_refresh_is_logged_once_and_the_watch_goes_on(self):
+        self.weather_source.refresh.side_effect = URLError("offline")
+        self.weather_source.is_expired.return_value = True
+
+        with self.assertLogs(self.SERVICE_LOGGER, level="ERROR") as captured:
+            await self.__watch_until_checked(times=2)
+
+        self.assertGreaterEqual(self.weather_source.refresh.call_count, 2)
+        self.assertEqual(1, len(captured.records))
+        self.assertIn("URLError", captured.records[0].getMessage())
+        self.assertIsNotNone(captured.records[0].exc_info)
 
     async def test_a_failed_check_is_logged_and_the_watch_goes_on(self):
         self.service.weather_converter.convert.side_effect = self.__config_error_then_danger()
@@ -197,6 +232,55 @@ class TestWeatherServiceWatchesOnItsOwn(unittest.IsolatedAsyncioTestCase):
         yield ChartConfigError("[wind_speed]: 'danger' is inverted")
         while True:
             yield WeatherResponse(status=WeatherStatus.WEATHER_STATUS_DANGER)
+
+
+class TestOnlyTheWatchReadsTheNetwork(unittest.IsolatedAsyncioTestCase):
+    """The handlers and GetStatus answer from the cached data: a slow or
+    broken weather source must not hold their RPCs on the event loop."""
+
+    def _patched_service(self):
+        patcher = patch("crac_server.service.weather_service.weather")
+        self.weather_source = patcher.start().return_value
+        self.addCleanup(patcher.stop)
+        self.weather_source.is_expired.return_value = False
+        service = WeatherService()
+        service.weather_converter = MagicMock()
+        service.weather_converter.convert.return_value = WeatherResponse(status=WeatherStatus.WEATHER_STATUS_NORMAL)
+        return service
+
+    async def test_get_status_reads_only_the_cache(self):
+        service = self._patched_service()
+
+        await service.GetStatus(None, None)
+
+        self.weather_source.refresh.assert_not_called()
+
+    async def test_the_watch_refreshes_the_data_from_the_network(self):
+        service = self._patched_service()
+        refresh = asyncio.create_task(service._refresh())
+
+        await refresh
+
+        self.weather_source.refresh.assert_called_once()
+
+    async def test_a_slow_refresh_does_not_block_the_other_rpcs(self):
+        service = self._patched_service()
+        refresh_started = Event()
+
+        def slow_refresh():
+            refresh_started.set()
+            sleep(0.3)
+
+        self.weather_source.refresh.side_effect = slow_refresh
+        refresh = asyncio.create_task(service._refresh())
+        while not refresh_started.is_set():
+            await asyncio.sleep(0.001)
+
+        before = asyncio.get_running_loop().time()
+        await asyncio.sleep(0.05)
+
+        self.assertLess(asyncio.get_running_loop().time() - before, 0.3)
+        await refresh
 
 
 class TestWeatherServiceCheckInterval(unittest.TestCase):
@@ -279,8 +363,14 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
         fixture = Path(__file__).resolve().parents[2] / "crac_server/static/meteo_mock.json"
         payload = json.loads(fixture.read_text())
         payload["time"] = datetime.now().strftime(time_format)
+
+        def chunks():
+            yield json.dumps(payload).encode()
+            while True:
+                yield b""
+
         http_response = MagicMock()
-        http_response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+        http_response.__enter__.return_value.read.side_effect = chunks()
 
         with (
             patch("crac_server.service.weather_service.weather", return_value=source),
@@ -288,7 +378,7 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
             self.assertLogs("crac_server", level="INFO") as captured,
         ):
             for _ in range(3):
-                response = await service.check()
+                response = await self.__read(service)
                 self.assertEqual(WeatherStatus.WEATHER_STATUS_UNSPECIFIED, response.status)
             self.assertEqual(6, urlopen.call_count)
             self.assertEqual(["ERROR"], [record.levelname for record in captured.records])
@@ -297,16 +387,20 @@ class TestWeatherServiceKeepsConfigurationErrorsVisible(unittest.IsolatedAsyncio
             urlopen.side_effect = None
             urlopen.return_value = http_response
             for _ in range(2):
-                response = await service.check()
+                response = await self.__read(service)
                 self.assertEqual(WeatherStatus.WEATHER_STATUS_NORMAL, response.status)
             self.assertEqual(["ERROR", "INFO"], [record.levelname for record in captured.records])
             self.assertIn("recovered", captured.records[1].getMessage())
 
             source.updated_at = "2000-01-01 00:00:00"
             urlopen.side_effect = URLError("offline again")
-            await service.check()
+            await self.__read(service)
             self.assertEqual(["ERROR", "INFO", "ERROR"],
                              [record.levelname for record in captured.records])
+
+    async def __read(self, service):
+        await service._refresh()
+        return await service.check()
 
     async def test_stale_data_after_a_failure_is_not_a_recovery(self):
         """After a failed refresh the next readings use the cached data: they
